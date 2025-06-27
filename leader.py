@@ -4,16 +4,21 @@ KitchenSync Leader Pi
 Broadcasts time sync and provides user interface for system control
 """
 
-import socket
-import time
 import json
-import threading
-import os
+import socket
 import sys
+import threading
+import time
 from pathlib import Path
 
 class KitchenSyncLeader:
+    """
+    Leader Pi that orchestrates synchronized playback across multiple collaborator Pis.
+    Handles time sync broadcasting, command distribution, and user interface.
+    """
+    
     def __init__(self):
+        # Network configuration
         self.BROADCAST_IP = '255.255.255.255'
         self.SYNC_PORT = 5005
         self.CONTROL_PORT = 5006
@@ -25,29 +30,60 @@ class KitchenSyncLeader:
         self.collaborator_pis = {}  # Track connected Pis
         self.system_schedule = self.load_schedule()
         
-        # Sockets
-        self.sync_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.sync_sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-        
-        self.control_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.control_sock.bind(('', self.CONTROL_PORT))
+        # Initialize sockets
+        self._setup_sockets()
+    
+    def _setup_sockets(self):
+        """Initialize UDP sockets for sync and control communication"""
+        try:
+            # Sync socket for broadcasting time sync
+            self.sync_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            self.sync_sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+            
+            # Control socket for commands and responses
+            self.control_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            self.control_sock.bind(('', self.CONTROL_PORT))
+            self.control_sock.settimeout(1.0)  # Add timeout for non-blocking operations
+            
+        except Exception as e:
+            print(f"Error setting up sockets: {e}")
+            sys.exit(1)
+    
+    def cleanup(self):
+        """Clean up resources"""
+        try:
+            if hasattr(self, 'sync_sock'):
+                self.sync_sock.close()
+            if hasattr(self, 'control_sock'):
+                self.control_sock.close()
+        except Exception as e:
+            print(f"Error during cleanup: {e}")
         
     def load_schedule(self):
         """Load schedule from JSON file"""
+        schedule_file = Path('schedule.json')
         try:
-            with open('schedule.json', 'r') as f:
-                return json.load(f)
-        except FileNotFoundError:
-            print("schedule.json not found, using empty schedule")
+            if schedule_file.exists():
+                with open(schedule_file, 'r') as f:
+                    return json.load(f)
+            else:
+                print("schedule.json not found, using empty schedule")
+                return []
+        except json.JSONDecodeError as e:
+            print(f"Error parsing schedule.json: {e}")
             return []
-        except json.JSONDecodeError:
-            print("Error parsing schedule.json")
+        except Exception as e:
+            print(f"Error loading schedule: {e}")
             return []
     
     def save_schedule(self):
         """Save current schedule to JSON file"""
-        with open('schedule.json', 'w') as f:
-            json.dump(self.system_schedule, f, indent=2)
+        try:
+            with open('schedule.json', 'w') as f:
+                json.dump(self.system_schedule, f, indent=2)
+            print("Schedule saved successfully")
+        except Exception as e:
+            print(f"Error saving schedule: {e}")
     
     def broadcast_sync(self):
         """Continuously broadcast time sync"""
@@ -87,10 +123,15 @@ class KitchenSyncLeader:
                     if pi_id in self.collaborator_pis:
                         self.collaborator_pis[pi_id]['last_seen'] = time.time()
                         
+            except socket.timeout:
+                # Expected timeout, continue loop
+                continue
             except json.JSONDecodeError:
+                print("Received invalid JSON from collaborator")
                 continue
             except Exception as e:
-                print(f"Error in collaborator listener: {e}")
+                if self.is_running:  # Only log if we're supposed to be running
+                    print(f"Error in collaborator listener: {e}")
     
     def send_command(self, command, target_pi=None):
         """Send command to collaborator Pi(s)"""
@@ -140,11 +181,14 @@ class KitchenSyncLeader:
             print("System is not running")
             return
             
+        print("Stopping system...")
         self.is_running = False
-        self.start_time = None
         
         # Send stop command to all collaborators
         self.send_command({'type': 'stop'})
+        
+        # Reset system state
+        self.start_time = None
         
         print("System stopped")
     
@@ -170,95 +214,134 @@ class KitchenSyncLeader:
         """Simple command-line interface"""
         print("\n=== KitchenSync Leader Control ===")
         print("Commands:")
-        print("  start - Start synchronized playback")
-        print("  stop - Stop playback")
-        print("  status - Show system status")
+        print("  start    - Start synchronized playback")
+        print("  stop     - Stop playback")
+        print("  status   - Show system status")
         print("  schedule - Edit schedule")
-        print("  quit - Exit program")
+        print("  quit     - Exit program")
         
-        while True:
-            try:
-                cmd = input("\nkitchensync> ").strip().lower()
-                
-                if cmd == 'start':
-                    self.start_system()
-                elif cmd == 'stop':
-                    self.stop_system()
-                elif cmd == 'status':
-                    self.show_status()
-                elif cmd == 'schedule':
-                    self.edit_schedule()
-                elif cmd in ['quit', 'exit', 'q']:
-                    if self.is_running:
-                        self.stop_system()
-                    print("Goodbye!")
-                    break
-                elif cmd == 'help':
-                    self.user_interface()
-                else:
-                    print("Unknown command. Type 'help' for available commands.")
+        try:
+            while True:
+                try:
+                    cmd = input("\nkitchensync> ").strip().lower()
                     
-            except KeyboardInterrupt:
-                if self.is_running:
-                    self.stop_system()
-                print("\nGoodbye!")
-                break
+                    if cmd == 'start':
+                        self.start_system()
+                    elif cmd == 'stop':
+                        self.stop_system()
+                    elif cmd == 'status':
+                        self.show_status()
+                    elif cmd == 'schedule':
+                        self.edit_schedule()
+                    elif cmd in ['quit', 'exit', 'q']:
+                        break
+                    elif cmd == 'help':
+                        # Re-show the help text
+                        print("Commands:")
+                        print("  start    - Start synchronized playback")
+                        print("  stop     - Stop playback")
+                        print("  status   - Show system status")
+                        print("  schedule - Edit schedule")
+                        print("  quit     - Exit program")
+                    else:
+                        print("Unknown command. Type 'help' for available commands.")
+                        
+                except EOFError:
+                    break
+                    
+        except KeyboardInterrupt:
+            pass
+        finally:
+            if self.is_running:
+                self.stop_system()
+            self.cleanup()
+            print("\nGoodbye!")
     
     def edit_schedule(self):
         """Simple schedule editor"""
         print("\n=== Schedule Editor ===")
-        print("Current schedule:")
-        for i, cue in enumerate(self.system_schedule):
-            print(f"  {i+1}. Time {cue['time']}s - Relay {cue['relay']}")
+        self._print_schedule()
         
         print("\nOptions:")
-        print("  add - Add new cue")
+        print("  add             - Add new cue")
         print("  remove <number> - Remove cue")
-        print("  clear - Clear all cues")
-        print("  save - Save and return")
+        print("  clear           - Clear all cues")
+        print("  save            - Save and return")
         
         while True:
-            cmd = input("schedule> ").strip().lower()
-            
-            if cmd == 'add':
-                try:
-                    time_val = float(input("Enter time (seconds): "))
-                    relay_val = int(input("Enter relay state (0 or 1): "))
-                    if relay_val not in [0, 1]:
-                        print("Relay state must be 0 or 1")
-                        continue
-                    self.system_schedule.append({"time": time_val, "relay": relay_val})
-                    self.system_schedule.sort(key=lambda x: x['time'])
-                    print(f"Added cue: {time_val}s -> relay {relay_val}")
-                except ValueError:
-                    print("Invalid input")
-                    
-            elif cmd.startswith('remove '):
-                try:
-                    num = int(cmd.split()[1]) - 1
-                    if 0 <= num < len(self.system_schedule):
-                        removed = self.system_schedule.pop(num)
-                        print(f"Removed cue: {removed['time']}s -> relay {removed['relay']}")
-                    else:
-                        print("Invalid cue number")
-                except (IndexError, ValueError):
-                    print("Usage: remove <number>")
-                    
-            elif cmd == 'clear':
-                self.system_schedule.clear()
-                print("Schedule cleared")
+            try:
+                cmd = input("schedule> ").strip().lower()
                 
-            elif cmd == 'save':
-                self.save_schedule()
-                print("Schedule saved")
+                if cmd == 'add':
+                    self._add_schedule_cue()
+                elif cmd.startswith('remove '):
+                    self._remove_schedule_cue(cmd)
+                elif cmd == 'clear':
+                    self.system_schedule.clear()
+                    print("Schedule cleared")
+                    self._print_schedule()
+                elif cmd == 'save':
+                    self.save_schedule()
+                    break
+                elif cmd == 'help':
+                    print("\nOptions:")
+                    print("  add             - Add new cue")
+                    print("  remove <number> - Remove cue") 
+                    print("  clear           - Clear all cues")
+                    print("  save            - Save and return")
+                else:
+                    print("Unknown command. Type 'help' for options.")
+            except (KeyboardInterrupt, EOFError):
                 break
-                
+    
+    def _print_schedule(self):
+        """Print the current schedule"""
+        if not self.system_schedule:
+            print("  (empty)")
+        else:
+            for i, cue in enumerate(self.system_schedule):
+                print(f"  {i+1}. Time {cue['time']}s - Relay {cue['relay']}")
+    
+    def _add_schedule_cue(self):
+        """Add a new cue to the schedule"""
+        try:
+            time_val = float(input("Enter time (seconds): "))
+            relay_val = int(input("Enter relay state (0 or 1): "))
+            if relay_val not in [0, 1]:
+                print("Relay state must be 0 or 1")
+                return
+            self.system_schedule.append({"time": time_val, "relay": relay_val})
+            self.system_schedule.sort(key=lambda x: x['time'])
+            print(f"Added cue: {time_val}s -> relay {relay_val}")
+            self._print_schedule()
+        except ValueError:
+            print("Invalid input. Please enter numeric values.")
+        except (KeyboardInterrupt, EOFError):
+            print("\nCancelled")
+    
+    def _remove_schedule_cue(self, cmd):
+        """Remove a cue from the schedule"""
+        try:
+            num = int(cmd.split()[1]) - 1
+            if 0 <= num < len(self.system_schedule):
+                removed = self.system_schedule.pop(num)
+                print(f"Removed cue: {removed['time']}s -> relay {removed['relay']}")
+                self._print_schedule()
             else:
-                print("Unknown command")
+                print("Invalid cue number")
+        except (IndexError, ValueError):
+            print("Usage: remove <number>")
 
 def main():
-    leader = KitchenSyncLeader()
-    leader.user_interface()
+    """Main entry point"""
+    try:
+        leader = KitchenSyncLeader()
+        leader.user_interface()
+    except KeyboardInterrupt:
+        print("\nExiting...")
+    except Exception as e:
+        print(f"Fatal error: {e}")
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()

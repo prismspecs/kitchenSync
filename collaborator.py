@@ -4,15 +4,15 @@ KitchenSync Collaborator Pi
 Receives time sync and commands from leader, plays videos and controls relays
 """
 
-import socket
-import json
-import time
-import subprocess
-import os
-import sys
 import configparser
-from threading import Thread
+import json
+import os
+import socket
+import subprocess
+import sys
+import time
 from pathlib import Path
+from threading import Thread
 
 # Try to import RPi.GPIO, fall back to simulation if not available
 try:
