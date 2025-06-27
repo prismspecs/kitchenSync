@@ -1,0 +1,25 @@
+# KitchenSync Requirements
+# Note: RPi.GPIO is only available on Raspberry Pi hardware
+# The code will fall back to simulation mode on other systems
+
+# For Raspberry Pi only:
+# RPi.GPIO>=0.7.0
+
+# Standard library modules used:
+# - socket
+# - json  
+# - time
+# - subprocess
+# - threading
+# - configparser
+# - pathlib
+# - os
+# - sys
+
+# Video Player Dependencies:
+# Raspberry Pi: omxplayer (install via: sudo apt install omxplayer)
+# Other Linux: one of the following for simulation/testing:
+#   - vlc (recommended for testing)
+#   - mpv
+#   - ffmpeg (includes ffplay)
+#   - mplayer
