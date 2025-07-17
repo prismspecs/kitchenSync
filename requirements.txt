@@ -5,6 +5,9 @@
 # MIDI Support
 python-rtmidi>=1.4.0
 
+# DBus support for omxplayer control (Raspberry Pi)
+dbus-python>=1.2.0
+
 # For Raspberry Pi only (legacy, no longer used):
 # RPi.GPIO>=0.7.0
 

@@ -34,6 +34,14 @@ except ImportError:
         def get_port_name(self, port): 
             return f"Mock MIDI Port {port}"
 
+# Try to import dbus for omxplayer control, fall back to simulation if not available
+try:
+    import dbus
+    DBUS_AVAILABLE = True
+except ImportError:
+    print("python-dbus not available, video seeking disabled")
+    DBUS_AVAILABLE = False
+
 class KitchenSyncCollaborator:
     def __init__(self, config_file='collaborator_config.ini'):
         # Load configuration
@@ -60,6 +68,13 @@ class KitchenSyncCollaborator:
         self.video_process = None
         self.schedule = []
         self.triggered_cues = set()
+        self.omx_dbus_interface = None
+        self.video_start_time = None
+        self.last_sync_check = 0
+        
+        # Video sync settings
+        self.sync_tolerance = self.config.get('sync_tolerance', 1.0)  # seconds
+        self.sync_check_interval = self.config.get('sync_check_interval', 5.0)  # seconds
         
         # Setup MIDI
         self.setup_midi()
@@ -126,6 +141,10 @@ class KitchenSyncCollaborator:
         # Convert numeric values
         if 'midi_port' in settings:
             settings['midi_port'] = int(settings['midi_port'])
+        if 'sync_tolerance' in settings:
+            settings['sync_tolerance'] = float(settings['sync_tolerance'])
+        if 'sync_check_interval' in settings:
+            settings['sync_check_interval'] = float(settings['sync_check_interval'])
         
         return settings
     
@@ -253,6 +272,12 @@ class KitchenSyncCollaborator:
                                                 stdout=subprocess.DEVNULL, 
                                                 stderr=subprocess.DEVNULL)
             print(f"Started video playback with {player_name}: {video_path}")
+            
+            # Set up DBus interface for omxplayer control
+            if player_name == "omxplayer":
+                self.setup_omxplayer_dbus()
+            
+            self.video_start_time = time.time()
             return True
             
         except FileNotFoundError:
@@ -302,6 +327,84 @@ class KitchenSyncCollaborator:
         
         return None
     
+    def setup_omxplayer_dbus(self):
+        """Set up DBus interface for omxplayer control"""
+        if not DBUS_AVAILABLE:
+            print("DBus not available, video sync correction disabled")
+            return
+            
+        try:
+            # Wait a moment for omxplayer to start up
+            time.sleep(0.5)
+            
+            # Connect to omxplayer's DBus interface
+            bus = dbus.SessionBus()
+            omx_object = bus.get_object('org.mpris.MediaPlayer2.omxplayer', 
+                                      '/org/mpris/MediaPlayer2', 
+                                      introspect=False)
+            self.omx_dbus_interface = dbus.Interface(omx_object, 'org.mpris.MediaPlayer2.Player')
+            print("Connected to omxplayer DBus interface")
+            
+        except Exception as e:
+            print(f"Could not connect to omxplayer DBus: {e}")
+            self.omx_dbus_interface = None
+    
+    def get_video_position(self):
+        """Get current video position in seconds"""
+        if not self.omx_dbus_interface:
+            return None
+            
+        try:
+            # Get position in microseconds and convert to seconds
+            position_us = self.omx_dbus_interface.Position()
+            return position_us / 1000000.0
+        except Exception as e:
+            print(f"Error getting video position: {e}")
+            return None
+    
+    def seek_video_position(self, target_seconds):
+        """Seek video to specific position"""
+        if not self.omx_dbus_interface:
+            print("No DBus interface available for seeking")
+            return False
+            
+        try:
+            # Convert to microseconds for omxplayer
+            target_us = int(target_seconds * 1000000)
+            self.omx_dbus_interface.SetPosition(dbus.ObjectPath('/not/used'), target_us)
+            print(f"Seeked video to {target_seconds:.2f}s")
+            return True
+        except Exception as e:
+            print(f"Error seeking video: {e}")
+            return False
+    
+    def check_video_sync(self, master_time):
+        """Check if video needs sync correction"""
+        if not self.video_start_time or not self.synced_start:
+            return
+            
+        # Only check sync periodically to avoid overhead
+        now = time.time()
+        if now - self.last_sync_check < self.sync_check_interval:
+            return
+        self.last_sync_check = now
+        
+        # Get current video position
+        video_position = self.get_video_position()
+        if video_position is None:
+            return
+            
+        # Calculate expected position based on master time
+        expected_position = master_time
+        
+        # Calculate drift
+        drift = abs(video_position - expected_position)
+        
+        if drift > self.sync_tolerance:
+            print(f"Video drift detected: {drift:.2f}s (video: {video_position:.2f}s, expected: {expected_position:.2f}s)")
+            print(f"Correcting video position to {expected_position:.2f}s")
+            self.seek_video_position(expected_position)
+    
     def stop_playback(self):
         """Stop video playback and reset state"""
         self.is_running = False
@@ -344,6 +447,9 @@ class KitchenSyncCollaborator:
                 print("Lost sync with leader")
                 self.stop_playback()
                 break
+            
+            # Check video sync correction
+            self.check_video_sync(current_time)
             
             # Process scheduled cues
             for cue in self.schedule:

@@ -21,6 +21,10 @@ fi
 echo "Installing Python MIDI library..."
 pip3 install python-rtmidi
 
+# Install Python DBus library for video sync control
+echo "Installing Python DBus library..."
+pip3 install dbus-python
+
 # Install system MIDI tools (optional, for debugging)
 echo "Installing MIDI system tools..."
 sudo apt install -y alsa-utils

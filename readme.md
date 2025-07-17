@@ -32,6 +32,9 @@ sudo apt install omxplayer
 
 # Install Python MIDI library
 pip3 install python-rtmidi
+
+# Install Python DBus library for video sync correction
+pip3 install dbus-python
 ```
 
 ### 2. Configuration
@@ -126,3 +129,5 @@ UDP time sync is accurate to ~10–30ms on a typical LAN. For tighter synchroniz
 - **File Management:** Leader Pi can manage video files and push updates to collaborator Pis
 - **MIDI Timing:** MIDI data is timecoded to the video, ensuring synchronized playback across all devices
 - **USB MIDI:** Each Pi requires a USB MIDI interface; class-compliant devices work best
+- **Video Sync:** Automatic drift correction keeps videos synchronized during playback (requires DBus)
+- **Sync Tolerance:** Videos are corrected if they drift more than 1 second (configurable)
