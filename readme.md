@@ -1,22 +1,22 @@
-# KitchenSync - Synchronized Video Playback & Relay Control System
+# KitchenSync - Synchronized Video Playback & MIDI Output System
 
 This project enables multiple Raspberry Pis to:
 - Play videos simultaneously (same or different videos per Pi)
-- Trigger relays at specific timecodes
+- Output MIDI data at specific timecodes via USB MIDI interface
 - Stay synchronized via UDP broadcast over LAN/Wi-Fi
 - Provide centralized control and configuration through the leader Pi
 
 ## 📦 Components
 - Multiple Raspberry Pis (each with unique ID)
-- Relay modules connected to GPIO (default: GPIO18)
+- USB MIDI interface connected to each Pi
 - Video files stored locally or on USB drives
-- Schedule file (`schedule.json`) defining cue timings
+- Schedule file (`schedule.json`) defining MIDI cue timings
 - Leader Pi with user interface for system control
 
 ## 📂 Files
 - `leader.py` — Runs on leader Pi, broadcasts time sync and provides user interface
-- `collaborator.py` — Runs on each collaborator Pi, receives time sync, starts video, triggers relays
-- `schedule.json` — List of relay cues by timecode
+- `collaborator.py` — Runs on each collaborator Pi, receives time sync, starts video, outputs MIDI data
+- `schedule.json` — List of MIDI cues by timecode (note, velocity, channel, etc.)
 - `collaborator_config.ini` — Configuration file for collaborator Pis (unique per Pi)
 - `setup.sh` — Installation script for Raspberry Pi setup
 - `requirements.txt` — Python dependencies
@@ -29,6 +29,9 @@ This project enables multiple Raspberry Pis to:
 ```bash
 sudo apt update
 sudo apt install omxplayer
+
+# Install Python MIDI library
+pip3 install python-rtmidi
 ```
 
 ### 2. Configuration
@@ -37,7 +40,7 @@ sudo apt install omxplayer
 Each Pi should be assigned a unique ID for identification and configuration.
 
 #### Connect Hardware
-- Connect relay module to GPIO18 (or modify pin in `collaborator.py`)
+- Connect USB MIDI interface to each Raspberry Pi
 - Power and network each Raspberry Pi
 - Connect USB drives if using external video storage
 
@@ -57,9 +60,11 @@ Each Pi should be assigned a unique ID for identification and configuration.
 Example `schedule.json`:
 ```json
 [
-  { "time": 5.0, "relay": 1 },
-  { "time": 10.0, "relay": 0 },
-  { "time": 15.0, "relay": 1 }
+  { "time": 5.0, "note": 60, "velocity": 127, "channel": 1, "type": "note_on" },
+  { "time": 5.5, "note": 60, "velocity": 0, "channel": 1, "type": "note_off" },
+  { "time": 10.0, "note": 64, "velocity": 100, "channel": 1, "type": "note_on" },
+  { "time": 10.5, "note": 64, "velocity": 0, "channel": 1, "type": "note_off" },
+  { "time": 15.0, "control": 7, "value": 127, "channel": 1, "type": "control_change" }
 ]
 ```
 
@@ -75,7 +80,7 @@ python3 leader.py
 python3 collaborator.py
 ```
 
-Each collaborator Pi will wait for time sync from the leader, then begin playback and execute relay triggers based on the shared clock.
+Each collaborator Pi will wait for time sync from the leader, then begin playback and execute MIDI output based on the shared clock.
 
 ## 🚀 Quick Start
 
@@ -87,7 +92,7 @@ Use the interactive interface to start/stop the system and manage schedules.
 
 ### Collaborator Pi  
 ```bash
-# Edit config file first (set unique pi_id and video_file)
+# Edit config file first (set unique pi_id, video_file, and midi_port)
 nano collaborator_config.ini
 python3 collaborator.py
 ```
@@ -101,8 +106,9 @@ UDP time sync is accurate to ~10–30ms on a typical LAN. For tighter synchroniz
 ## 🧪 Testing
 
 - Use `omxplayer` flags like `--no-osd` and `--vol` for clean output
-- Monitor relay switching with a multimeter or LED
+- Monitor MIDI output with a MIDI monitor or DAW software
 - Test with different video files on different Pis to verify individual control
+- Verify MIDI interface connectivity with `aconnect -l` or `amidi -l`
 
 ## � Features
 
@@ -118,3 +124,5 @@ UDP time sync is accurate to ~10–30ms on a typical LAN. For tighter synchroniz
 - **Time Sync:** Ensure NTP is either disabled or all Pis use the same server to avoid drift
 - **Network:** Works on both wired and wireless networks (wired recommended for best sync)
 - **File Management:** Leader Pi can manage video files and push updates to collaborator Pis
+- **MIDI Timing:** MIDI data is timecoded to the video, ensuring synchronized playback across all devices
+- **USB MIDI:** Each Pi requires a USB MIDI interface; class-compliant devices work best

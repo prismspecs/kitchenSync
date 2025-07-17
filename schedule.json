@@ -1,5 +1,37 @@
 [
-  { "time": 5.0, "relay": 1 },
-  { "time": 10.0, "relay": 0 },
-  { "time": 15.0, "relay": 1 }
+  {
+    "time": 5.0,
+    "note": 60,
+    "velocity": 127,
+    "channel": 1,
+    "type": "note_on"
+  },
+  {
+    "time": 5.5,
+    "note": 60,
+    "velocity": 0,
+    "channel": 1,
+    "type": "note_off"
+  },
+  {
+    "time": 10.0,
+    "note": 64,
+    "velocity": 100,
+    "channel": 1,
+    "type": "note_on"
+  },
+  {
+    "time": 10.5,
+    "note": 64,
+    "velocity": 0,
+    "channel": 1,
+    "type": "note_off"
+  },
+  {
+    "time": 15.0,
+    "control": 7,
+    "value": 127,
+    "channel": 1,
+    "type": "control_change"
+  }
 ]

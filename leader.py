@@ -208,7 +208,14 @@ class KitchenSyncLeader:
         
         print(f"\nSchedule: {len(self.system_schedule)} cues")
         for i, cue in enumerate(self.system_schedule):
-            print(f"  {i+1}. Time {cue['time']}s - Relay {cue['relay']}")
+            if cue.get('type') == 'note_on':
+                print(f"  {i+1}. Time {cue['time']}s - Note {cue['note']} ON (vel:{cue['velocity']}, ch:{cue['channel']})")
+            elif cue.get('type') == 'note_off':
+                print(f"  {i+1}. Time {cue['time']}s - Note {cue['note']} OFF (ch:{cue['channel']})")
+            elif cue.get('type') == 'control_change':
+                print(f"  {i+1}. Time {cue['time']}s - CC {cue['control']}={cue['value']} (ch:{cue['channel']})")
+            else:
+                print(f"  {i+1}. Time {cue['time']}s - Unknown type: {cue.get('type', 'N/A')}")
     
     def user_interface(self):
         """Simple command-line interface"""
@@ -300,20 +307,61 @@ class KitchenSyncLeader:
             print("  (empty)")
         else:
             for i, cue in enumerate(self.system_schedule):
-                print(f"  {i+1}. Time {cue['time']}s - Relay {cue['relay']}")
+                if cue.get('type') == 'note_on':
+                    print(f"  {i+1}. Time {cue['time']}s - Note {cue['note']} ON (vel:{cue['velocity']}, ch:{cue['channel']})")
+                elif cue.get('type') == 'note_off':
+                    print(f"  {i+1}. Time {cue['time']}s - Note {cue['note']} OFF (ch:{cue['channel']})")
+                elif cue.get('type') == 'control_change':
+                    print(f"  {i+1}. Time {cue['time']}s - CC {cue['control']}={cue['value']} (ch:{cue['channel']})")
+                else:
+                    print(f"  {i+1}. Time {cue['time']}s - Unknown type: {cue.get('type', 'N/A')}")
     
     def _add_schedule_cue(self):
         """Add a new cue to the schedule"""
         try:
             time_val = float(input("Enter time (seconds): "))
-            relay_val = int(input("Enter relay state (0 or 1): "))
-            if relay_val not in [0, 1]:
-                print("Relay state must be 0 or 1")
+            
+            print("\nMIDI Event Types:")
+            print("  1. Note On")
+            print("  2. Note Off") 
+            print("  3. Control Change")
+            event_type = input("Select event type (1-3): ").strip()
+            
+            if event_type == '1':
+                note = int(input("Enter MIDI note (0-127): "))
+                velocity = int(input("Enter velocity (0-127): "))
+                channel = int(input("Enter MIDI channel (1-16): "))
+                if not (0 <= note <= 127 and 0 <= velocity <= 127 and 1 <= channel <= 16):
+                    print("Invalid MIDI values")
+                    return
+                cue = {"time": time_val, "note": note, "velocity": velocity, "channel": channel, "type": "note_on"}
+                
+            elif event_type == '2':
+                note = int(input("Enter MIDI note (0-127): "))
+                channel = int(input("Enter MIDI channel (1-16): "))
+                if not (0 <= note <= 127 and 1 <= channel <= 16):
+                    print("Invalid MIDI values")
+                    return
+                cue = {"time": time_val, "note": note, "velocity": 0, "channel": channel, "type": "note_off"}
+                
+            elif event_type == '3':
+                control = int(input("Enter control number (0-127): "))
+                value = int(input("Enter control value (0-127): "))
+                channel = int(input("Enter MIDI channel (1-16): "))
+                if not (0 <= control <= 127 and 0 <= value <= 127 and 1 <= channel <= 16):
+                    print("Invalid MIDI values")
+                    return
+                cue = {"time": time_val, "control": control, "value": value, "channel": channel, "type": "control_change"}
+                
+            else:
+                print("Invalid event type")
                 return
-            self.system_schedule.append({"time": time_val, "relay": relay_val})
+                
+            self.system_schedule.append(cue)
             self.system_schedule.sort(key=lambda x: x['time'])
-            print(f"Added cue: {time_val}s -> relay {relay_val}")
+            print(f"Added MIDI cue at {time_val}s")
             self._print_schedule()
+            
         except ValueError:
             print("Invalid input. Please enter numeric values.")
         except (KeyboardInterrupt, EOFError):
@@ -325,7 +373,8 @@ class KitchenSyncLeader:
             num = int(cmd.split()[1]) - 1
             if 0 <= num < len(self.system_schedule):
                 removed = self.system_schedule.pop(num)
-                print(f"Removed cue: {removed['time']}s -> relay {removed['relay']}")
+                cue_desc = f"MIDI {removed.get('type', 'unknown')} at {removed['time']}s"
+                print(f"Removed cue: {cue_desc}")
                 self._print_schedule()
             else:
                 print("Invalid cue number")

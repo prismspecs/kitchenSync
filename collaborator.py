@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 KitchenSync Collaborator Pi
-Receives time sync and commands from leader, plays videos and controls relays
+Receives time sync and commands from leader, plays videos and outputs MIDI data
 """
 
 import configparser
@@ -14,31 +14,25 @@ import time
 from pathlib import Path
 from threading import Thread
 
-# Try to import RPi.GPIO, fall back to simulation if not available
+# Try to import rtmidi, fall back to simulation if not available
 try:
-    import RPi.GPIO as GPIO
-    GPIO_AVAILABLE = True
+    import rtmidi
+    MIDI_AVAILABLE = True
 except ImportError:
-    print("RPi.GPIO not available, using simulation mode")
-    GPIO_AVAILABLE = False
+    print("python-rtmidi not available, using simulation mode")
+    MIDI_AVAILABLE = False
     
-    class MockGPIO:
-        BCM = "BCM"
-        OUT = "OUT"
-        HIGH = True
-        LOW = False
-        
-        @staticmethod
-        def setmode(mode): pass
-        @staticmethod
-        def setup(pin, mode): pass
-        @staticmethod
-        def output(pin, state): 
-            print(f"GPIO {pin} -> {'HIGH' if state else 'LOW'}")
-        @staticmethod
-        def cleanup(): pass
-    
-    GPIO = MockGPIO()
+    class MockMidiOut:
+        def open_port(self, port=0): 
+            print(f"MIDI: Opened mock port {port}")
+        def send_message(self, message): 
+            print(f"MIDI: {message}")
+        def close_port(self): 
+            print("MIDI: Closed mock port")
+        def get_port_count(self): 
+            return 1
+        def get_port_name(self, port): 
+            return f"Mock MIDI Port {port}"
 
 class KitchenSyncCollaborator:
     def __init__(self, config_file='collaborator_config.ini'):
@@ -56,8 +50,8 @@ class KitchenSyncCollaborator:
         self.video_file = self.config.get('video_file', 'video.mp4')
         self.video_sources = self.config.get('video_sources', ['./videos/', '/media/usb/'])
         
-        # GPIO settings
-        self.relay_pin = self.config.get('relay_pin', 18)
+        # MIDI settings
+        self.midi_port = int(self.config.get('midi_port', 0))
         
         # System state
         self.synced_start = None
@@ -67,11 +61,8 @@ class KitchenSyncCollaborator:
         self.schedule = []
         self.triggered_cues = set()
         
-        # Setup GPIO
-        if GPIO_AVAILABLE:
-            GPIO.setmode(GPIO.BCM)
-            GPIO.setup(self.relay_pin, GPIO.OUT)
-            GPIO.output(self.relay_pin, GPIO.LOW)
+        # Setup MIDI
+        self.setup_midi()
         
         # Setup sockets
         self.sync_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -82,7 +73,35 @@ class KitchenSyncCollaborator:
         
         print(f"KitchenSync Collaborator '{self.pi_id}' initialized")
         print(f"Video file: {self.video_file}")
-        print(f"Relay pin: {self.relay_pin}")
+        print(f"MIDI port: {self.midi_port}")
+    
+    def setup_midi(self):
+        """Initialize MIDI output"""
+        if MIDI_AVAILABLE:
+            try:
+                self.midi_out = rtmidi.MidiOut()
+                available_ports = self.midi_out.get_port_count()
+                
+                if available_ports == 0:
+                    print("No MIDI ports available, creating virtual port")
+                    self.midi_out.open_virtual_port("KitchenSync")
+                elif self.midi_port < available_ports:
+                    port_name = self.midi_out.get_port_name(self.midi_port)
+                    self.midi_out.open_port(self.midi_port)
+                    print(f"Connected to MIDI port {self.midi_port}: {port_name}")
+                else:
+                    print(f"MIDI port {self.midi_port} not available, using port 0")
+                    port_name = self.midi_out.get_port_name(0)
+                    self.midi_out.open_port(0)
+                    print(f"Connected to MIDI port 0: {port_name}")
+                    
+            except Exception as e:
+                print(f"Error setting up MIDI: {e}")
+                print("Falling back to simulation mode")
+                self.midi_out = MockMidiOut()
+        else:
+            self.midi_out = MockMidiOut()
+            self.midi_out.open_port(self.midi_port)
     
     def load_config(self, config_file):
         """Load configuration from file or create default"""
@@ -96,7 +115,7 @@ class KitchenSyncCollaborator:
             settings = {
                 'pi_id': f'pi-{int(time.time()) % 1000:03d}',
                 'video_file': 'video.mp4',
-                'relay_pin': '18'
+                'midi_port': '0'
             }
             
             config['DEFAULT'] = settings
@@ -105,8 +124,8 @@ class KitchenSyncCollaborator:
             print(f"Created default config file: {config_file}")
         
         # Convert numeric values
-        if 'relay_pin' in settings:
-            settings['relay_pin'] = int(settings['relay_pin'])
+        if 'midi_port' in settings:
+            settings['midi_port'] = int(settings['midi_port'])
         
         return settings
     
@@ -191,8 +210,8 @@ class KitchenSyncCollaborator:
         # Start video playback
         self.start_video()
         
-        # Start relay control loop
-        Thread(target=self.relay_control_loop, daemon=True).start()
+        # Start MIDI control loop
+        Thread(target=self.midi_control_loop, daemon=True).start()
         
         print("Collaborator started successfully")
     
@@ -298,14 +317,21 @@ class KitchenSyncCollaborator:
             finally:
                 self.video_process = None
         
-        # Turn off relay
-        GPIO.output(self.relay_pin, GPIO.LOW)
+        # Send MIDI all notes off
+        try:
+            for channel in range(16):
+                # All notes off (CC 123)
+                self.midi_out.send_message([0xB0 + channel, 123, 0])
+                # All sound off (CC 120)
+                self.midi_out.send_message([0xB0 + channel, 120, 0])
+        except Exception as e:
+            print(f"Error sending MIDI all notes off: {e}")
         
         self.triggered_cues.clear()
         print("Playback stopped")
     
-    def relay_control_loop(self):
-        """Main loop for relay control based on schedule"""
+    def midi_control_loop(self):
+        """Main loop for MIDI output based on schedule"""
         while self.is_running:
             if self.synced_start is None:
                 time.sleep(0.1)
@@ -322,18 +348,47 @@ class KitchenSyncCollaborator:
             # Process scheduled cues
             for cue in self.schedule:
                 cue_time = cue['time']
-                relay_state = cue['relay']
+                cue_id = f"{cue_time}_{cue.get('type', 'unknown')}"
                 
                 if (cue_time <= current_time and 
-                    cue_time not in self.triggered_cues):
+                    cue_id not in self.triggered_cues):
                     
-                    # Trigger relay
-                    GPIO.output(self.relay_pin, GPIO.HIGH if relay_state else GPIO.LOW)
-                    self.triggered_cues.add(cue_time)
+                    # Send MIDI message
+                    self.send_midi_message(cue)
+                    self.triggered_cues.add(cue_id)
                     
-                    print(f"Relay triggered at {cue_time}s -> {'ON' if relay_state else 'OFF'}")
+                    print(f"MIDI triggered at {cue_time}s: {cue.get('type', 'unknown')}")
             
             time.sleep(0.01)  # 10ms precision
+    
+    def send_midi_message(self, cue):
+        """Send MIDI message based on cue data"""
+        try:
+            cue_type = cue.get('type')
+            channel = cue.get('channel', 1) - 1  # Convert to 0-15 range
+            
+            if cue_type == 'note_on':
+                note = cue.get('note', 60)
+                velocity = cue.get('velocity', 127)
+                message = [0x90 + channel, note, velocity]
+                
+            elif cue_type == 'note_off':
+                note = cue.get('note', 60)
+                message = [0x80 + channel, note, 0]
+                
+            elif cue_type == 'control_change':
+                control = cue.get('control', 7)
+                value = cue.get('value', 127)
+                message = [0xB0 + channel, control, value]
+                
+            else:
+                print(f"Unknown MIDI message type: {cue_type}")
+                return
+            
+            self.midi_out.send_message(message)
+            
+        except Exception as e:
+            print(f"Error sending MIDI message: {e}")
     
     def register_with_leader(self):
         """Register this Pi with the leader"""
@@ -394,8 +449,10 @@ class KitchenSyncCollaborator:
         except KeyboardInterrupt:
             print("\nShutting down...")
             self.stop_playback()
-            if GPIO_AVAILABLE:
-                GPIO.cleanup()
+            try:
+                self.midi_out.close_port()
+            except:
+                pass
 
 def main():
     collaborator = KitchenSyncCollaborator()

@@ -1,8 +1,11 @@
 # KitchenSync Requirements
-# Note: RPi.GPIO is only available on Raspberry Pi hardware
+# Note: RPi.GPIO is only available on Raspberry Pi hardware (no longer used for MIDI version)
 # The code will fall back to simulation mode on other systems
 
-# For Raspberry Pi only:
+# MIDI Support
+python-rtmidi>=1.4.0
+
+# For Raspberry Pi only (legacy, no longer used):
 # RPi.GPIO>=0.7.0
 
 # Standard library modules used:
