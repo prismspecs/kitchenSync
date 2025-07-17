@@ -54,6 +54,24 @@ midi_port = 0
 
 # Directories to search for video files
 video_sources = ./videos/,/media/usb/,/media/usb0/,/media/usb1/
+
+# Video sync correction settings
+sync_tolerance = 1.0              # Deprecated - kept for compatibility
+sync_check_interval = 5.0         # How often to check sync (seconds)
+
+# Advanced sync settings (from omxplayer-sync improvements)
+deviation_threshold = 0.5         # Median deviation threshold for correction (seconds)
+max_deviation_samples = 10        # Number of samples for median calculation
+pause_threshold = 2.0             # Deviation threshold for pause-during-correction (seconds)
+sync_grace_time = 3.0             # Wait time after correction before checking again (seconds)
+```
+
+#### Sync Parameter Explanation:
+
+- **deviation_threshold**: Minimum median deviation to trigger correction (0.5s default)
+- **max_deviation_samples**: Sample size for median filtering (10 samples default)  
+- **pause_threshold**: Large deviations above this trigger pause-during-correction (2.0s default)
+- **sync_grace_time**: Prevents immediate re-checking after correction (3.0s default)
 ```
 
 ### Multiple Collaborator Pis

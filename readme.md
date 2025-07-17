@@ -106,6 +106,28 @@ See `USAGE.md` for detailed instructions and troubleshooting.
 
 UDP time sync is accurate to ~10–30ms on a typical LAN. For tighter synchronization, consider wired GPIO triggers or hardware timestamping.
 
+### Advanced Video Sync Technology
+
+KitchenSync incorporates advanced synchronization techniques inspired by omxplayer-sync:
+
+**Median Deviation Filtering:**
+- Collects multiple sync measurements over time (configurable sample size)
+- Uses statistical median to filter out temporary glitches and network hiccups
+- Only triggers corrections when median deviation consistently exceeds threshold
+- Prevents false corrections from momentary position reading errors
+
+**Intelligent Correction Strategy:**
+- Small deviations: Seamless seeking without interrupting playback
+- Large deviations (>2s): Temporarily pauses video during correction to prevent audio/video artifacts
+- Grace period after corrections prevents immediate re-checking
+- Configurable thresholds allow tuning for different network conditions
+
+**Why Median Filtering is Superior:**
+- **Noise Immunity:** Single bad readings (network lag, CPU spike) don't trigger corrections
+- **Stability:** Prevents "correction oscillation" where frequent small adjustments make sync worse  
+- **Reliability:** Statistical approach ensures corrections only happen for genuine drift
+- **Performance:** Reduces unnecessary seek operations that can cause stuttering
+
 ## 🧪 Testing
 
 - Use `omxplayer` flags like `--no-osd` and `--vol` for clean output
@@ -129,5 +151,7 @@ UDP time sync is accurate to ~10–30ms on a typical LAN. For tighter synchroniz
 - **File Management:** Leader Pi can manage video files and push updates to collaborator Pis
 - **MIDI Timing:** MIDI data is timecoded to the video, ensuring synchronized playback across all devices
 - **USB MIDI:** Each Pi requires a USB MIDI interface; class-compliant devices work best
-- **Video Sync:** Automatic drift correction keeps videos synchronized during playback (requires DBus)
-- **Sync Tolerance:** Videos are corrected if they drift more than 1 second (configurable)
+- **Video Sync:** Advanced drift correction with median filtering keeps videos synchronized during playback (requires DBus)
+- **Sync Tolerance:** Videos are corrected if median deviation exceeds threshold (configurable)
+- **Outlier Filtering:** Median deviation filtering prevents false corrections from temporary glitches
+- **Smart Corrections:** Large deviations trigger pause-during-correction to avoid playback artifacts

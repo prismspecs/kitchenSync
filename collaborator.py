@@ -13,6 +13,8 @@ import sys
 import time
 from pathlib import Path
 from threading import Thread
+from collections import deque
+import statistics
 
 # Try to import rtmidi, fall back to simulation if not available
 try:
@@ -75,6 +77,16 @@ class KitchenSyncCollaborator:
         # Video sync settings
         self.sync_tolerance = self.config.get('sync_tolerance', 1.0)  # seconds
         self.sync_check_interval = self.config.get('sync_check_interval', 5.0)  # seconds
+        
+        # Advanced sync settings from omxplayer-sync
+        self.deviation_threshold = self.config.get('deviation_threshold', 0.5)  # seconds
+        self.max_deviation_samples = int(self.config.get('max_deviation_samples', 10))
+        self.pause_threshold = self.config.get('pause_threshold', 2.0)  # seconds for pausing during large corrections
+        self.sync_grace_time = self.config.get('sync_grace_time', 3.0)  # seconds to wait after sync before checking again
+        
+        # Deviation tracking for median filtering
+        self.deviation_samples = deque(maxlen=self.max_deviation_samples)
+        self.last_correction_time = 0
         
         # Setup MIDI
         self.setup_midi()
@@ -145,6 +157,14 @@ class KitchenSyncCollaborator:
             settings['sync_tolerance'] = float(settings['sync_tolerance'])
         if 'sync_check_interval' in settings:
             settings['sync_check_interval'] = float(settings['sync_check_interval'])
+        if 'deviation_threshold' in settings:
+            settings['deviation_threshold'] = float(settings['deviation_threshold'])
+        if 'max_deviation_samples' in settings:
+            settings['max_deviation_samples'] = int(settings['max_deviation_samples'])
+        if 'pause_threshold' in settings:
+            settings['pause_threshold'] = float(settings['pause_threshold'])
+        if 'sync_grace_time' in settings:
+            settings['sync_grace_time'] = float(settings['sync_grace_time'])
         
         return settings
     
@@ -378,8 +398,8 @@ class KitchenSyncCollaborator:
             print(f"Error seeking video: {e}")
             return False
     
-    def check_video_sync(self, master_time):
-        """Check if video needs sync correction"""
+    def check_video_sync(self, leader_time):
+        """Check if video needs sync correction using median deviation filtering"""
         if not self.video_start_time or not self.synced_start:
             return
             
@@ -389,21 +409,81 @@ class KitchenSyncCollaborator:
             return
         self.last_sync_check = now
         
+        # Don't check sync too soon after a correction (grace period)
+        if now - self.last_correction_time < self.sync_grace_time:
+            return
+        
         # Get current video position
         video_position = self.get_video_position()
         if video_position is None:
             return
             
-        # Calculate expected position based on master time
-        expected_position = master_time
+        # Calculate expected position based on leader time
+        expected_position = leader_time
         
-        # Calculate drift
-        drift = abs(video_position - expected_position)
+        # Calculate deviation (positive = video ahead, negative = video behind)
+        deviation = video_position - expected_position
         
-        if drift > self.sync_tolerance:
-            print(f"Video drift detected: {drift:.2f}s (video: {video_position:.2f}s, expected: {expected_position:.2f}s)")
-            print(f"Correcting video position to {expected_position:.2f}s")
-            self.seek_video_position(expected_position)
+        # Add deviation to our sample collection for median filtering
+        self.deviation_samples.append(deviation)
+        
+        # Only act on sync if we have enough samples
+        if len(self.deviation_samples) < 3:
+            return
+            
+        # Calculate median deviation to filter out outliers
+        median_deviation = statistics.median(self.deviation_samples)
+        abs_median_deviation = abs(median_deviation)
+        
+        # Check if median deviation exceeds our threshold
+        if abs_median_deviation > self.deviation_threshold:
+            print(f"Video sync drift detected: median deviation {median_deviation:.2f}s")
+            print(f"Video position: {video_position:.2f}s, Expected: {expected_position:.2f}s")
+            
+            # For large deviations, pause video during correction to avoid glitches
+            if abs_median_deviation > self.pause_threshold:
+                print(f"Large deviation ({abs_median_deviation:.2f}s), pausing during correction")
+                self.pause_video()
+                time.sleep(0.1)  # Brief pause to ensure pause takes effect
+            
+            # Perform the correction
+            corrected_position = expected_position
+            if self.seek_video_position(corrected_position):
+                self.last_correction_time = now
+                # Clear deviation samples after successful correction
+                self.deviation_samples.clear()
+                
+                # Resume video if we paused it
+                if abs_median_deviation > self.pause_threshold:
+                    time.sleep(0.1)  # Brief delay before resuming
+                    self.resume_video()
+                    print("Video resumed after correction")
+            else:
+                print("Failed to correct video position")
+    
+    def pause_video(self):
+        """Pause video playback"""
+        if not self.omx_dbus_interface:
+            return False
+            
+        try:
+            self.omx_dbus_interface.Pause()
+            return True
+        except Exception as e:
+            print(f"Error pausing video: {e}")
+            return False
+    
+    def resume_video(self):
+        """Resume video playback"""
+        if not self.omx_dbus_interface:
+            return False
+            
+        try:
+            self.omx_dbus_interface.Play()
+            return True
+        except Exception as e:
+            print(f"Error resuming video: {e}")
+            return False
     
     def stop_playback(self):
         """Stop video playback and reset state"""
