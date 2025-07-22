@@ -2,6 +2,7 @@
 """
 KitchenSync Collaborator Pi
 Receives time sync and commands from leader, plays videos and outputs MIDI data
+Now uses VLC as the primary video player (omxplayer is deprecated in Raspberry Pi OS Bookworm)
 """
 
 import configparser
@@ -36,13 +37,240 @@ except ImportError:
         def get_port_name(self, port): 
             return f"Mock MIDI Port {port}"
 
-# Try to import dbus for omxplayer control, fall back to simulation if not available
+# Try to import VLC Python bindings, fall back to command line if not available
+try:
+    import vlc
+    VLC_PYTHON_AVAILABLE = True
+    print("VLC Python bindings available - using advanced video control")
+except ImportError:
+    print("python-vlc not available, falling back to VLC command line interface")
+    VLC_PYTHON_AVAILABLE = False
+
+# DBus is no longer needed since we're using VLC instead of omxplayer
+# But we'll keep the import for backward compatibility
 try:
     import dbus
     DBUS_AVAILABLE = True
 except ImportError:
-    print("python-dbus not available, video seeking disabled")
+    print("python-dbus not available (not needed for VLC mode)")
     DBUS_AVAILABLE = False
+
+class VLCVideoPlayer:
+    """
+    VLC-based video player with precise control and synchronization capabilities
+    Supports both VLC Python bindings and command-line interface
+    """
+    
+    def __init__(self):
+        self.vlc_instance = None
+        self.vlc_player = None
+        self.vlc_media = None
+        self.command_process = None
+        self.start_time = None
+        self.video_path = None
+        self.using_python_vlc = False
+        
+    def start_video(self, video_path, volume=-2000):
+        """Start video playback with VLC"""
+        self.video_path = video_path
+        
+        if VLC_PYTHON_AVAILABLE:
+            return self._start_with_python_vlc(video_path, volume)
+        else:
+            return self._start_with_command_line_vlc(video_path, volume)
+    
+    def _start_with_python_vlc(self, video_path, volume):
+        """Start video using VLC Python bindings (preferred method)"""
+        try:
+            # Create VLC instance with appropriate options
+            vlc_args = [
+                '--intf', 'dummy',          # No interface
+                '--no-video-title-show',    # Don't show title
+                '--no-osd',                 # No on-screen display
+                '--quiet',                  # Reduce log output
+            ]
+            
+            self.vlc_instance = vlc.Instance(' '.join(vlc_args))
+            self.vlc_player = self.vlc_instance.media_player_new()
+            
+            # Load media
+            self.vlc_media = self.vlc_instance.media_new(video_path)
+            self.vlc_player.set_media(self.vlc_media)
+            
+            # Set volume (VLC uses 0-100 scale, convert from omxplayer-style values)
+            if volume < 0:
+                # Convert from omxplayer millibel to VLC percentage
+                # omxplayer -2000 (very quiet) -> VLC ~20%
+                vlc_volume = max(0, min(100, int(100 * pow(10, volume/4000))))
+            else:
+                vlc_volume = min(100, volume)
+            
+            self.vlc_player.audio_set_volume(vlc_volume)
+            
+            # Start playback
+            self.vlc_player.play()
+            self.start_time = time.time()
+            self.using_python_vlc = True
+            
+            print(f"Started VLC Python playback: {video_path} (volume: {vlc_volume}%)")
+            return True
+            
+        except Exception as e:
+            print(f"Error starting VLC Python player: {e}")
+            return False
+    
+    def _start_with_command_line_vlc(self, video_path, volume):
+        """Start video using VLC command line (fallback method)"""
+        try:
+            # Build VLC command
+            cmd = [
+                'vlc',
+                '--intf', 'dummy',          # No interface
+                '--no-video-title-show',    # Don't show title
+                '--no-osd',                 # No on-screen display
+                '--play-and-exit',          # Exit when done
+                '--quiet',                  # Reduce log output
+            ]
+            
+            # Add volume if specified
+            if volume < 0:
+                # Convert from omxplayer millibel to VLC gain
+                vlc_gain = max(-20, volume/100)  # Rough conversion
+                cmd.extend(['--gain', str(vlc_gain)])
+            
+            cmd.append(video_path)
+            
+            # Start VLC process
+            self.command_process = subprocess.Popen(
+                cmd,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL
+            )
+            
+            self.start_time = time.time()
+            self.using_python_vlc = False
+            
+            print(f"Started VLC command line playback: {video_path}")
+            return True
+            
+        except FileNotFoundError:
+            print("Error: VLC not found. Install with: sudo apt install vlc")
+            return False
+        except Exception as e:
+            print(f"Error starting VLC command line: {e}")
+            return False
+    
+    def get_position(self):
+        """Get current playback position in seconds"""
+        if self.using_python_vlc and self.vlc_player:
+            try:
+                # VLC returns position as fraction (0.0-1.0) of total duration
+                position_fraction = self.vlc_player.get_position()
+                length_ms = self.vlc_player.get_length()
+                
+                if position_fraction >= 0 and length_ms > 0:
+                    return (position_fraction * length_ms) / 1000.0
+                else:
+                    # Fallback to elapsed time if position unavailable
+                    return time.time() - self.start_time if self.start_time else 0
+            except Exception as e:
+                print(f"Error getting VLC position: {e}")
+                return time.time() - self.start_time if self.start_time else 0
+        else:
+            # For command line VLC, estimate based on elapsed time
+            return time.time() - self.start_time if self.start_time else 0
+    
+    def seek_to(self, position_seconds):
+        """Seek to specific position in seconds"""
+        if self.using_python_vlc and self.vlc_player:
+            try:
+                length_ms = self.vlc_player.get_length()
+                if length_ms > 0:
+                    # Convert seconds to fraction of total duration
+                    position_fraction = min(1.0, max(0.0, (position_seconds * 1000.0) / length_ms))
+                    self.vlc_player.set_position(position_fraction)
+                    print(f"VLC seeked to {position_seconds:.2f}s ({position_fraction:.3f})")
+                    return True
+                else:
+                    print("Cannot seek: video length unknown")
+                    return False
+            except Exception as e:
+                print(f"Error seeking VLC player: {e}")
+                return False
+        else:
+            print("Seeking not available with VLC command line interface")
+            return False
+    
+    def pause(self):
+        """Pause playback"""
+        if self.using_python_vlc and self.vlc_player:
+            try:
+                self.vlc_player.pause()
+                print("VLC playback paused")
+                return True
+            except Exception as e:
+                print(f"Error pausing VLC: {e}")
+                return False
+        else:
+            print("Pause not available with VLC command line interface")
+            return False
+    
+    def resume(self):
+        """Resume playback"""
+        if self.using_python_vlc and self.vlc_player:
+            try:
+                if self.vlc_player.is_playing():
+                    print("VLC is already playing")
+                else:
+                    self.vlc_player.play()
+                    print("VLC playback resumed")
+                return True
+            except Exception as e:
+                print(f"Error resuming VLC: {e}")
+                return False
+        else:
+            print("Resume not available with VLC command line interface")
+            return False
+    
+    def stop(self):
+        """Stop playback and cleanup"""
+        if self.using_python_vlc:
+            try:
+                if self.vlc_player:
+                    self.vlc_player.stop()
+                if self.vlc_instance:
+                    self.vlc_instance.release()
+                print("VLC Python player stopped")
+            except Exception as e:
+                print(f"Error stopping VLC Python player: {e}")
+        
+        if self.command_process:
+            try:
+                self.command_process.terminate()
+                self.command_process.wait(timeout=5)
+                print("VLC command line player stopped")
+            except Exception as e:
+                print(f"Error stopping VLC command line: {e}")
+        
+        # Reset state
+        self.vlc_instance = None
+        self.vlc_player = None
+        self.vlc_media = None
+        self.command_process = None
+        self.start_time = None
+        self.using_python_vlc = False
+    
+    def is_playing(self):
+        """Check if video is currently playing"""
+        if self.using_python_vlc and self.vlc_player:
+            try:
+                return self.vlc_player.is_playing()
+            except:
+                return False
+        elif self.command_process:
+            return self.command_process.poll() is None
+        else:
+            return False
 
 class KitchenSyncCollaborator:
     def __init__(self, config_file='collaborator_config.ini'):
@@ -67,10 +295,9 @@ class KitchenSyncCollaborator:
         self.synced_start = None
         self.last_sync_received = 0
         self.is_running = False
-        self.video_process = None
+        self.video_player = VLCVideoPlayer()  # Use new VLC video player
         self.schedule = []
         self.triggered_cues = set()
-        self.omx_dbus_interface = None
         self.video_start_time = None
         self.last_sync_check = 0
         
@@ -78,7 +305,7 @@ class KitchenSyncCollaborator:
         self.sync_tolerance = self.config.get('sync_tolerance', 1.0)  # seconds
         self.sync_check_interval = self.config.get('sync_check_interval', 5.0)  # seconds
         
-        # Advanced sync settings from omxplayer-sync
+        # Advanced sync settings (originally from omxplayer-sync, now adapted for VLC)
         self.deviation_threshold = self.config.get('deviation_threshold', 0.5)  # seconds
         self.max_deviation_samples = int(self.config.get('max_deviation_samples', 10))
         self.pause_threshold = self.config.get('pause_threshold', 2.0)  # seconds for pausing during large corrections
@@ -260,143 +487,31 @@ class KitchenSyncCollaborator:
         print("Stopped by leader command")
     
     def start_video(self):
-        """Start video playback with appropriate player"""
+        """Start video playback with VLC"""
         video_path = self.find_video_file()
         
         if not video_path:
             print(f"Error: Video file '{self.video_file}' not found")
             return False
         
-        # Determine which video player to use
-        if self.is_raspberry_pi():
-            # Use omxplayer on Raspberry Pi
-            cmd = [
-                'omxplayer',
-                '--no-osd',
-                '--vol', '-2000',
-                video_path
-            ]
-            player_name = "omxplayer"
-        else:
-            # Use alternative players for simulation on other systems
-            cmd = self.get_fallback_video_command(video_path)
-            player_name = cmd[0] if cmd else "no player"
-            
-        if not cmd:
-            print("No suitable video player found for simulation")
-            print("Install one of: vlc, mpv, ffplay, or mplayer")
-            return False
+        # Use VLC video player (works on both Raspberry Pi and other systems)
+        success = self.video_player.start_video(video_path, volume=-2000)
         
-        try:
-            self.video_process = subprocess.Popen(cmd, 
-                                                stdout=subprocess.DEVNULL, 
-                                                stderr=subprocess.DEVNULL)
-            print(f"Started video playback with {player_name}: {video_path}")
-            
-            # Set up DBus interface for omxplayer control
-            if player_name == "omxplayer":
-                self.setup_omxplayer_dbus()
-            
+        if success:
             self.video_start_time = time.time()
+            print(f"Started VLC video playback: {video_path}")
             return True
-            
-        except FileNotFoundError:
-            print(f"Error: {player_name} not found")
-            if self.is_raspberry_pi():
-                print("Install with: sudo apt install omxplayer")
-            else:
-                print("For simulation, install one of: vlc, mpv, ffplay, or mplayer")
+        else:
+            print("Failed to start video playback")
             return False
-        except Exception as e:
-            print(f"Error starting video: {e}")
-            return False
-    
-    def is_raspberry_pi(self):
-        """Check if running on Raspberry Pi"""
-        try:
-            with open('/proc/cpuinfo', 'r') as f:
-                cpuinfo = f.read()
-                return 'Raspberry Pi' in cpuinfo or 'BCM' in cpuinfo
-        except:
-            return False
-    
-    def get_fallback_video_command(self, video_path):
-        """Get fallback video player command for non-Pi systems"""
-        # Try different video players in order of preference
-        players = [
-            # VLC (common, good for testing)
-            ['vlc', '--intf', 'dummy', '--play-and-exit', video_path],
-            # MPV (lightweight, good alternative)
-            ['mpv', '--no-video-aspect', '--really-quiet', video_path],
-            # FFplay (part of ffmpeg, widely available)
-            ['ffplay', '-nodisp', '-autoexit', '-loglevel', 'quiet', video_path],
-            # MPlayer (older but widely available)
-            ['mplayer', '-really-quiet', '-vo', 'null', video_path]
-        ]
-        
-        for cmd in players:
-            try:
-                # Check if the player exists
-                subprocess.run(['which', cmd[0]], 
-                             check=True, 
-                             stdout=subprocess.DEVNULL, 
-                             stderr=subprocess.DEVNULL)
-                return cmd
-            except (subprocess.CalledProcessError, FileNotFoundError):
-                continue
-        
-        return None
-    
-    def setup_omxplayer_dbus(self):
-        """Set up DBus interface for omxplayer control"""
-        if not DBUS_AVAILABLE:
-            print("DBus not available, video sync correction disabled")
-            return
-            
-        try:
-            # Wait a moment for omxplayer to start up
-            time.sleep(0.5)
-            
-            # Connect to omxplayer's DBus interface
-            bus = dbus.SessionBus()
-            omx_object = bus.get_object('org.mpris.MediaPlayer2.omxplayer', 
-                                      '/org/mpris/MediaPlayer2', 
-                                      introspect=False)
-            self.omx_dbus_interface = dbus.Interface(omx_object, 'org.mpris.MediaPlayer2.Player')
-            print("Connected to omxplayer DBus interface")
-            
-        except Exception as e:
-            print(f"Could not connect to omxplayer DBus: {e}")
-            self.omx_dbus_interface = None
     
     def get_video_position(self):
         """Get current video position in seconds"""
-        if not self.omx_dbus_interface:
-            return None
-            
-        try:
-            # Get position in microseconds and convert to seconds
-            position_us = self.omx_dbus_interface.Position()
-            return position_us / 1000000.0
-        except Exception as e:
-            print(f"Error getting video position: {e}")
-            return None
+        return self.video_player.get_position()
     
     def seek_video_position(self, target_seconds):
         """Seek video to specific position"""
-        if not self.omx_dbus_interface:
-            print("No DBus interface available for seeking")
-            return False
-            
-        try:
-            # Convert to microseconds for omxplayer
-            target_us = int(target_seconds * 1000000)
-            self.omx_dbus_interface.SetPosition(dbus.ObjectPath('/not/used'), target_us)
-            print(f"Seeked video to {target_seconds:.2f}s")
-            return True
-        except Exception as e:
-            print(f"Error seeking video: {e}")
-            return False
+        return self.video_player.seek_to(target_seconds)
     
     def check_video_sync(self, leader_time):
         """Check if video needs sync correction using median deviation filtering"""
@@ -463,42 +578,18 @@ class KitchenSyncCollaborator:
     
     def pause_video(self):
         """Pause video playback"""
-        if not self.omx_dbus_interface:
-            return False
-            
-        try:
-            self.omx_dbus_interface.Pause()
-            return True
-        except Exception as e:
-            print(f"Error pausing video: {e}")
-            return False
+        return self.video_player.pause()
     
     def resume_video(self):
         """Resume video playback"""
-        if not self.omx_dbus_interface:
-            return False
-            
-        try:
-            self.omx_dbus_interface.Play()
-            return True
-        except Exception as e:
-            print(f"Error resuming video: {e}")
-            return False
+        return self.video_player.resume()
     
     def stop_playback(self):
         """Stop video playback and reset state"""
         self.is_running = False
         
-        if self.video_process:
-            try:
-                self.video_process.terminate()
-                self.video_process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                self.video_process.kill()
-            except Exception as e:
-                print(f"Error stopping video: {e}")
-            finally:
-                self.video_process = None
+        # Stop VLC video player
+        self.video_player.stop()
         
         # Send MIDI all notes off
         try:

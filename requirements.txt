@@ -1,31 +1,23 @@
 # KitchenSync Requirements
-# Note: RPi.GPIO is only available on Raspberry Pi hardware (no longer used for MIDI version)
-# The code will fall back to simulation mode on other systems
 
 # MIDI Support
 python-rtmidi>=1.4.0
 
-# DBus support for omxplayer control (Raspberry Pi)
+# VLC Python bindings for video control
+python-vlc>=3.0.0
+
+# DBus support (optional, for legacy compatibility)
 dbus-python>=1.2.0
 
-# For Raspberry Pi only (legacy, no longer used):
-# RPi.GPIO>=0.7.0
-
 # Standard library modules used:
-# - socket
-# - json  
-# - time
-# - subprocess
-# - threading
-# - configparser
-# - pathlib
-# - os
-# - sys
+# - socket, json, time, subprocess, threading
+# - configparser, pathlib, os, sys, statistics, collections
 
-# Video Player Dependencies:
-# Raspberry Pi: omxplayer (install via: sudo apt install omxplayer)
-# Other Linux: one of the following for simulation/testing:
-#   - vlc (recommended for testing)
-#   - mpv
-#   - ffmpeg (includes ffplay)
+# System Dependencies (install via apt):
+# sudo apt install vlc libvlc-dev python3-vlc python3-pip python3-venv python3-dev libasound2-dev
+
+# Installation:
+# python3 -m venv kitchensync-env
+# source kitchensync-env/bin/activate
+# pip install -r requirements.txt
 #   - mplayer
