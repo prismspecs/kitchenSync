@@ -251,11 +251,16 @@ class KitchenSyncLeader:
     def _play_with_python_vlc(self):
         """Play video using VLC Python bindings"""
         try:
+            print(f"🎬 VLC Python bindings: Starting video playback")
+            print(f"🎬 Video path: {self.video_path}")
+            print(f"🎬 File exists: {os.path.exists(self.video_path)}")
+            print(f"🎬 Debug mode: {self.debug_mode}")
+            print(f"🎬 Debug overlay available: {self.debug_overlay is not None}")
+            
             # Create VLC instance with optimized args for faster startup
             vlc_args = [
                 '--no-video-title-show',
                 '--no-osd',
-                '--quiet',
                 '--mouse-hide-timeout=0',
                 '--no-snapshot-preview',  # Disable preview generation
                 '--network-caching=0',  # Minimize caching delay
@@ -266,8 +271,8 @@ class KitchenSyncLeader:
             ]
             
             # Conditional fullscreen based on debug mode
-            if self.debug_mode and self.debug_overlay:
-                # In debug mode with overlay, use windowed mode positioned to leave space for overlay
+            if self.debug_mode:
+                # In debug mode, use windowed mode positioned to leave space for debug info
                 vlc_args.extend([
                     '--no-fullscreen',
                     '--width=1520',  # Leave space for 400px debug overlay
@@ -276,38 +281,61 @@ class KitchenSyncLeader:
                     '--video-y=0',   # Position VLC window at top
                     '--no-video-deco',  # Remove window decorations
                 ])
-                print("🐛 Debug mode: Running VLC in windowed mode to show debug overlay")
+                print("🐛 Debug mode: Running VLC in windowed mode")
             else:
                 # Normal operation: fullscreen
                 vlc_args.extend([
                     '--fullscreen',
                     '--video-on-top',  # Ensure video stays on top
                 ])
+                print("🎬 Normal mode: Running VLC in fullscreen")
+            
+            print(f"🎬 VLC args: {' '.join(vlc_args)}")
             
             self.vlc_instance = vlc.Instance(' '.join(vlc_args))
             if not self.vlc_instance:
                 print("❌ Failed to create VLC instance")
                 return False
+            
+            print("✅ VLC instance created successfully")
                 
             self.vlc_player = self.vlc_instance.media_player_new()
             if not self.vlc_player:
                 print("❌ Failed to create VLC player")
                 return False
             
+            print("✅ VLC player created successfully")
+            
             # Load media and start immediately
             self.vlc_media = self.vlc_instance.media_new(self.video_path)
             if not self.vlc_media:
                 print("❌ Failed to create VLC media")
                 return False
+            
+            print("✅ VLC media created successfully")
                 
             self.vlc_player.set_media(self.vlc_media)
+            print("✅ Media set on player")
             
             # Set fullscreen based on debug mode
-            if not (self.debug_mode and self.debug_overlay):
+            if not self.debug_mode:
                 self.vlc_player.set_fullscreen(True)
+                print("✅ Fullscreen mode set")
             
             # Start playback immediately
             result = self.vlc_player.play()
+            print(f"✅ VLC play() called (result: {result})")
+            
+            # Wait a moment and check player state
+            time.sleep(0.5)
+            state = self.vlc_player.get_state()
+            print(f"🎬 VLC player state after start: {state}")
+            
+            # Check if the video window is visible
+            if hasattr(self.vlc_player, 'get_hwnd'):
+                hwnd = self.vlc_player.get_hwnd()
+                print(f"🎬 VLC window handle: {hwnd}")
+            
             print(f"✅ VLC started (result: {result}) - Video should appear shortly")
             
             # If in debug mode, give VLC a moment to start then raise debug overlay
@@ -325,12 +353,16 @@ class KitchenSyncLeader:
     def _play_with_command_vlc(self):
         """Play video using VLC command line"""
         try:
+            print(f"🎬 VLC command line: Starting video playback")
+            print(f"🎬 Video path: {self.video_path}")
+            print(f"🎬 File exists: {os.path.exists(self.video_path)}")
+            print(f"🎬 Debug mode: {self.debug_mode}")
+            
             cmd = [
                 'vlc',
                 '--intf', 'dummy',  # No interface
                 '--no-video-title-show',
                 '--no-osd',
-                '--quiet',
                 '--mouse-hide-timeout=0',
                 '--no-loop',
                 '--start-time=0',   # Start from beginning
@@ -340,8 +372,8 @@ class KitchenSyncLeader:
             ]
             
             # Conditional fullscreen based on debug mode
-            if self.debug_mode and self.debug_overlay:
-                # In debug mode with overlay, use windowed mode
+            if self.debug_mode:
+                # In debug mode, use windowed mode
                 cmd.extend([
                     '--no-fullscreen',
                     '--width=1520',  # Leave space for 400px debug overlay
@@ -350,30 +382,41 @@ class KitchenSyncLeader:
                     '--video-y=0',   # Position VLC window at top
                     '--no-video-deco',  # Remove window decorations
                 ])
-                print("🐛 Debug mode: Running VLC in windowed mode to show debug overlay")
+                print("🐛 Debug mode: Running VLC in windowed mode")
             else:
                 # Normal operation: fullscreen
                 cmd.append('--fullscreen')
+                print("🎬 Normal mode: Running VLC in fullscreen")
             
             cmd.append(self.video_path)
             
-            print(f"🔧 Running: {' '.join(cmd)}")
-            process = subprocess.Popen(cmd)
+            print(f"🔧 Running command: {' '.join(cmd)}")
+            process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             print(f"✅ VLC command started with PID: {process.pid}")
             
-            # Give VLC a moment to start
-            time.sleep(3)
-            
-            # If in debug mode, raise debug overlay after VLC starts
-            if self.debug_mode and self.debug_overlay:
-                self._raise_debug_overlay()
+            # Give VLC a moment to start and capture any immediate errors
+            time.sleep(1)
             
             # Check if process is still running
             if process.poll() is None:
                 print("✅ VLC process is running")
             else:
+                # Process exited, get error output
+                stdout, stderr = process.communicate()
                 print(f"❌ VLC process exited with code: {process.returncode}")
+                if stdout:
+                    print(f"❌ VLC stdout: {stdout.decode()}")
+                if stderr:
+                    print(f"❌ VLC stderr: {stderr.decode()}")
                 return False
+            
+            # Wait a bit more for window to appear
+            time.sleep(2)
+            
+            # If in debug mode, raise debug overlay after VLC starts
+            if self.debug_mode:
+                if hasattr(self, '_raise_debug_overlay'):
+                    self._raise_debug_overlay()
             
             return True
             
