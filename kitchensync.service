@@ -1,7 +1,7 @@
 [Unit]
 Description=KitchenSync Auto-Start Service
-After=network.target graphical-session.target sound.target
-Wants=network.target graphical-session.target
+After=graphical.target
+Wants=graphical.target
 
 [Service]
 Type=simple
@@ -12,11 +12,9 @@ ExecStart=/usr/bin/python3 /home/kitchensync/kitchenSync/kitchensync.py
 Restart=always
 RestartSec=10
 Environment=DISPLAY=:0
-Environment=PULSE_RUNTIME_PATH=/run/user/1000/pulse
-Environment=XDG_RUNTIME_DIR=/run/user/1000
 
-# Wait for USB drives and display to be ready
-ExecStartPre=/bin/sleep 20
+# Wait for desktop to be ready
+ExecStartPre=/bin/sleep 30
 
 [Install]
-WantedBy=multi-user.target
+WantedBy=graphical.target
