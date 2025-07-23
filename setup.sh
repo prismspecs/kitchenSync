@@ -44,11 +44,12 @@ sudo pip install python-rtmidi dbus-python python-vlc --break-system-packages
 
 # Setup auto-start service
 echo "Setting up auto-start service..."
-sudo cp kitchensync.service /etc/systemd/system/
-sudo sed -i "s/kitchensync/$USER/g" /etc/systemd/system/kitchensync.service
-sudo sed -i "s|/home/kitchensync/kitchenSync|$(pwd)|g" /etc/systemd/system/kitchensync.service
-sudo systemctl daemon-reload
-sudo systemctl enable kitchensync.service
+mkdir -p ~/.config/systemd/user
+cp kitchensync.service ~/.config/systemd/user/
+sed -i "s/kitchensync/$USER/g" ~/.config/systemd/user/kitchensync.service
+sed -i "s|/home/kitchensync/kitchenSync|$(pwd)|g" ~/.config/systemd/user/kitchensync.service
+systemctl --user daemon-reload
+systemctl --user enable kitchensync.service
 
 echo "Auto-start service installed. KitchenSync will start automatically on boot."
 
