@@ -261,8 +261,9 @@ class KitchenSyncLeader:
                     '--no-fullscreen',
                     '--width=1520',  # Leave space for 400px debug overlay
                     '--height=1080',
-                    '--video-x=0',
-                    '--video-y=0',
+                    '--video-x=0',   # Position VLC window at left edge
+                    '--video-y=0',   # Position VLC window at top
+                    '--no-video-deco',  # Remove window decorations
                 ])
                 print("🐛 Debug mode: Running VLC in windowed mode to show debug overlay")
             else:
@@ -298,6 +299,12 @@ class KitchenSyncLeader:
             result = self.vlc_player.play()
             print(f"✅ VLC started (result: {result}) - Video should appear shortly")
             
+            # If in debug mode, give VLC a moment to start then raise debug overlay
+            if self.debug_mode and self.debug_overlay:
+                import time
+                time.sleep(1)  # Let VLC window appear first
+                self._raise_debug_overlay()
+            
             return True
             
         except Exception as e:
@@ -325,8 +332,9 @@ class KitchenSyncLeader:
                     '--no-fullscreen',
                     '--width=1520',  # Leave space for 400px debug overlay
                     '--height=1080',
-                    '--video-x=0',
-                    '--video-y=0',
+                    '--video-x=0',   # Position VLC window at left edge
+                    '--video-y=0',   # Position VLC window at top
+                    '--no-video-deco',  # Remove window decorations
                 ])
                 print("🐛 Debug mode: Running VLC in windowed mode to show debug overlay")
             else:
@@ -341,6 +349,10 @@ class KitchenSyncLeader:
             
             # Give VLC a moment to start
             time.sleep(3)
+            
+            # If in debug mode, raise debug overlay after VLC starts
+            if self.debug_mode and self.debug_overlay:
+                self._raise_debug_overlay()
             
             # Check if process is still running
             if process.poll() is None:
@@ -507,6 +519,36 @@ class KitchenSyncLeader:
             except Exception as e:
                 print(f"⚠️ Debug overlay update error: {e}")
     
+    def _raise_debug_overlay(self):
+        """Force debug overlay window to front"""
+        if not self.debug_overlay:
+            return
+            
+        try:
+            import subprocess
+            print("🐛 Raising debug overlay window to front...")
+            
+            # Multiple attempts to bring debug window to front
+            commands = [
+                ['wmctrl', '-r', 'KitchenSync Debug', '-b', 'add,above'],
+                ['wmctrl', '-r', 'KitchenSync Debug', 'raise'],
+                ['xdotool', 'search', '--name', 'KitchenSync Debug', 'windowraise'],
+                ['xdotool', 'search', '--name', 'KitchenSync Debug', 'windowactivate'],
+            ]
+            
+            for cmd in commands:
+                try:
+                    result = subprocess.run(cmd, capture_output=True, timeout=2)
+                    if result.returncode == 0:
+                        print(f"✓ Debug overlay raised via {cmd[0]}")
+                    else:
+                        print(f"⚠️ {cmd[0]} failed: {result.stderr.decode()}")
+                except Exception as e:
+                    print(f"⚠️ {cmd[0]} not available: {e}")
+                    
+        except Exception as e:
+            print(f"⚠️ Could not raise debug overlay: {e}")
+
     def broadcast_sync(self):
         """Continuously broadcast time sync"""
         while self.is_running:

@@ -326,11 +326,11 @@ class DebugOverlay:
             self.overlay_width = 400
             self.overlay_height = 240
             
-            # Position overlay in top-right corner
-            self.overlay_x = self.screen_width - self.overlay_width - 20
-            self.overlay_y = 20
+            # Position overlay in top-right corner, ensuring it doesn't overlap VLC
+            self.overlay_x = 1520  # Right after VLC's 1520px width
+            self.overlay_y = 0     # Top of screen
             
-            # Set window position
+            # Set window position before creating window
             os.environ['SDL_VIDEO_WINDOW_POS'] = f'{self.overlay_x},{self.overlay_y}'
             
             # Create a small window with ALWAYS_ON_TOP flag
@@ -344,23 +344,28 @@ class DebugOverlay:
             self.screen = self.pygame.display.set_mode((self.overlay_width, self.overlay_height), flags)
             self.pygame.display.set_caption("KitchenSync Debug")
             
-            # Multiple attempts to force window on top
+            # Force window properties immediately after creation
             try:
                 import subprocess
                 import time
                 
-                # Method 1: Use wmctrl to set always on top
-                subprocess.run(['wmctrl', '-r', 'KitchenSync Debug', '-b', 'add,above'], 
-                              capture_output=True, timeout=2)
+                # Give pygame a moment to create the window
+                time.sleep(0.5)
                 
-                # Method 2: Use xdotool to raise window repeatedly
-                subprocess.run(['xdotool', 'search', '--name', 'KitchenSync Debug', 'windowraise'], 
-                              capture_output=True, timeout=2)
+                # Aggressive window management - try all methods
+                commands = [
+                    ['wmctrl', '-r', 'KitchenSync Debug', '-b', 'add,above'],
+                    ['wmctrl', '-r', 'KitchenSync Debug', '-b', 'add,sticky'],
+                    ['wmctrl', '-r', 'KitchenSync Debug', '-T', 'KitchenSync Debug - ALWAYS ON TOP'],
+                    ['xdotool', 'search', '--name', 'KitchenSync Debug', 'windowraise'],
+                ]
                 
-                # Method 3: Set window as sticky (appears on all workspaces)
-                subprocess.run(['wmctrl', '-r', 'KitchenSync Debug', '-b', 'add,sticky'], 
-                              capture_output=True, timeout=2)
-                
+                for cmd in commands:
+                    try:
+                        subprocess.run(cmd, capture_output=True, timeout=1)
+                    except:
+                        pass
+                        
             except:
                 pass  # Tools not available, continue anyway
             
