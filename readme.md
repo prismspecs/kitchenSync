@@ -38,22 +38,10 @@ sudo apt update
 sudo apt install -y vlc libvlc-dev python3-vlc
 
 # Install system packages for Python libraries
-sudo apt install -y python3-pip python3-venv python3-dev libasound2-dev
+sudo apt install -y python3-pip python3-dev libasound2-dev libdbus-1-dev libglib2.0-dev
 
-# Create a virtual environment for Python packages (recommended for modern systems)
-python3 -m venv kitchensync-env
-source kitchensync-env/bin/activate
-
-# Install Python dependencies
-pip install python-rtmidi dbus-python python-vlc
-```
-
-**Note:** Always activate your virtual environment before running the scripts:
-```bash
-source kitchensync-env/bin/activate
-python3 leader.py
-# or
-python3 collaborator.py
+# Install Python dependencies system-wide
+sudo pip install python-rtmidi dbus-python python-vlc --break-system-packages
 ```
 
 ### 2. Configuration
@@ -136,9 +124,6 @@ chmod +x setup.sh
 ### Leader Pi
 
 ```bash
-# Activate virtual environment
-source kitchensync-env/bin/activate
-
 python3 leader.py
 ```
 
@@ -147,9 +132,6 @@ Use the interactive interface to start/stop the system and manage schedules.
 ### Collaborator Pi
 
 ```bash
-# Activate virtual environment
-source kitchensync-env/bin/activate
-
 # Edit config file first (set unique pi_id, video_file, and midi_port)
 nano collaborator_config.ini
 python3 collaborator.py
@@ -401,13 +383,13 @@ sudo apt update
 
 **Python Environment:**
 ```bash
-# Create and use virtual environment (recommended)
-python3 -m venv kitchensync-env
-source kitchensync-env/bin/activate
-pip install python-rtmidi dbus-python python-vlc
+# Install Python packages system-wide
+sudo pip install python-rtmidi dbus-python python-vlc --break-system-packages
 
-# Always activate before running scripts
-source kitchensync-env/bin/activate
+# Ensure dbus libraries are installed
+sudo apt install -y libdbus-1-dev libglib2.0-dev
+
+# Run the scripts directly
 python3 leader.py
 ```
 
@@ -422,7 +404,7 @@ python3 leader.py
 - Check USB MIDI interface connectivity: `aconnect -l` or `amidi -l`
 - Verify MIDI port configuration in `collaborator_config.ini`
 - Test with a MIDI monitor or DAW software
-- Ensure `python-rtmidi` is installed in your virtual environment
+- Ensure `python-rtmidi` is installed: `sudo pip install python-rtmidi --break-system-packages`
 
 ### Video Not Playing
 
