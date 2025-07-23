@@ -265,6 +265,8 @@ class KitchenSyncLeader:
                 '--no-snapshot-preview',  # Disable preview generation
                 '--network-caching=0',  # Minimize caching delay
                 '--file-caching=300',  # Reduce file caching (300ms)
+                '--vout=x11',  # Force X11 video output (not ASCII)
+                '--aout=alsa',  # Use ALSA audio output
             ]
             
             # Conditional fullscreen based on debug mode
@@ -390,6 +392,8 @@ class KitchenSyncLeader:
                 '--mouse-hide-timeout=0',
                 '--no-loop',
                 '--start-time=0',   # Start from beginning
+                '--vout=x11',  # Force X11 video output (not ASCII)
+                '--aout=alsa',  # Use ALSA audio output
             ]
             
             # Conditional fullscreen based on debug mode
