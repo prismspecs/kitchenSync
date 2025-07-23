@@ -127,30 +127,41 @@ class KitchenSyncAutoStart:
         
         # Try to display error with various methods
         try:
-            # Method 1: Try to use notify-send (if available)
-            subprocess.run(['notify-send', 'KitchenSync Error', message], 
-                         capture_output=True, timeout=5)
+            # Method 1: Try to use notify-send (if available and DISPLAY is set)
+            if os.environ.get('DISPLAY'):
+                subprocess.run(['notify-send', 'KitchenSync Error', message], 
+                             capture_output=True, timeout=5)
         except:
             pass
         
         try:
-            # Method 2: Try to create a simple GUI error dialog
-            error_script = f'''
+            # Method 2: Try to create a simple GUI error dialog (if DISPLAY available)
+            if os.environ.get('DISPLAY'):
+                error_script = f'''
 import tkinter as tk
 from tkinter import messagebox
 import sys
 
-root = tk.Tk()
-root.withdraw()
-messagebox.showerror("KitchenSync Error", "{message}")
-root.quit()
+try:
+    root = tk.Tk()
+    root.withdraw()
+    messagebox.showerror("KitchenSync Error", "{message}")
+    root.quit()
+except:
+    pass
 '''
-            subprocess.run([sys.executable, '-c', error_script], 
-                         capture_output=True, timeout=10)
+                subprocess.run([sys.executable, '-c', error_script], 
+                             capture_output=True, timeout=10)
         except:
             pass
         
-        # Method 3: Always print to console
+        # Method 3: Always log to syslog and console
+        try:
+            subprocess.run(['logger', '-t', 'kitchensync', f'ERROR: {message}'], 
+                         capture_output=True, timeout=5)
+        except:
+            pass
+            
         print("\n" + "="*60)
         print("KITCHENSYNC ERROR")
         print("="*60)

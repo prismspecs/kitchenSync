@@ -42,22 +42,47 @@ sudo usermod -a -G plugdev,disk $USER
 echo "Installing Python packages system-wide..."
 sudo pip install python-rtmidi dbus-python python-vlc --break-system-packages
 
+# Setup auto-start service
+echo "Setting up auto-start service..."
+sudo cp kitchensync.service /etc/systemd/system/
+sudo sed -i "s/kitchensync/$USER/g" /etc/systemd/system/kitchensync.service
+sudo sed -i "s|/home/kitchensync/kitchenSync|$(pwd)|g" /etc/systemd/system/kitchensync.service
+sudo systemctl daemon-reload
+sudo systemctl enable kitchensync.service
+
+echo "Auto-start service installed. KitchenSync will start automatically on boot."
+
 echo ""
 echo "=== Setup Complete! ==="
 echo ""
 echo "Video player: VLC"
 echo "Python packages installed system-wide"
+echo "🔄 Auto-start service: ENABLED"
 echo ""
-echo "Next steps:"
-echo "1. Connect USB MIDI interface to each Pi"
-echo "2. For leader Pi: python3 leader.py"
-echo "3. For collaborator Pi: Edit collaborator_config.ini, then python3 collaborator.py"
-echo "4. Video files:"
-echo "   - USB drive (auto-detected): Place ONE video file at the root of USB drive"
-echo "   - Local storage: Place files in ./videos/ directory"
-echo "5. Test MIDI connection with: aconnect -l or amidi -l"
+echo "🚀 PLUG-AND-PLAY OPERATION:"
+echo "1. Create kitchensync.ini on your USB drive with:"
+echo "   - is_leader = true/false (designates leader or collaborator)"
+echo "   - pi_id = unique ID for each Pi" 
+echo "   - video_file = specific video filename (optional)"
+echo "2. Power on the Pi - KitchenSync starts automatically!"
 echo ""
-echo "💡 USB Drive Priority: The system will automatically mount and use video files"
-echo "   from USB drives before checking local directories. For best results, use"
-echo "   only one video file per USB drive at the root level."
+echo "📁 USB Drive Contents:"
+echo "   - kitchensync.ini (configuration file)"
+echo "   - Your video file(s) at the root level"
+echo ""
+echo "🔧 MANUAL TESTING (Optional):"
+echo "- Test now: python3 kitchensync.py"
+echo "- Manual leader: python3 leader.py"
+echo "- Manual collaborator: python3 collaborator.py"
+echo ""
+echo "🎵 MIDI Setup:"
+echo "1. Connect USB MIDI interface to collaborator Pis"
+echo "2. Test connection: aconnect -l or amidi -l"
+echo ""
+echo "� Service Management:"
+echo "- Check status: sudo systemctl status kitchensync"
+echo "- View logs: sudo journalctl -u kitchensync -f"
+echo "- Disable auto-start: sudo systemctl disable kitchensync"
+echo ""
+echo "💡 READY FOR DEPLOYMENT! Just plug in USB drive and power on!"
 echo ""

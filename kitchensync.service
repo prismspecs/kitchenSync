@@ -1,0 +1,21 @@
+[Unit]
+Description=KitchenSync Auto-Start Service
+After=network.target graphical-session.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=kitchensync
+Group=kitchensync
+WorkingDirectory=/home/kitchensync/kitchenSync
+ExecStart=/usr/bin/python3 /home/kitchensync/kitchenSync/kitchensync.py
+Restart=always
+RestartSec=10
+Environment=DISPLAY=:0
+Environment=PULSE_RUNTIME_PATH=/run/user/1000/pulse
+
+# Wait for USB drives to be mounted
+ExecStartPre=/bin/sleep 15
+
+[Install]
+WantedBy=multi-user.target
