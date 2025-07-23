@@ -9,7 +9,17 @@ import socket
 import sys
 import threading
 import time
+import os
+import glob
+import subprocess
 from pathlib import Path
+
+# VLC video player support
+try:
+    import vlc
+    VLC_PYTHON_AVAILABLE = True
+except ImportError:
+    VLC_PYTHON_AVAILABLE = False
 
 class KitchenSyncLeader:
     """
@@ -30,8 +40,148 @@ class KitchenSyncLeader:
         self.collaborator_pis = {}  # Track connected Pis
         self.system_schedule = self.load_schedule()
         
+        # Video player state
+        self.vlc_instance = None
+        self.vlc_player = None
+        self.vlc_media = None
+        self.video_path = None
+        
         # Initialize sockets
         self._setup_sockets()
+        
+        # Initialize video player
+        self._setup_video_player()
+    
+    def _setup_video_player(self):
+        """Initialize video player and find video file"""
+        try:
+            # Find video file from USB drive
+            self.video_path = self._find_video_file()
+            if self.video_path:
+                print(f"🎬 Found video: {self.video_path}")
+            else:
+                print("⚠️ No video file found")
+        except Exception as e:
+            print(f"Error setting up video player: {e}")
+    
+    def _find_video_file(self):
+        """Find video file on USB drives or local directory"""
+        # Check USB drives first
+        mount_result = subprocess.run(['mount'], capture_output=True, text=True)
+        if mount_result.returncode == 0:
+            for line in mount_result.stdout.split('\n'):
+                if '/media/' in line:
+                    parts = line.split(' on ')
+                    if len(parts) >= 2:
+                        mount_point = parts[1].split(' type ')[0]
+                        if os.path.exists(mount_point) and os.path.isdir(mount_point):
+                            # Look for video files
+                            video_extensions = ['.mp4', '.avi', '.mov', '.mkv', '.wmv']
+                            for ext in video_extensions:
+                                videos = glob.glob(os.path.join(mount_point, f'*{ext}'))
+                                if videos:
+                                    return videos[0]
+        
+        # Check local videos directory
+        if os.path.exists('./videos'):
+            video_extensions = ['.mp4', '.avi', '.mov', '.mkv', '.wmv']
+            for ext in video_extensions:
+                videos = glob.glob(f'./videos/*{ext}')
+                if videos:
+                    return videos[0]
+        
+        return None
+    
+    def _play_video(self):
+        """Start video playback using VLC"""
+        if not self.video_path:
+            print("❌ No video file to play")
+            return False
+        
+        print(f"🎬 Starting video playback: {self.video_path}")
+        
+        if VLC_PYTHON_AVAILABLE:
+            return self._play_with_python_vlc()
+        else:
+            return self._play_with_command_vlc()
+    
+    def _play_with_python_vlc(self):
+        """Play video using VLC Python bindings"""
+        try:
+            # Create VLC instance for fullscreen playbook
+            vlc_args = [
+                '--fullscreen',
+                '--no-video-title-show',
+                '--no-osd',
+                '--quiet',
+                '--mouse-hide-timeout=0',
+            ]
+            
+            self.vlc_instance = vlc.Instance(' '.join(vlc_args))
+            if not self.vlc_instance:
+                print("❌ Failed to create VLC instance")
+                return False
+                
+            self.vlc_player = self.vlc_instance.media_player_new()
+            if not self.vlc_player:
+                print("❌ Failed to create VLC player")
+                return False
+            
+            # Set fullscreen
+            self.vlc_player.set_fullscreen(True)
+            
+            # Load and play media
+            self.vlc_media = self.vlc_instance.media_new(self.video_path)
+            if not self.vlc_media:
+                print("❌ Failed to create VLC media")
+                return False
+                
+            self.vlc_player.set_media(self.vlc_media)
+            
+            result = self.vlc_player.play()
+            print(f"✅ VLC play result: {result}")
+            print("🎬 Video should now be playing in fullscreen")
+            
+            return True
+            
+        except Exception as e:
+            print(f"❌ Error with VLC Python: {e}")
+            return False
+    
+    def _play_with_command_vlc(self):
+        """Play video using VLC command line"""
+        try:
+            cmd = [
+                'vlc',
+                '--fullscreen',
+                '--no-video-title-show',
+                '--no-osd',
+                '--quiet',
+                '--mouse-hide-timeout=0',
+                self.video_path
+            ]
+            
+            print(f"🔧 Running: {' '.join(cmd)}")
+            subprocess.Popen(cmd)
+            print("✅ VLC command started")
+            return True
+            
+        except Exception as e:
+            print(f"❌ Error with VLC command: {e}")
+            return False
+    
+    def _stop_video(self):
+        """Stop video playback"""
+        try:
+            if self.vlc_player:
+                self.vlc_player.stop()
+                print("🛑 Stopped VLC Python player")
+            
+            # Also kill any VLC processes
+            subprocess.run(['pkill', 'vlc'], capture_output=True)
+            print("🛑 Killed VLC processes")
+        except Exception as e:
+            print(f"Error stopping video: {e}")
     
     def _setup_sockets(self):
         """Initialize UDP sockets for sync and control communication"""
@@ -162,6 +312,10 @@ class KitchenSyncLeader:
         self.start_time = time.time()
         self.is_running = True
         
+        # Start video playback on leader Pi
+        print("🎬 Starting video playback on leader Pi...")
+        self._play_video()
+        
         # Start background threads
         threading.Thread(target=self.broadcast_sync, daemon=True).start()
         threading.Thread(target=self.listen_for_collaborators, daemon=True).start()
@@ -183,6 +337,10 @@ class KitchenSyncLeader:
             
         print("Stopping system...")
         self.is_running = False
+        
+        # Stop video playback on leader Pi
+        print("🛑 Stopping video playback on leader Pi...")
+        self._stop_video()
         
         # Send stop command to all collaborators
         self.send_command({'type': 'stop'})
