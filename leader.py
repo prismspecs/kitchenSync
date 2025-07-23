@@ -21,6 +21,13 @@ try:
 except ImportError:
     VLC_PYTHON_AVAILABLE = False
 
+# Debug overlay support
+try:
+    from collaborator import DebugOverlay
+    DEBUG_OVERLAY_AVAILABLE = True
+except ImportError:
+    DEBUG_OVERLAY_AVAILABLE = False
+
 class KitchenSyncLeader:
     """
     Leader Pi that orchestrates synchronized playback across multiple collaborator Pis.
@@ -37,6 +44,22 @@ class KitchenSyncLeader:
         # Debug configuration
         self.debug_mode = False
         self.load_leader_config()
+        
+        # Debug overlay initialization
+        self.debug_overlay = None
+        if self.debug_mode and DEBUG_OVERLAY_AVAILABLE:
+            try:
+                # Try to initialize with pygame first
+                self.debug_overlay = DebugOverlay("leader-pi", "leader_video.mp4", use_pygame=True)
+                print("✓ Visual debug overlay initialized")
+            except:
+                try:
+                    # Fallback to text mode
+                    self.debug_overlay = DebugOverlay("leader-pi", "leader_video.mp4", use_pygame=False)
+                    print("✓ Text debug overlay initialized")
+                except Exception as e:
+                    print(f"⚠️ Could not initialize debug overlay: {e}")
+                    self.debug_overlay = None
         
         # System state
         self.start_time = None
@@ -422,6 +445,33 @@ class KitchenSyncLeader:
             if upcoming_events:
                 next_event = upcoming_events[0]
                 print(f"🐛 ⏭️  NEXT: {next_event['type']} Ch:{next_event['channel']} Note:{next_event['note']} @{next_event['time']:.1f}s")
+        
+        # Update visual debug overlay (if available)
+        if self.debug_overlay:
+            # Prepare debug info for overlay
+            debug_info = []
+            debug_info.append(f"Leader Pi - {current_time:.1f}s")
+            
+            if current_events:
+                for event in current_events[:2]:  # Show max 2 current events
+                    debug_info.append(f"▶️ {event['type']} Ch:{event['channel']} @{event['time']:.1f}s")
+            
+            if upcoming_events:
+                next_event = upcoming_events[0]
+                debug_info.append(f"⏭️ NEXT: {next_event['type']} @{next_event['time']:.1f}s")
+            
+            # Add connected Pi count
+            debug_info.append(f"Connected Pis: {len(self.collaborator_pis)}")
+            
+            # Update the overlay display
+            try:
+                self.debug_overlay.update_display(
+                    current_time=current_time,
+                    total_time=180.0,  # Assuming 3-minute video, adjust as needed
+                    additional_info=debug_info
+                )
+            except Exception as e:
+                print(f"⚠️ Debug overlay update error: {e}")
     
     def broadcast_sync(self):
         """Continuously broadcast time sync"""
@@ -535,6 +585,14 @@ class KitchenSyncLeader:
         # Stop video playback on leader Pi
         print("🛑 Stopping video playback on leader Pi...")
         self._stop_video()
+        
+        # Cleanup debug overlay
+        if self.debug_overlay and hasattr(self.debug_overlay, 'cleanup'):
+            try:
+                self.debug_overlay.cleanup()
+                print("✓ Debug overlay cleaned up")
+            except Exception as e:
+                print(f"⚠️ Debug overlay cleanup error: {e}")
         
         # Send stop command to all collaborators
         self.send_command({'type': 'stop'})
@@ -739,10 +797,16 @@ def main():
     
     parser = argparse.ArgumentParser(description='KitchenSync Leader Pi')
     parser.add_argument('--auto', action='store_true', help='Start automatically without interactive interface')
+    parser.add_argument('--debug', action='store_true', help='Enable debug mode with detailed console output')
     args = parser.parse_args()
-    
+
     try:
         leader = KitchenSyncLeader()
+        
+        # Override debug mode if specified via command line
+        if args.debug:
+            leader.debug_mode = True
+            print("✓ Debug mode: ENABLED (via command line)")
         
         if args.auto:
             print("🎯 Leader Pi starting in automatic mode...")

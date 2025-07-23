@@ -311,6 +311,10 @@ class DebugOverlay:
     def _init_pygame_overlay(self):
         """Initialize pygame overlay for visual debug display"""
         try:
+            import os
+            # Set pygame to create window on top
+            os.environ['SDL_WINDOWID'] = ''
+            
             self.pygame.init()
             
             # Get display info
@@ -318,18 +322,31 @@ class DebugOverlay:
             self.screen_width = info.current_w
             self.screen_height = info.current_h
             
-            # Create overlay surface (smaller than full screen to not obstruct video too much)
+            # Create overlay surface (small window for debug info)
             self.overlay_width = 400
-            self.overlay_height = 200
+            self.overlay_height = 220
             
             # Position overlay in top-right corner
             self.overlay_x = self.screen_width - self.overlay_width - 20
             self.overlay_y = 20
             
-            # Create display surface
-            self.screen = self.pygame.display.set_mode((self.screen_width, self.screen_height), 
+            # Set window position
+            os.environ['SDL_VIDEO_WINDOW_POS'] = f'{self.overlay_x},{self.overlay_y}'
+            
+            # Create a small window instead of fullscreen
+            self.screen = self.pygame.display.set_mode((self.overlay_width, self.overlay_height), 
                                                        self.pygame.NOFRAME)
             self.pygame.display.set_caption("KitchenSync Debug")
+            
+            # Try to set window to stay on top (Linux-specific)
+            try:
+                # Make window always on top using wmctrl if available
+                import subprocess
+                window_title = "KitchenSync Debug"
+                subprocess.run(['wmctrl', '-r', window_title, '-b', 'add,above'], 
+                              capture_output=True, timeout=2)
+            except:
+                pass  # wmctrl not available, continue anyway
             
             # Create fonts (monospace for consistent layout)
             try:
@@ -365,21 +382,22 @@ class DebugOverlay:
     def _update_pygame_display(self, current_time, total_time, additional_info):
         """Update pygame-based visual overlay"""
         try:
-            # Clear overlay area with semi-transparent background
-            overlay_surface = self.pygame.Surface((self.overlay_width, self.overlay_height))
-            overlay_surface.set_alpha(180)
-            overlay_surface.fill((0, 0, 0))
+            # Clear the entire window with semi-transparent background
+            self.screen.fill((0, 0, 0))  # Black background for small window
             
             y_pos = 10
             
             # Pi ID (large, prominent)
             pi_text = self.font_large.render(f"Pi: {self.pi_id}", True, self.color_pi_id)
-            overlay_surface.blit(pi_text, (10, y_pos))
+            self.screen.blit(pi_text, (10, y_pos))
             y_pos += 40
             
-            # Video file name
-            video_text = self.font_medium.render(f"Video: {self.video_file}", True, self.color_video)
-            overlay_surface.blit(video_text, (10, y_pos))
+            # Video file name (truncate if too long)
+            video_name = self.video_file
+            if len(video_name) > 25:
+                video_name = video_name[:22] + "..."
+            video_text = self.font_medium.render(f"Video: {video_name}", True, self.color_video)
+            self.screen.blit(video_text, (10, y_pos))
             y_pos += 30
             
             # Time display (MM:SS / MM:SS format)
@@ -390,18 +408,21 @@ class DebugOverlay:
             
             time_str = f"{current_min:02d}:{current_sec:02d}/{total_min:02d}:{total_sec:02d}"
             time_text = self.font_medium.render(time_str, True, self.color_time)
-            overlay_surface.blit(time_text, (10, y_pos))
+            self.screen.blit(time_text, (10, y_pos))
             y_pos += 30
             
-            # Additional info (if provided)
+            # Additional info (if provided) - limit to fit in window
             if additional_info:
-                for info_line in additional_info[:3]:  # Limit to 3 lines
-                    info_text = self.font_small.render(str(info_line), True, self.color_text)
-                    overlay_surface.blit(info_text, (10, y_pos))
+                for info_line in additional_info[:4]:  # Limit to 4 lines
+                    # Truncate long lines
+                    info_str = str(info_line)
+                    if len(info_str) > 40:
+                        info_str = info_str[:37] + "..."
+                    info_text = self.font_small.render(info_str, True, self.color_text)
+                    self.screen.blit(info_text, (10, y_pos))
                     y_pos += 20
             
-            # Blit overlay to main screen
-            self.screen.blit(overlay_surface, (self.overlay_x, self.overlay_y))
+            # Update the display
             self.pygame.display.flip()
             
         except Exception as e:

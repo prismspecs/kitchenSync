@@ -216,13 +216,23 @@ class KitchenSyncAutoStart:
         # Update local config files for both roles
         self.update_local_config()
         
+        # Get debug flag from USB config
+        debug_enabled = config.getboolean('debug', False)
+        
         if is_leader:
             print("🎯 Starting as LEADER...")
-            # Start leader in automatic mode
-            os.execv(sys.executable, [sys.executable, 'leader.py', '--auto'] + sys.argv[1:])
+            # Start leader in automatic mode, pass debug flag directly
+            if debug_enabled:
+                os.execv(sys.executable, [sys.executable, 'leader.py', '--auto', '--debug'] + sys.argv[1:])
+            else:
+                os.execv(sys.executable, [sys.executable, 'leader.py', '--auto'] + sys.argv[1:])
         else:
             print("🎵 Starting as COLLABORATOR...")
-            os.execv(sys.executable, [sys.executable, 'collaborator.py'] + sys.argv[1:])
+            # Start collaborator, pass debug flag if needed
+            if debug_enabled:
+                os.execv(sys.executable, [sys.executable, 'collaborator.py', '--debug'] + sys.argv[1:])
+            else:
+                os.execv(sys.executable, [sys.executable, 'collaborator.py'] + sys.argv[1:])
     
     def set_desktop_background(self):
         """Check for and set desktop background from USB drive"""
