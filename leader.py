@@ -290,9 +290,9 @@ class KitchenSyncLeader:
                 ])
                 print("🎬 Normal mode: Running VLC in fullscreen")
             
-            print(f"🎬 VLC args: {' '.join(vlc_args)}")
-            
-            self.vlc_instance = vlc.Instance(' '.join(vlc_args))
+            print(f"🎬 VLC args: {vlc_args}")
+
+            self.vlc_instance = vlc.Instance(vlc_args)
             if not self.vlc_instance:
                 print("❌ Failed to create VLC instance")
                 return False
