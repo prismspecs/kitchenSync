@@ -1,397 +1,443 @@
 # KitchenSync - Synchronized Video Playback & MIDI Output System
 
-This project enables multiple Raspberry Pis to:
+A modern, plug-and-play system for synchronized video playback and MIDI output across multiple Raspberry Pis. Features automatic USB drive detection, VLC-based video playback with drift correction, and seamless deployment.
 
-- Play videos simultaneously (same or different videos per Pi)
-- Output MIDI data at specific timecodes via USB MIDI interface
-- Stay synchronized via UDP broadcast over LAN/Wi-Fi
-- Provide centralized control and configuration through the leader Pi
+## ✨ Key Features
 
-## 📦 Components
+- **🎬 Synchronized Video Playback**: Multiple Pis play videos in perfect sync using VLC with advanced drift correction
+- **🎹 Precise MIDI Output**: Timecoded MIDI events via USB interfaces with sub-50ms accuracy
+- **🔌 Plug-and-Play USB**: Automatic USB drive detection, mounting, and video file selection
+- **🎯 Automatic Role Detection**: USB-based configuration determines leader vs collaborator roles
+- **🚀 Auto-Start System**: Systemd service for boot-time initialization and hands-free operation
+- **📡 Network Synchronization**: UDP broadcast for real-time time sync across all devices
+- **🎛️ Centralized Control**: Leader Pi provides interactive interface for system management
 
-- Multiple Raspberry Pis (each with unique ID)
-- USB MIDI interface connected to each Pi
-- Video files stored locally or on USB drives
-- Schedule file (`schedule.json`) defining MIDI cue timings
-- Leader Pi with user interface for system control
+## �️ Hardware Requirements
 
-## 📂 Files
+- Multiple Raspberry Pis (Pi 4 recommended for 4K video)
+- USB MIDI interface for each Pi
+- USB drives for video storage and configuration
+- Network connectivity (wired recommended for best sync)
 
-- `leader.py` — Runs on leader Pi, broadcasts time sync and provides user interface
-- `collaborator.py` — Runs on each collaborator Pi, receives time sync, starts video, outputs MIDI data
-- `schedule.json` — List of MIDI cues by timecode (note, velocity, channel, etc.)
-- `collaborator_config.ini` — Configuration file for collaborator Pis (unique per Pi)
-- `setup.sh` — Installation script for Raspberry Pi setup
+## 📂 Project Structure
+
+- `kitchensync.py` — Main auto-start script with USB configuration detection
+- `leader.py` — Leader Pi script with video playback and system coordination
+- `collaborator.py` — Collaborator Pi script for synchronized playback and MIDI output
+- `schedule.json` — MIDI cue timings and events
+- `kitchensync.service` — Systemd service for automatic startup
 - `requirements.txt` — Python dependencies
-- `videos/` — Directory for video files (can also use USB drives)
+- Configuration files for different Pi roles
 
-## 🛠 Setup Instructions
+## � Quick Setup
 
-### 1. Install Dependencies
+### 1. Install Dependencies (Raspberry Pi OS Bookworm)
 
 ```bash
-# Fix APT cache if corrupted (common on Raspberry Pi OS Bookworm)
+# Fix APT cache if needed
 sudo rm -rf /var/lib/apt/lists/*
 sudo apt update
 
-# Install VLC for video playback
-sudo apt install -y vlc libvlc-dev python3-vlc
+# Install VLC and development packages
+sudo apt install -y vlc libvlc-dev python3-vlc python3-pip python3-dev libasound2-dev
 
-# Install system packages for Python libraries
-sudo apt install -y python3-pip python3-dev libasound2-dev libdbus-1-dev libglib2.0-dev
-
-# Install Python dependencies system-wide
-sudo pip install python-rtmidi dbus-python python-vlc --break-system-packages
+# Install Python dependencies system-wide (recommended for Pi)
+sudo pip install python-rtmidi python-vlc --break-system-packages
 ```
 
-### 2. Configuration
+### 2. Enable Auto-Start Service
 
-#### Assign Unique IDs
+```bash
+# Copy service file to systemd
+sudo cp kitchensync.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable kitchensync.service
 
-Each Pi should be assigned a unique ID for identification and configuration.
+# Start immediately (optional)
+sudo systemctl start kitchensync.service
+```
 
-#### Connect Hardware
+### 3. Prepare USB Drive Configuration
 
-- Connect USB MIDI interface to each Raspberry Pi
-- Power and network each Raspberry Pi
-- Connect USB drives if using external video storage
+Create a `kitchensync.ini` file on your USB drive:
 
-### 3. Prepare Files
+**For Leader Pi:**
+```ini
+[DEFAULT]
+role = leader
+video_file = your_video.mp4
+```
 
-**On each collaborator Pi:**
+**For Collaborator Pi:**
+```ini
+[DEFAULT]
+role = collaborator
+pi_id = pi-001
+video_file = your_video.mp4
+midi_port = 0
+```
 
-- `collaborator.py`
-- `schedule.json`
-- Video files (locally or on USB drive)
+### 4. Plug and Play
 
-**On the leader Pi:**
+1. Insert USB drive with configuration and video file
+2. Power on Pi (auto-starts via systemd service)
+3. System automatically detects role and starts appropriate mode
+4. Videos play in sync across all connected Pis
 
-- `leader.py`
-- User interface files for system control and configuration
+## 🎮 Manual Operation
 
-### 4. Define Schedule
+### Leader Pi
 
-Example `schedule.json`:
+```bash
+# Interactive mode
+python3 leader.py
+
+# Automatic mode (no interface)
+python3 leader.py --auto
+```
+
+### Collaborator Pi
+
+```bash
+python3 collaborator.py [config_file]
+```
+
+### Main Script (Auto-Detection)
+
+```bash
+# Detects USB config and starts appropriate role
+python3 kitchensync.py
+```
+
+## 🎛️ System Configuration
+
+### USB-Based Configuration (Recommended)
+
+The system automatically detects configuration from USB drives:
+
+**Leader Configuration (kitchensync.ini):**
+```ini
+[DEFAULT]
+role = leader
+video_file = presentation.mp4
+
+# Optional settings
+sync_port = 5005
+control_port = 5006
+```
+
+**Collaborator Configuration (kitchensync.ini):**
+```ini
+[DEFAULT]
+role = collaborator
+pi_id = pi-001
+video_file = presentation.mp4
+midi_port = 0
+
+# Sync settings for drift correction
+deviation_threshold = 0.5
+max_deviation_samples = 10
+pause_threshold = 2.0
+sync_grace_time = 3.0
+```
+
+### Manual Configuration Files
+
+For advanced setups, create separate config files:
+
+- `collaborator_config_pi2.ini`
+- `collaborator_config_pi3.ini`
+- etc.
+
+### MIDI Schedule (schedule.json)
+
+Define precisely timed MIDI events:
 
 ```json
 [
   { "time": 5.0, "note": 60, "velocity": 127, "channel": 1, "type": "note_on" },
   { "time": 5.5, "note": 60, "velocity": 0, "channel": 1, "type": "note_off" },
-  {
-    "time": 10.0,
-    "note": 64,
-    "velocity": 100,
-    "channel": 1,
-    "type": "note_on"
-  },
-  { "time": 10.5, "note": 64, "velocity": 0, "channel": 1, "type": "note_off" },
-  {
-    "time": 15.0,
-    "control": 7,
-    "value": 127,
-    "channel": 1,
-    "type": "control_change"
-  }
+  { "time": 10.0, "control": 7, "value": 127, "channel": 1, "type": "control_change" }
 ]
 ```
 
-### 5. Run the System
+## 🎬 Automatic Video Management
 
-**On Leader Pi:**
+### USB Drive Auto-Detection
 
-```bash
-python3 leader.py
+The system provides professional USB drive handling:
+
+**✅ Automatic Process:**
+1. **Detects** connected USB drives on startup
+2. **Mounts** drives to accessible directories  
+3. **Scans** for video files with intelligent priority
+4. **Selects** optimal video file automatically
+
+**📁 USB Drive Structure:**
+```
+USB Drive Root/
+├── kitchensync.ini    # Configuration file
+├── video.mp4          # Video file (any supported format)
+└── schedule.json      # Optional MIDI schedule
 ```
 
-**On Each Collaborator Pi:**
+**⚡ Supported Formats:**
+- MP4, AVI, MKV, MOV, M4V, WMV, FLV, WebM
+- H.264 encoding recommended for best compatibility
 
-```bash
-python3 collaborator.py
-```
+### Intelligent File Selection
 
-Each collaborator Pi will wait for time sync from the leader, then begin playback and execute MIDI output based on the shared clock.
+**Priority Order:**
+1. USB drive video files (highest priority)
+2. Local `./videos/` directory
+3. Configured `video_sources` paths
+4. Current directory fallback
 
-## 🚀 Quick Start
+**Smart Handling:**
+- **Single file**: Automatic selection
+- **Multiple files**: First file selected with warning
+- **No files**: Clear error message with guidance
 
-### Setup (run once)
+### Different Videos Per Pi
 
-```bash
-# Run the setup script
-chmod +x setup.sh
-./setup.sh
-```
+Each Pi can play unique content:
 
-### Leader Pi
+1. **USB Method**: Different USB drive per Pi (recommended)
+2. **Config Method**: Different `video_file` settings
+3. **Mixed Mode**: Some Pis use USB, others use local files
 
-```bash
-python3 leader.py
-```
-
-Use the interactive interface to start/stop the system and manage schedules.
-
-### Collaborator Pi
-
-```bash
-# Edit config file first (set unique pi_id, video_file, and midi_port)
-nano collaborator_config.ini
-python3 collaborator.py
-```
-
-## 🖥️ Usage & Commands
+## � Interactive Controls
 
 ### Leader Pi Commands
 
-When running `leader.py`, you'll get an interactive command prompt:
+When running `leader.py` interactively:
 
 - `start` - Start synchronized playback across all Pis
-- `stop` - Stop playback on all Pis
+- `stop` - Stop playback on all Pis  
 - `status` - Show system status and connected Pis
 - `schedule` - Edit the MIDI cue schedule
 - `quit` - Exit the program
 
 ### Schedule Editor
 
-The schedule editor allows you to:
+Built-in schedule editor for real-time MIDI programming:
 
 - `add` - Add new MIDI cues (note on/off, control changes)
 - `remove <number>` - Remove specific cues
-- `clear` - Clear all cues
+- `clear` - Clear all cues  
 - `save` - Save schedule and return to main menu
 
-### Multiple Collaborator Pis
+### Auto-Start Mode
 
-For multiple Pis, create separate config files:
-
-- `collaborator_config_pi2.ini`
-- `collaborator_config_pi3.ini`
-- etc.
-
-Run collaborators with specific configs:
+For production deployment:
 
 ```bash
-# Activate virtual environment
-source kitchensync-env/bin/activate
+# Leader Pi auto-start (no interface)
+python3 leader.py --auto
 
-# Run with specific config
-python3 collaborator.py collaborator_config_pi2.ini
+# Or use systemd service
+sudo systemctl start kitchensync.service
 ```
 
-## 📝 Collaborator Configuration
+## 🔄 Advanced Synchronization
 
-Each collaborator Pi needs its own config file:
+### VLC-Based Drift Correction
 
-```ini
-[DEFAULT]
-# Unique identifier (must be different for each Pi)
-pi_id = pi-001
+KitchenSync uses advanced algorithms for maintaining perfect sync:
 
-# Video file to play (can be different per Pi)
-video_file = video.mp4
+**Median Deviation Filtering:**
+- Collects multiple sync measurements over time
+- Uses statistical median to filter network glitches
+- Only corrects when median deviation exceeds threshold
+- Prevents false corrections from temporary issues
 
-# MIDI port for output (0 = first available port)
-midi_port = 0
+**Intelligent Correction Strategy:**
+- **Small deviations**: Seamless seeking without interruption
+- **Large deviations**: Temporary pause during correction
+- **Grace period**: Prevents immediate re-checking
+- **Configurable thresholds**: Tune for your network conditions
 
-# Directories to search for video files
-video_sources = ./videos/,/media/usb/,/media/usb0/,/media/usb1/
+**Technical Benefits:**
+- **Cross-Platform**: Works on Pi and desktop systems
+- **Precise Control**: Python VLC bindings for exact positioning
+- **Format Support**: Handles all modern video formats
+- **Robust Playback**: Mature VLC media engine
 
-# Video sync correction settings
-sync_tolerance = 1.0              # Deprecated - kept for compatibility
-sync_check_interval = 5.0         # How often to check sync (seconds)
+## 🎹 MIDI Output & Networking
 
-# Advanced sync settings (adapted for VLC)
-deviation_threshold = 0.5         # Median deviation threshold for correction (seconds)
-max_deviation_samples = 10        # Number of samples for median calculation
-pause_threshold = 2.0             # Deviation threshold for pause-during-correction (seconds)
-sync_grace_time = 3.0             # Wait time after correction before checking again (seconds)
-```
-
-#### Sync Parameter Explanation:
-
-- **deviation_threshold**: Minimum median deviation to trigger correction (0.5s default)
-- **max_deviation_samples**: Sample size for median filtering (10 samples default)
-- **pause_threshold**: Large deviations above this trigger pause-during-correction (2.0s default)
-- **sync_grace_time**: Prevents immediate re-checking after correction (3.0s default)
-
-For multiple Pis, create separate config files:
-
-- `collaborator_config_pi2.ini`
-- `collaborator_config_pi3.ini`
-- etc.
-
-Run collaborators with specific configs:
-
-```bash
-python3 collaborator.py collaborator_config_pi2.ini
-```
-
-## 🎬 Video File Management
-
-### USB Drive Auto-Detection (PRIORITY 1) 🔥
-
-The system automatically detects, mounts, and plays video files from USB drives:
-
-**✅ Automatic Process:**
-1. **Detects** connected USB drives when collaborator starts
-2. **Mounts** drives to `/media/usb-*` directories  
-3. **Scans** root directory of each drive for video files
-4. **Plays** the video file automatically
-
-**📁 USB Drive Requirements:**
-- Place **ONE video file** at the root (top level) of the USB drive
-- Supported formats: MP4, AVI, MKV, MOV, M4V, WMV, FLV, WebM
-- File can have any name (automatic detection)
-
-**⚠️ Multiple Files Handling:**
-- **One file**: Automatically selected and played
-- **Multiple files**: First file used, warning displayed
-- **No files**: Error message with troubleshooting info
-
-### Local Storage (PRIORITY 2)
-
-If no USB drive is found, the system searches local directories:
-
-- `./videos/` directory  
-- Same directory as the scripts
-- Configured `video_sources` directories
-
-### Different Videos Per Pi
-
-Each Pi can play different videos by:
-1. **USB Method**: Different USB drive per Pi (recommended)
-2. **Config Method**: Different `video_file` settings per Pi
-
-```ini
-# Pi 1 config
-video_file = intro.mp4
-
-# Pi 2 config  
-video_file = main_show.mp4
-
-# Pi 3 config
-video_file = outro.mp4
-```
-
-## 🎹 MIDI Output
-
-MIDI data is output via USB MIDI interface based on the schedule:
+### MIDI Message Types
 
 ```json
 [
   { "time": 5.0, "note": 60, "velocity": 127, "channel": 1, "type": "note_on" },
   { "time": 5.5, "note": 60, "velocity": 0, "channel": 1, "type": "note_off" },
-  {
-    "time": 10.0,
-    "control": 7,
-    "value": 127,
-    "channel": 1,
-    "type": "control_change"
-  }
+  { "time": 10.0, "control": 7, "value": 127, "channel": 1, "type": "control_change" }
 ]
 ```
 
-### MIDI Message Types:
+**Supported Events:**
+- **note_on**: Trigger note with specified velocity
+- **note_off**: Release note
+- **control_change**: Send CC messages
 
-- **note_on**: Trigger a note with specified velocity
-- **note_off**: Release a note
-- **control_change**: Send control change message (CC)
-
-## 🌐 Network Configuration
+### Network Configuration
 
 - **Sync Port**: 5005 (UDP broadcast for time sync)
-- **Control Port**: 5006 (UDP for commands and registration)
-- **Network**: All Pis must be on the same network
-- **Broadcast**: Uses 255.255.255.255 for discovery
+- **Control Port**: 5006 (UDP for commands and registration)  
+- **Discovery**: Automatic Pi detection via broadcast
+- **Precision**: ~10-30ms accuracy on typical LAN
 
-## ⏱ Sync Precision
+## 🧪 Testing & Validation
 
-UDP time sync is accurate to ~10–30ms on a typical LAN. For tighter synchronization, consider wired GPIO triggers or hardware timestamping.
-
-### Advanced Video Sync Technology
-
-KitchenSync incorporates advanced synchronization techniques with VLC:
-
-**Median Deviation Filtering:**
-
-- Collects multiple sync measurements over time (configurable sample size)
-- Uses statistical median to filter out temporary glitches and network hiccups
-- Only triggers corrections when median deviation consistently exceeds threshold
-- Prevents false corrections from momentary position reading errors
-
-**Intelligent Correction Strategy:**
-
-- Small deviations: Seamless seeking without interrupting playback
-- Large deviations (>2s): Temporarily pauses video during correction to prevent audio/video artifacts
-- Grace period after corrections prevents immediate re-checking
-- Configurable thresholds allow tuning for different network conditions
-
-**VLC Integration Benefits:**
-
-- **Cross-Platform Compatibility:** Works on Raspberry Pi OS, desktop Linux, and other systems
-- **Python API:** Direct control through VLC Python bindings for precise seeking and position tracking
-- **Robust Playback:** VLC's mature media engine handles various video formats reliably
-- **Active Development:** VLC is actively maintained and supported
-
-**Why Median Filtering is Superior:**
-
-- **Noise Immunity:** Single bad readings (network lag, CPU spike) don't trigger corrections
-- **Stability:** Prevents "correction oscillation" where frequent small adjustments make sync worse
-- **Reliability:** Statistical approach ensures corrections only happen for genuine drift
-- **Performance:** Reduces unnecessary seek operations that can cause stuttering
-
-**VLC Technical Advantages:**
-
-- **Precise Control:** Python bindings provide accurate position tracking and seeking
-- **Format Support:** Handles more video formats and codecs than legacy players
-- **Cross-Platform:** Same codebase works on Pi and desktop systems for testing
-- **Error Handling:** Better error reporting and recovery mechanisms
-
-## 🧪 Testing
-
-- Monitor video playback with VLC's built-in controls and logging
-- Monitor MIDI output with a MIDI monitor or DAW software
-- Test with different video files on different Pis to verify individual control
-- Verify MIDI interface connectivity with `aconnect -l` or `amidi -l`
-- Check VLC installation: `vlc --version`
-
-### USB Drive Testing
-
-Test USB drive detection and video file finding:
+### System Status Check
 
 ```bash
-# Activate virtual environment
-source kitchensync-env/bin/activate
+# Check VLC installation
+vlc --version
+
+# Check MIDI interfaces
+aconnect -l
 
 # Test USB drive detection
-python3 collaborator.py --test-usb
+python3 kitchensync.py --test-usb
+
+# Monitor systemd service
+sudo systemctl status kitchensync.service
 ```
 
-This will show:
-- Detected USB drives and mount points
-- Video files found on each drive  
-- Which video file would be selected for playback
+### Video Playback Testing
+
+```bash
+# Test standalone video playback
+python3 test_video_simple.py
+
+# Test leader with auto-start
+DISPLAY=:0 python3 leader.py --auto
+```
 
 ## 🛠️ Troubleshooting
 
-### Common Setup Issues
+### Common Issues
 
-**APT Cache Issues:**
+**System Won't Start:**
 ```bash
-# Fix corrupted package cache (common on some Raspberry Pi systems)
-sudo rm -rf /var/lib/apt/lists/*
-sudo apt update
+# Check systemd service status
+sudo systemctl status kitchensync.service
+sudo journalctl -u kitchensync.service -f
+
+# Run manually for debugging
+cd /home/kitchensync/workbench/kitchenSync
+python3 kitchensync.py
 ```
 
-**Python Environment:**
+**Video Not Displaying:**
 ```bash
-# Install Python packages system-wide
-sudo pip install python-rtmidi dbus-python python-vlc --break-system-packages
+# Check display environment
+echo $DISPLAY
 
-# Ensure dbus libraries are installed
-sudo apt install -y libdbus-1-dev libglib2.0-dev
+# Test with manual display setting
+DISPLAY=:0 python3 leader.py --auto
 
-# Run the scripts directly
-python3 leader.py
+# Verify VLC can access display
+DISPLAY=:0 vlc --version
 ```
+
+**USB Drive Not Detected:**
+```bash
+# Check USB connections
+lsusb
+lsblk
+
+# Check mount points  
+df -h | grep media
+
+# Manual mount if needed
+sudo mkdir -p /media/usb-manual
+sudo mount /dev/sdb1 /media/usb-manual
+```
+
+**MIDI Not Working:**
+```bash
+# Check MIDI interfaces
+aconnect -l
+amidi -l
+
+# Test MIDI connectivity
+amidi -p hw:1,0 --send-hex="90 60 7F"
+```
+
+**Network Sync Issues:**
+- Ensure all Pis on same network segment
+- Check firewall settings for UDP ports 5005/5006
+- Use wired connection for best reliability
+- Verify NTP settings consistent across Pis
+
+### Performance Optimization
+
+**Video Quality:**
+- Use H.264 encoded MP4 files for best compatibility
+- Consider lower bitrates for multiple Pi setups
+- Test with known good video files (e.g., Big Buck Bunny samples)
+
+**Network Performance:**
+- Use Gigabit wired connections when possible
+- Minimize network traffic during synchronized playback
+- Consider dedicated VLAN for KitchenSync traffic
+
+## 📋 Production Deployment
+
+### Complete Setup Checklist
+
+1. **✅ Install Dependencies**: VLC, Python packages, systemd service
+2. **✅ Prepare USB Drives**: Config files and video content
+3. **✅ Network Setup**: Ensure all Pis on same network
+4. **✅ MIDI Hardware**: Connect and test USB MIDI interfaces
+5. **✅ Auto-Start**: Enable systemd service on all Pis
+6. **✅ Testing**: Verify sync, video playback, and MIDI output
+
+### Deployment Commands
+
+```bash
+# Enable auto-start on all Pis
+sudo systemctl enable kitchensync.service
+
+# Start system immediately
+sudo systemctl start kitchensync.service
+
+# Monitor system status
+sudo systemctl status kitchensync.service
+```
+
+## 🔧 Advanced Features
+
+### Multiple Pi Configurations
+
+**Scaling Up:**
+- Add Pis dynamically to existing setup
+- Each Pi auto-discovers leader and registers
+- Heartbeat monitoring tracks Pi status
+- Graceful handling of Pi disconnections
+
+**Content Management:**
+- Different videos per Pi supported
+- USB-based content deployment
+- Centralized schedule management via leader Pi
+- Real-time configuration updates
+
+### Synchronization Technology
+
+**Drift Correction:**
+- Median filtering eliminates false corrections
+- Intelligent pause-during-correction for large deviations
+- Configurable thresholds for different environments
+- Grace periods prevent correction oscillation
+
+**Technical Specifications:**
+- Time sync accuracy: 10-30ms typical
+- Video sync tolerance: configurable (0.5s default)
+- MIDI timing precision: sub-50ms
+- Network protocol: UDP broadcast
+- Video engine: VLC with Python bindings
 
 ### Pi Not Appearing in Status
 
