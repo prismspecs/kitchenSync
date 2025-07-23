@@ -182,11 +182,39 @@ class KitchenSyncAutoStart:
                 local_config.write(f)
             
             print("✓ Updated local collaborator configuration")
+        
+        # Update leader config
+        if os.path.exists('leader_config.ini'):
+            leader_config = configparser.ConfigParser()
+            leader_config.read('leader_config.ini')
+            
+            if 'DEFAULT' not in leader_config:
+                leader_config['DEFAULT'] = {}
+            if 'KITCHENSYNC' not in leader_config:
+                leader_config['KITCHENSYNC'] = {}
+            
+            # Update both sections to ensure debug is found
+            leader_config['DEFAULT']['debug'] = config.get('debug', 'false')
+            leader_config['KITCHENSYNC']['debug'] = config.get('debug', 'false')
+            leader_config['DEFAULT']['pi_id'] = config.get('pi_id', 'pi-leader')
+            leader_config['KITCHENSYNC']['pi_id'] = config.get('pi_id', 'pi-leader')
+            
+            # Add USB mount point so leader knows where to find videos
+            leader_config['DEFAULT']['usb_mount_point'] = self.usb_mount_point if self.usb_mount_point else ''
+            leader_config['KITCHENSYNC']['usb_mount_point'] = self.usb_mount_point if self.usb_mount_point else ''
+            
+            with open('leader_config.ini', 'w') as f:
+                leader_config.write(f)
+            
+            print("✓ Updated local leader configuration")
     
     def start_appropriate_role(self):
         """Start leader or collaborator based on configuration"""
         config = self.usb_config['KITCHENSYNC']
         is_leader = config.getboolean('is_leader', False)
+        
+        # Update local config files for both roles
+        self.update_local_config()
         
         if is_leader:
             print("🎯 Starting as LEADER...")
@@ -194,7 +222,6 @@ class KitchenSyncAutoStart:
             os.execv(sys.executable, [sys.executable, 'leader.py', '--auto'] + sys.argv[1:])
         else:
             print("🎵 Starting as COLLABORATOR...")
-            self.update_local_config()
             os.execv(sys.executable, [sys.executable, 'collaborator.py'] + sys.argv[1:])
     
     def set_desktop_background(self):
