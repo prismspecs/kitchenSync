@@ -227,7 +227,6 @@ class KitchenSyncLeader:
                 '--no-osd',
                 '--quiet',
                 '--mouse-hide-timeout=0',
-                '--no-audio',  # Disable audio processing for faster startup
                 '--video-on-top',  # Ensure video stays on top
                 '--no-snapshot-preview',  # Disable preview generation
                 '--network-caching=0',  # Minimize caching delay

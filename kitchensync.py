@@ -197,6 +197,78 @@ class KitchenSyncAutoStart:
             self.update_local_config()
             os.execv(sys.executable, [sys.executable, 'collaborator.py'] + sys.argv[1:])
     
+    def set_desktop_background(self):
+        """Check for and set desktop background from USB drive"""
+        if not self.usb_mount_point:
+            return False
+            
+        background_file = os.path.join(self.usb_mount_point, 'desktop-background.png')
+        
+        if os.path.exists(background_file):
+            print(f"🖼️  Found desktop background: {background_file}")
+            
+            try:
+                # Set desktop background for Raspbian/LXDE
+                # Try multiple methods as different versions use different commands
+                
+                # Method 1: pcmanfm (most common on Raspbian)
+                try:
+                    subprocess.run([
+                        'pcmanfm', '--set-wallpaper', background_file, '--wallpaper-mode=stretch'
+                    ], capture_output=True, timeout=10)
+                    print("✓ Desktop background set via pcmanfm")
+                    return True
+                except (subprocess.TimeoutExpired, FileNotFoundError):
+                    pass
+                
+                # Method 2: feh (alternative wallpaper setter)
+                try:
+                    subprocess.run([
+                        'feh', '--bg-fill', background_file
+                    ], capture_output=True, timeout=10)
+                    print("✓ Desktop background set via feh")
+                    return True
+                except (subprocess.TimeoutExpired, FileNotFoundError):
+                    pass
+                
+                # Method 3: gsettings (for GNOME-based environments)
+                try:
+                    subprocess.run([
+                        'gsettings', 'set', 'org.gnome.desktop.background', 'picture-uri', f'file://{background_file}'
+                    ], capture_output=True, timeout=10)
+                    print("✓ Desktop background set via gsettings")
+                    return True
+                except (subprocess.TimeoutExpired, FileNotFoundError):
+                    pass
+                
+                # Method 4: LXDE config file modification (fallback)
+                try:
+                    home_dir = os.path.expanduser("~")
+                    lxde_config_dir = os.path.join(home_dir, ".config", "lxsession", "LXDE-pi")
+                    desktop_conf = os.path.join(lxde_config_dir, "desktop.conf")
+                    
+                    if os.path.exists(lxde_config_dir):
+                        # Create/update desktop.conf
+                        os.makedirs(lxde_config_dir, exist_ok=True)
+                        with open(desktop_conf, 'w') as f:
+                            f.write(f"[*]\n")
+                            f.write(f"wallpaper_mode=stretch\n")
+                            f.write(f"wallpaper={background_file}\n")
+                        print("✓ Desktop background configured in LXDE settings")
+                        return True
+                except Exception as e:
+                    print(f"⚠️ Could not modify LXDE config: {e}")
+                
+                print("⚠️ Could not set desktop background (no supported method found)")
+                return False
+                
+            except Exception as e:
+                print(f"⚠️ Error setting desktop background: {e}")
+                return False
+        else:
+            print("💡 No desktop-background.png found on USB drive")
+            return False
+
     def run(self):
         """Main execution flow"""
         print("\n🎬 KitchenSync Auto-Start")
@@ -209,6 +281,9 @@ class KitchenSyncAutoStart:
             print("  python3 leader.py     - Start as leader")
             print("  python3 collaborator.py - Start as collaborator")
             return False
+        
+        # Step 1.5: Set desktop background if available
+        self.set_desktop_background()
         
         # Step 2: Select video file
         if not self.select_video_file():
