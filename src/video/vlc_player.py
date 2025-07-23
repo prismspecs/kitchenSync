@@ -224,6 +224,7 @@ class VLCVideoPlayer:
             '--file-caching=300',
             '--vout=x11',
             '--aout=alsa',
+            '--x11-display=:0',
         ]
     
     def _configure_debug_window(self) -> None:

@@ -12,6 +12,7 @@ ExecStart=/usr/bin/python3 /home/kitchensync/kitchenSync/kitchensync.py
 Restart=always
 RestartSec=10
 Environment=DISPLAY=:0
+Environment=XAUTHORITY=/home/kitchensync/.Xauthority
 
 # Wait for desktop to be ready
 ExecStartPre=/bin/sleep 30
