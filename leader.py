@@ -272,16 +272,8 @@ class KitchenSyncLeader:
             
             # Conditional fullscreen based on debug mode
             if self.debug_mode:
-                # In debug mode, use windowed mode positioned to leave space for debug info
-                vlc_args.extend([
-                    '--no-fullscreen',
-                    '--width=1520',  # Leave space for 400px debug overlay
-                    '--height=1080',
-                    '--video-x=0',   # Position VLC window at left edge
-                    '--video-y=0',   # Position VLC window at top
-                    '--no-video-deco',  # Remove window decorations
-                ])
-                print("🐛 Debug mode: Running VLC in windowed mode")
+                # In debug mode, we'll set window properties after player creation
+                print("🐛 Debug mode: Will configure VLC in windowed mode")
             else:
                 # Normal operation: fullscreen
                 vlc_args.extend([
@@ -317,14 +309,31 @@ class KitchenSyncLeader:
             self.vlc_player.set_media(self.vlc_media)
             print("✅ Media set on player")
             
-            # Set fullscreen based on debug mode
-            if not self.debug_mode:
-                self.vlc_player.set_fullscreen(True)
-                print("✅ Fullscreen mode set")
-            
-            # Start playback immediately
+            # Start playback before setting window properties
             result = self.vlc_player.play()
             print(f"✅ VLC play() called (result: {result})")
+
+            # Allow the player to initialize
+            time.sleep(0.2)
+
+            # Set window properties programmatically
+            if self.debug_mode:
+                try:
+                    xid = self.vlc_player.get_xwindow()
+                    if xid:
+                        print(f"✅ Got X window ID: {xid}")
+                        # Use xdotool to move and resize the window
+                        subprocess.run(['xdotool', 'windowsize', str(xid), '1520', '1080'])
+                        subprocess.run(['xdotool', 'windowmove', str(xid), '0', '0'])
+                        print(f"✅ Resized and moved VLC window {xid}")
+                    else:
+                        print("⚠️ Could not get X window ID to resize/move.")
+                except Exception as e:
+                    print(f"⚠️ Error setting window geometry with xdotool: {e}")
+            else:
+                # Set fullscreen for non-debug mode
+                self.vlc_player.set_fullscreen(True)
+                print("✅ Fullscreen mode set")
             
             # Wait a moment and check player state
             time.sleep(0.5)
