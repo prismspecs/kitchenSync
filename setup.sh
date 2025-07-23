@@ -52,6 +52,27 @@ sudo systemctl enable kitchensync.service
 
 echo "Auto-start service installed. KitchenSync will start automatically on boot."
 
+# Test networking imports after cleanup
+echo ""
+echo "🔍 Testing networking imports..."
+python3 -c "
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path.cwd() / 'src'))
+
+try:
+    from networking import SyncBroadcaster, CommandManager
+    print('✅ Leader networking imports OK')
+except Exception as e:
+    print(f'❌ Leader networking imports failed: {e}')
+
+try:
+    from networking import SyncReceiver, CommandListener  
+    print('✅ Collaborator networking imports OK')
+except Exception as e:
+    print(f'❌ Collaborator networking imports failed: {e}')
+"
+
 echo ""
 echo "=== Setup Complete! ==="
 echo ""
