@@ -47,19 +47,27 @@ class KitchenSyncLeader:
         
         # Debug overlay initialization
         self.debug_overlay = None
-        if self.debug_mode and DEBUG_OVERLAY_AVAILABLE:
+        self.debug_terminal_process = None
+        if self.debug_mode:
             try:
-                # Try to initialize with pygame first
-                self.debug_overlay = DebugOverlay("leader-pi", "leader_video.mp4", use_pygame=True)
-                print("✓ Visual debug overlay initialized")
+                # Try simple terminal-based debug display first
+                self.debug_overlay = "terminal"
+                self._start_debug_terminal()
+                print("✓ Terminal-based debug display initialized")
             except:
-                try:
-                    # Fallback to text mode
-                    self.debug_overlay = DebugOverlay("leader-pi", "leader_video.mp4", use_pygame=False)
-                    print("✓ Text debug overlay initialized")
-                except Exception as e:
-                    print(f"⚠️ Could not initialize debug overlay: {e}")
-                    self.debug_overlay = None
+                if DEBUG_OVERLAY_AVAILABLE:
+                    try:
+                        # Fallback to pygame overlay
+                        self.debug_overlay = DebugOverlay("leader-pi", "leader_video.mp4", use_pygame=True)
+                        print("✓ Visual debug overlay initialized")
+                    except:
+                        try:
+                            # Final fallback to text mode
+                            self.debug_overlay = DebugOverlay("leader-pi", "leader_video.mp4", use_pygame=False)
+                            print("✓ Text debug overlay initialized")
+                        except Exception as e:
+                            print(f"⚠️ Could not initialize debug overlay: {e}")
+                            self.debug_overlay = None
         
         # System state
         self.start_time = None
@@ -252,6 +260,9 @@ class KitchenSyncLeader:
                 '--no-snapshot-preview',  # Disable preview generation
                 '--network-caching=0',  # Minimize caching delay
                 '--file-caching=300',  # Reduce file caching (300ms)
+                '--audio-buffer=500',   # Increase audio buffer to prevent dropouts
+                '--clock-jitter=0',     # Reduce audio jitter
+                '--audio-resampler=soxr',  # Use high-quality audio resampler
             ]
             
             # Conditional fullscreen based on debug mode
@@ -323,6 +334,9 @@ class KitchenSyncLeader:
                 '--mouse-hide-timeout=0',
                 '--no-loop',
                 '--start-time=0',   # Start from beginning
+                '--audio-buffer=500',   # Increase audio buffer to prevent dropouts
+                '--clock-jitter=0',     # Reduce audio jitter
+                '--audio-resampler=soxr',  # Use high-quality audio resampler
             ]
             
             # Conditional fullscreen based on debug mode
@@ -493,7 +507,20 @@ class KitchenSyncLeader:
                 print(f"🐛 ⏭️  NEXT: {next_event['type']} Ch:{next_event['channel']} Note:{next_event['note']} @{next_event['time']:.1f}s")
         
         # Update visual debug overlay (if available)
-        if self.debug_overlay:
+        if self.debug_overlay == "terminal":
+            # Send to debug terminal
+            if int(current_time) % 2 == 0:  # Update every 2 seconds
+                debug_msg = f"🐛 Leader Pi - {current_time:.1f}s | Pis: {len(self.collaborator_pis)}"
+                if current_events:
+                    event = current_events[0]
+                    debug_msg += f" | ▶️ {event['type']} Ch:{event['channel']}"
+                if upcoming_events:
+                    next_event = upcoming_events[0]
+                    debug_msg += f" | ⏭️ {next_event['type']} @{next_event['time']:.1f}s"
+                self._send_debug_message(debug_msg)
+                
+        elif self.debug_overlay and hasattr(self.debug_overlay, 'update_display'):
+            # Use pygame overlay
             # Prepare debug info for overlay
             debug_info = []
             debug_info.append(f"Leader Pi - {current_time:.1f}s")
@@ -548,6 +575,84 @@ class KitchenSyncLeader:
                     
         except Exception as e:
             print(f"⚠️ Could not raise debug overlay: {e}")
+
+    def _start_debug_terminal(self):
+        """Start a separate terminal window for debug display"""
+        try:
+            import subprocess
+            import tempfile
+            import os
+            
+            # Create a temporary script that displays debug info
+            script_content = '''#!/bin/bash
+# KitchenSync Debug Terminal
+echo "🐛 KitchenSync Debug Monitor"
+echo "=========================="
+echo "Debug information will appear here..."
+echo ""
+
+# Create a named pipe for communication
+PIPE="/tmp/kitchensync_debug"
+mkfifo "$PIPE" 2>/dev/null || true
+
+# Read from pipe and display
+while true; do
+    if read line <"$PIPE"; then
+        echo "$line"
+    else
+        sleep 0.1
+    fi
+done
+'''
+            
+            # Write script to temporary file
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.sh', delete=False) as f:
+                f.write(script_content)
+                script_path = f.name
+            
+            # Make script executable
+            os.chmod(script_path, 0o755)
+            
+            # Try different terminal emulators
+            terminal_commands = [
+                ['gnome-terminal', '--geometry=60x20+1520+0', '--title=KitchenSync Debug', '--', 'bash', script_path],
+                ['xterm', '-geometry', '60x20+1520+0', '-title', 'KitchenSync Debug', '-e', 'bash', script_path],
+                ['lxterminal', '--geometry=60x20', '--title=KitchenSync Debug', '-e', 'bash ' + script_path],
+            ]
+            
+            for cmd in terminal_commands:
+                try:
+                    self.debug_terminal_process = subprocess.Popen(cmd, 
+                                                                   stdout=subprocess.DEVNULL, 
+                                                                   stderr=subprocess.DEVNULL)
+                    print(f"✓ Debug terminal started with {cmd[0]}")
+                    
+                    # Create the named pipe for sending debug info
+                    self.debug_pipe_path = "/tmp/kitchensync_debug"
+                    
+                    # Give terminal a moment to start
+                    import time
+                    time.sleep(1)
+                    return True
+                    
+                except Exception as e:
+                    continue
+            
+            raise Exception("No suitable terminal emulator found")
+            
+        except Exception as e:
+            print(f"⚠️ Could not start debug terminal: {e}")
+            return False
+
+    def _send_debug_message(self, message):
+        """Send a message to the debug terminal"""
+        try:
+            if self.debug_overlay == "terminal" and hasattr(self, 'debug_pipe_path'):
+                with open(self.debug_pipe_path, 'w') as pipe:
+                    pipe.write(f"{message}\n")
+                    pipe.flush()
+        except:
+            pass  # Ignore pipe errors
 
     def broadcast_sync(self):
         """Continuously broadcast time sync"""
@@ -663,7 +768,17 @@ class KitchenSyncLeader:
         self._stop_video()
         
         # Cleanup debug overlay
-        if self.debug_overlay and hasattr(self.debug_overlay, 'cleanup'):
+        if self.debug_overlay == "terminal" and self.debug_terminal_process:
+            try:
+                self.debug_terminal_process.terminate()
+                # Clean up the named pipe
+                import os
+                if hasattr(self, 'debug_pipe_path') and os.path.exists(self.debug_pipe_path):
+                    os.unlink(self.debug_pipe_path)
+                print("✓ Debug terminal cleaned up")
+            except Exception as e:
+                print(f"⚠️ Debug terminal cleanup error: {e}")
+        elif self.debug_overlay and hasattr(self.debug_overlay, 'cleanup'):
             try:
                 self.debug_overlay.cleanup()
                 print("✓ Debug overlay cleaned up")
