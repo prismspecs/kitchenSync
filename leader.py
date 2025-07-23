@@ -245,16 +245,32 @@ class KitchenSyncLeader:
         try:
             # Create VLC instance with optimized args for faster startup
             vlc_args = [
-                '--fullscreen',
                 '--no-video-title-show',
                 '--no-osd',
                 '--quiet',
                 '--mouse-hide-timeout=0',
-                '--video-on-top',  # Ensure video stays on top
                 '--no-snapshot-preview',  # Disable preview generation
                 '--network-caching=0',  # Minimize caching delay
                 '--file-caching=300',  # Reduce file caching (300ms)
             ]
+            
+            # Conditional fullscreen based on debug mode
+            if self.debug_mode and self.debug_overlay:
+                # In debug mode with overlay, use windowed mode positioned to leave space for overlay
+                vlc_args.extend([
+                    '--no-fullscreen',
+                    '--width=1520',  # Leave space for 400px debug overlay
+                    '--height=1080',
+                    '--video-x=0',
+                    '--video-y=0',
+                ])
+                print("🐛 Debug mode: Running VLC in windowed mode to show debug overlay")
+            else:
+                # Normal operation: fullscreen
+                vlc_args.extend([
+                    '--fullscreen',
+                    '--video-on-top',  # Ensure video stays on top
+                ])
             
             self.vlc_instance = vlc.Instance(' '.join(vlc_args))
             if not self.vlc_instance:
@@ -273,7 +289,10 @@ class KitchenSyncLeader:
                 return False
                 
             self.vlc_player.set_media(self.vlc_media)
-            self.vlc_player.set_fullscreen(True)
+            
+            # Set fullscreen based on debug mode
+            if not (self.debug_mode and self.debug_overlay):
+                self.vlc_player.set_fullscreen(True)
             
             # Start playback immediately
             result = self.vlc_player.play()
@@ -291,15 +310,30 @@ class KitchenSyncLeader:
             cmd = [
                 'vlc',
                 '--intf', 'dummy',  # No interface
-                '--fullscreen',
                 '--no-video-title-show',
                 '--no-osd',
                 '--quiet',
                 '--mouse-hide-timeout=0',
                 '--no-loop',
                 '--start-time=0',   # Start from beginning
-                self.video_path
             ]
+            
+            # Conditional fullscreen based on debug mode
+            if self.debug_mode and self.debug_overlay:
+                # In debug mode with overlay, use windowed mode
+                cmd.extend([
+                    '--no-fullscreen',
+                    '--width=1520',  # Leave space for 400px debug overlay
+                    '--height=1080',
+                    '--video-x=0',
+                    '--video-y=0',
+                ])
+                print("🐛 Debug mode: Running VLC in windowed mode to show debug overlay")
+            else:
+                # Normal operation: fullscreen
+                cmd.append('--fullscreen')
+            
+            cmd.append(self.video_path)
             
             print(f"🔧 Running: {' '.join(cmd)}")
             process = subprocess.Popen(cmd)

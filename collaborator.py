@@ -312,7 +312,7 @@ class DebugOverlay:
         """Initialize pygame overlay for visual debug display"""
         try:
             import os
-            # Set pygame to create window on top
+            # Set pygame window properties for staying on top
             os.environ['SDL_WINDOWID'] = ''
             
             self.pygame.init()
@@ -324,7 +324,7 @@ class DebugOverlay:
             
             # Create overlay surface (small window for debug info)
             self.overlay_width = 400
-            self.overlay_height = 220
+            self.overlay_height = 240
             
             # Position overlay in top-right corner
             self.overlay_x = self.screen_width - self.overlay_width - 20
@@ -333,20 +333,52 @@ class DebugOverlay:
             # Set window position
             os.environ['SDL_VIDEO_WINDOW_POS'] = f'{self.overlay_x},{self.overlay_y}'
             
-            # Create a small window instead of fullscreen
-            self.screen = self.pygame.display.set_mode((self.overlay_width, self.overlay_height), 
-                                                       self.pygame.NOFRAME)
+            # Create a small window with ALWAYS_ON_TOP flag
+            flags = self.pygame.NOFRAME
+            try:
+                # Try to set always on top flag if available
+                flags |= getattr(self.pygame, 'HWSURFACE', 0)
+            except:
+                pass
+                
+            self.screen = self.pygame.display.set_mode((self.overlay_width, self.overlay_height), flags)
             self.pygame.display.set_caption("KitchenSync Debug")
             
-            # Try to set window to stay on top (Linux-specific)
+            # Multiple attempts to force window on top
             try:
-                # Make window always on top using wmctrl if available
                 import subprocess
-                window_title = "KitchenSync Debug"
-                subprocess.run(['wmctrl', '-r', window_title, '-b', 'add,above'], 
+                import time
+                
+                # Method 1: Use wmctrl to set always on top
+                subprocess.run(['wmctrl', '-r', 'KitchenSync Debug', '-b', 'add,above'], 
                               capture_output=True, timeout=2)
+                
+                # Method 2: Use xdotool to raise window repeatedly
+                subprocess.run(['xdotool', 'search', '--name', 'KitchenSync Debug', 'windowraise'], 
+                              capture_output=True, timeout=2)
+                
+                # Method 3: Set window as sticky (appears on all workspaces)
+                subprocess.run(['wmctrl', '-r', 'KitchenSync Debug', '-b', 'add,sticky'], 
+                              capture_output=True, timeout=2)
+                
             except:
-                pass  # wmctrl not available, continue anyway
+                pass  # Tools not available, continue anyway
+            
+            # Start a thread to periodically raise the window
+            import threading
+            self.keep_on_top = True
+            def raise_window_periodically():
+                while self.keep_on_top:
+                    try:
+                        # Raise window every 2 seconds
+                        subprocess.run(['wmctrl', '-r', 'KitchenSync Debug', '-b', 'add,above'], 
+                                      capture_output=True, timeout=1)
+                        time.sleep(2)
+                    except:
+                        time.sleep(2)
+            
+            self.raise_thread = threading.Thread(target=raise_window_periodically, daemon=True)
+            self.raise_thread.start()
             
             # Create fonts (monospace for consistent layout)
             try:
@@ -449,6 +481,12 @@ class DebugOverlay:
         """Clean up overlay resources"""
         if self.use_pygame:
             try:
+                # Stop the window raising thread
+                if hasattr(self, 'keep_on_top'):
+                    self.keep_on_top = False
+                if hasattr(self, 'raise_thread'):
+                    self.raise_thread.join(timeout=1)
+                
                 self.pygame.quit()
             except:
                 pass
