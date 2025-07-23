@@ -239,10 +239,7 @@ class KitchenSyncLeader:
                 print("❌ Failed to create VLC player")
                 return False
             
-            # Set fullscreen
-            self.vlc_player.set_fullscreen(True)
-            
-            # Load and play media
+            # Load media first
             self.vlc_media = self.vlc_instance.media_new(self.video_path)
             if not self.vlc_media:
                 print("❌ Failed to create VLC media")
@@ -250,27 +247,20 @@ class KitchenSyncLeader:
                 
             self.vlc_player.set_media(self.vlc_media)
             
+            # Set fullscreen (this should work since we already have the --fullscreen arg)
+            self.vlc_player.set_fullscreen(True)
+            
+            # Start playbook once
             result = self.vlc_player.play()
             print(f"✅ VLC play result: {result}")
             print("🎬 Video should now be playing in fullscreen")
             
-            # Wait for VLC to initialize and then trigger play again
-            time.sleep(2)
+            # Wait briefly for VLC to initialize
+            time.sleep(1)
             
-            # Check if video is actually playing and trigger play again if needed
+            # Check state but don't restart unless truly necessary
             state = self.vlc_player.get_state()
             print(f"📊 VLC player state: {state}")
-            
-            if state != vlc.State.Playing:
-                print("🔄 Video not playing, triggering play again...")
-                self.vlc_player.play()
-                time.sleep(1)
-                state = self.vlc_player.get_state()
-                print(f"📊 VLC player state after retry: {state}")
-            
-            # Set position to start and play again to ensure it's not stuck
-            self.vlc_player.set_position(0.0)
-            self.vlc_player.play()
             
             return True
             
