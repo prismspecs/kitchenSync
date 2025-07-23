@@ -67,24 +67,34 @@ class SimpleVideoPlayer:
     def _play_with_python_vlc(self, video_path):
         """Play with VLC Python bindings"""
         try:
-            # Create VLC instance for fullscreen playback
+            # Create VLC instance for fullscreen playbook
             vlc_args = [
                 '--fullscreen',
                 '--no-video-title-show',
                 '--no-osd',
                 '--quiet',
-                '--no-audio-display',
                 '--mouse-hide-timeout=0',
             ]
             
             self.vlc_instance = vlc.Instance(' '.join(vlc_args))
+            if not self.vlc_instance:
+                print("❌ Failed to create VLC instance")
+                return False
+                
             self.vlc_player = self.vlc_instance.media_player_new()
+            if not self.vlc_player:
+                print("❌ Failed to create VLC player")
+                return False
             
             # Set fullscreen
             self.vlc_player.set_fullscreen(True)
             
             # Load and play media
             self.vlc_media = self.vlc_instance.media_new(video_path)
+            if not self.vlc_media:
+                print("❌ Failed to create VLC media")
+                return False
+                
             self.vlc_player.set_media(self.vlc_media)
             
             result = self.vlc_player.play()
@@ -113,7 +123,6 @@ class SimpleVideoPlayer:
                 '--no-video-title-show',
                 '--no-osd',
                 '--quiet',
-                '--no-audio-display',
                 '--mouse-hide-timeout=0',
                 video_path
             ]

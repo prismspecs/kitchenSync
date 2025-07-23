@@ -88,7 +88,6 @@ class VLCVideoPlayer:
                 '--no-video-title-show',    # Don't show title
                 '--no-osd',                 # No on-screen display
                 '--quiet',                  # Reduce log output
-                '--no-audio-display',       # Don't show audio visualization
                 '--mouse-hide-timeout=0',   # Hide mouse immediately
             ]
             
@@ -145,7 +144,6 @@ class VLCVideoPlayer:
                 '--no-osd',                 # No on-screen display
                 '--play-and-exit',          # Exit when done
                 '--quiet',                  # Reduce log output
-                '--no-audio-display',       # Don't show audio visualization
                 '--mouse-hide-timeout=0',   # Hide mouse immediately
             ]
             
