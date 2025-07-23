@@ -185,6 +185,10 @@ except:
             local_config['DEFAULT']['pi_id'] = config.get('pi_id', 'pi-unknown')
             local_config['DEFAULT']['video_file'] = os.path.basename(self.video_file) if self.video_file else ''
             local_config['DEFAULT']['midi_port'] = config.get('midi_port', '0')
+            # Add USB mount point so collaborator knows where to find videos
+            local_config['DEFAULT']['usb_mount_point'] = self.usb_mount_point if self.usb_mount_point else ''
+            # Pass debug mode setting to collaborator
+            local_config['DEFAULT']['debug'] = config.get('debug', 'false')
             
             with open('collaborator_config.ini', 'w') as f:
                 local_config.write(f)

@@ -287,6 +287,151 @@ class VLCVideoPlayer:
         else:
             return False
 
+class DebugOverlay:
+    """
+    Debug overlay system that displays Pi ID, video info, and time on screen
+    Supports both pygame (preferred) and text-based (fallback) modes
+    """
+    
+    def __init__(self, pi_id, video_file, use_pygame=False):
+        self.pi_id = pi_id
+        self.video_file = os.path.basename(video_file) if video_file else "No Video"
+        self.use_pygame = use_pygame
+        self.overlay_active = False
+        
+        if self.use_pygame:
+            try:
+                import pygame
+                self.pygame = pygame
+                self._init_pygame_overlay()
+            except ImportError:
+                print("Pygame not available, falling back to text debug mode")
+                self.use_pygame = False
+    
+    def _init_pygame_overlay(self):
+        """Initialize pygame overlay for visual debug display"""
+        try:
+            self.pygame.init()
+            
+            # Get display info
+            info = self.pygame.display.Info()
+            self.screen_width = info.current_w
+            self.screen_height = info.current_h
+            
+            # Create overlay surface (smaller than full screen to not obstruct video too much)
+            self.overlay_width = 400
+            self.overlay_height = 200
+            
+            # Position overlay in top-right corner
+            self.overlay_x = self.screen_width - self.overlay_width - 20
+            self.overlay_y = 20
+            
+            # Create display surface
+            self.screen = self.pygame.display.set_mode((self.screen_width, self.screen_height), 
+                                                       self.pygame.NOFRAME)
+            self.pygame.display.set_caption("KitchenSync Debug")
+            
+            # Create fonts (monospace for consistent layout)
+            try:
+                self.font_large = self.pygame.font.Font(None, 36)  # For Pi ID
+                self.font_medium = self.pygame.font.Font(None, 24)  # For video name
+                self.font_small = self.pygame.font.Font(None, 18)   # For time and details
+            except:
+                # Fallback to default font
+                self.font_large = self.pygame.font.Font(None, 36)
+                self.font_medium = self.pygame.font.Font(None, 24)
+                self.font_small = self.pygame.font.Font(None, 18)
+            
+            # Colors
+            self.color_bg = (0, 0, 0, 180)      # Semi-transparent black
+            self.color_pi_id = (255, 255, 255)   # White for Pi ID
+            self.color_video = (200, 200, 255)   # Light blue for video name
+            self.color_time = (255, 255, 0)      # Yellow for time
+            self.color_text = (220, 220, 220)    # Light gray for other text
+            
+            print("✓ Pygame debug overlay initialized")
+            
+        except Exception as e:
+            print(f"Error initializing pygame overlay: {e}")
+            self.use_pygame = False
+    
+    def update_display(self, current_time=0, total_time=0, additional_info=None):
+        """Update the debug overlay display"""
+        if self.use_pygame:
+            self._update_pygame_display(current_time, total_time, additional_info)
+        else:
+            self._update_text_display(current_time, total_time, additional_info)
+    
+    def _update_pygame_display(self, current_time, total_time, additional_info):
+        """Update pygame-based visual overlay"""
+        try:
+            # Clear overlay area with semi-transparent background
+            overlay_surface = self.pygame.Surface((self.overlay_width, self.overlay_height))
+            overlay_surface.set_alpha(180)
+            overlay_surface.fill((0, 0, 0))
+            
+            y_pos = 10
+            
+            # Pi ID (large, prominent)
+            pi_text = self.font_large.render(f"Pi: {self.pi_id}", True, self.color_pi_id)
+            overlay_surface.blit(pi_text, (10, y_pos))
+            y_pos += 40
+            
+            # Video file name
+            video_text = self.font_medium.render(f"Video: {self.video_file}", True, self.color_video)
+            overlay_surface.blit(video_text, (10, y_pos))
+            y_pos += 30
+            
+            # Time display (MM:SS / MM:SS format)
+            current_min = int(current_time // 60)
+            current_sec = int(current_time % 60)
+            total_min = int(total_time // 60)
+            total_sec = int(total_time % 60)
+            
+            time_str = f"{current_min:02d}:{current_sec:02d}/{total_min:02d}:{total_sec:02d}"
+            time_text = self.font_medium.render(time_str, True, self.color_time)
+            overlay_surface.blit(time_text, (10, y_pos))
+            y_pos += 30
+            
+            # Additional info (if provided)
+            if additional_info:
+                for info_line in additional_info[:3]:  # Limit to 3 lines
+                    info_text = self.font_small.render(str(info_line), True, self.color_text)
+                    overlay_surface.blit(info_text, (10, y_pos))
+                    y_pos += 20
+            
+            # Blit overlay to main screen
+            self.screen.blit(overlay_surface, (self.overlay_x, self.overlay_y))
+            self.pygame.display.flip()
+            
+        except Exception as e:
+            print(f"Error updating pygame display: {e}")
+    
+    def _update_text_display(self, current_time, total_time, additional_info):
+        """Update text-based debug display (fallback)"""
+        # Format time
+        current_min = int(current_time // 60)
+        current_sec = int(current_time % 60)
+        total_min = int(total_time // 60)
+        total_sec = int(total_time % 60)
+        
+        time_str = f"{current_min:02d}:{current_sec:02d}/{total_min:02d}:{total_sec:02d}"
+        
+        # Print debug info to console (every 5 seconds to avoid spam)
+        if int(current_time) % 5 == 0 and current_time > 0:
+            print(f"🐛 DEBUG | Pi: {self.pi_id} | Video: {self.video_file} | Time: {time_str}")
+            if additional_info:
+                for info in additional_info[:2]:
+                    print(f"🐛        | {info}")
+    
+    def cleanup(self):
+        """Clean up overlay resources"""
+        if self.use_pygame:
+            try:
+                self.pygame.quit()
+            except:
+                pass
+
 class KitchenSyncCollaborator:
     def __init__(self, config_file='collaborator_config.ini'):
         # Load configuration
@@ -301,7 +446,37 @@ class KitchenSyncCollaborator:
         
         # Video settings
         self.video_file = self.config.get('video_file', 'video.mp4')
-        self.video_sources = self.config.get('video_sources', ['./videos/', '/media/usb/'])
+        
+        # Build video sources list - prioritize USB mount point from auto-start
+        usb_mount_point = self.config.get('usb_mount_point', '').strip()
+        if usb_mount_point:
+            # USB mount point identified by auto-start script gets highest priority
+            self.video_sources = [usb_mount_point]
+            print(f"✓ Using USB mount point from auto-start: {usb_mount_point}")
+        else:
+            # Fallback to configured video_sources or defaults
+            configured_sources = self.config.get('video_sources', './videos/,/media/usb/,/media/usb0/,/media/usb1/')
+            if isinstance(configured_sources, str):
+                self.video_sources = [s.strip() for s in configured_sources.split(',') if s.strip()]
+            else:
+                self.video_sources = configured_sources
+            print(f"⚠️  No USB mount point from auto-start, using fallback sources: {self.video_sources}")
+        
+        # Debug mode configuration
+        self.debug_mode = self.config.get('debug', 'false').lower() == 'true'
+        if self.debug_mode:
+            print("🐛 DEBUG MODE ENABLED")
+            # Initialize debug overlay components
+            self.debug_overlay = None
+            try:
+                import pygame
+                self.pygame_available = True
+                print("✓ Pygame available for debug overlay")
+            except ImportError:
+                self.pygame_available = False
+                print("⚠️ Pygame not available, debug overlay will be text-based")
+        else:
+            self.pygame_available = False
         
         # MIDI settings
         self.midi_port = int(self.config.get('midi_port', 0))
@@ -520,13 +695,53 @@ class KitchenSyncCollaborator:
         return sorted(video_files)
 
     def find_video_file(self):
-        """Find video file with USB drive priority and intelligent detection"""
+        """Find video file with USB mount point priority from auto-start script"""
         
-        # Step 1: Mount USB drives automatically
-        print("🔍 Scanning for USB drives...")
+        # Step 1: Check if we have a USB mount point from the auto-start script
+        usb_mount_point = self.config.get('usb_mount_point', '').strip()
+        if usb_mount_point and os.path.exists(usb_mount_point):
+            print(f"✓ Using USB mount point from auto-start script: {usb_mount_point}")
+            
+            # Look for the specific video file first
+            if self.video_file:
+                video_path = os.path.join(usb_mount_point, self.video_file)
+                if os.path.exists(video_path):
+                    print(f"✓ Found configured video file: {video_path}")
+                    return video_path
+            
+            # Look for any video files in the USB mount point
+            video_extensions = ['.mp4', '.avi', '.mkv', '.mov', '.m4v', '.wmv', '.flv', '.webm']
+            usb_videos = []
+            
+            try:
+                for item in os.listdir(usb_mount_point):
+                    item_path = os.path.join(usb_mount_point, item)
+                    if os.path.isfile(item_path):
+                        _, ext = os.path.splitext(item.lower())
+                        if ext in video_extensions:
+                            usb_videos.append(item_path)
+                
+                if usb_videos:
+                    if len(usb_videos) == 1:
+                        print(f"✓ Found video on USB drive: {usb_videos[0]}")
+                        return usb_videos[0]
+                    else:
+                        print("⚠ Multiple video files found on USB drive:")
+                        for i, video in enumerate(usb_videos, 1):
+                            print(f"   {i}. {os.path.basename(video)}")
+                        
+                        selected_video = usb_videos[0]
+                        print(f"➤ Using first video file: {selected_video}")
+                        return selected_video
+                        
+            except Exception as e:
+                print(f"Error scanning USB mount point: {e}")
+        
+        # Step 2: Fallback to legacy USB scanning (for manual mode or if auto-start failed)
+        print("🔍 No USB mount point from auto-start, scanning for USB drives...")
         mounted_drives = self.mount_usb_drives()
         
-        # Step 2: Check USB drives first (highest priority)
+        # Check USB drives 
         usb_video_files = []
         for mount_point in mounted_drives:
             videos = self.find_video_files_on_usb(mount_point)
@@ -541,7 +756,6 @@ class KitchenSyncCollaborator:
                 for i, video in enumerate(usb_video_files, 1):
                     print(f"   {i}. {os.path.basename(video)} ({os.path.dirname(video)})")
                 
-                # Use the first one but warn the user
                 selected_video = usb_video_files[0]
                 print(f"➤ Using first video file: {selected_video}")
                 print("💡 Tip: Use only one video file per USB drive for automatic selection")
@@ -598,17 +812,26 @@ class KitchenSyncCollaborator:
         print("=" * 50)
         print(f"Error: {error_message}")
         print("")
-        print("Expected locations:")
-        print("  1. USB drive (root directory) - HIGHEST PRIORITY")
+        print("Expected locations (in priority order):")
         
-        for mount_point in ['/media/usb', '/media/usb0', '/media/usb1']:
-            if os.path.exists(mount_point):
-                print(f"     ✓ {mount_point}/")
+        # Check if we have USB mount point from auto-start
+        usb_mount_point = self.config.get('usb_mount_point', '').strip()
+        if usb_mount_point:
+            print(f"  1. USB mount point (from auto-start): {usb_mount_point}")
+            if os.path.exists(usb_mount_point):
+                print(f"     ✓ {usb_mount_point}/ (accessible)")
             else:
-                print(f"     ✗ {mount_point}/ (not found)")
+                print(f"     ✗ {usb_mount_point}/ (not accessible)")
+        else:
+            print("  1. USB drive auto-detection (fallback)")
+            for mount_point in ['/media/usb', '/media/usb0', '/media/usb1']:
+                if os.path.exists(mount_point):
+                    print(f"     ✓ {mount_point}/")
+                else:
+                    print(f"     ✗ {mount_point}/ (not found)")
         
         print(f"  2. Configured file: {self.video_file}")
-        print("  3. Local directories:")
+        print("  3. Fallback directories:")
         for source_dir in self.video_sources:
             if os.path.exists(source_dir):
                 print(f"     ✓ {source_dir}")
@@ -704,6 +927,19 @@ class KitchenSyncCollaborator:
         self.triggered_cues.clear()
         self.is_running = True
         
+        # Override debug mode if leader specifies it
+        leader_debug_mode = msg.get('debug_mode', False)
+        if leader_debug_mode and not self.debug_mode:
+            self.debug_mode = True
+            print("🐛 Debug mode enabled by leader")
+            # Initialize pygame if possible
+            try:
+                import pygame
+                self.pygame_available = True
+                print("✓ Pygame available for debug overlay")
+            except ImportError:
+                self.pygame_available = False
+        
         print(f"Received start command with {len(self.schedule)} cues")
         
         # Wait for sync
@@ -738,6 +974,14 @@ class KitchenSyncCollaborator:
         if success:
             self.video_start_time = time.time()
             print(f"Started VLC video playback: {video_path}")
+            
+            # Initialize debug overlay if in debug mode
+            if self.debug_mode:
+                self.debug_overlay = DebugOverlay(self.pi_id, video_path, self.pygame_available)
+                # Start debug update thread
+                Thread(target=self.debug_update_loop, daemon=True).start()
+                print("🐛 Debug overlay initialized")
+            
             return True
         else:
             print("Failed to start video playback")
@@ -829,6 +1073,11 @@ class KitchenSyncCollaborator:
         # Stop VLC video player
         self.video_player.stop()
         
+        # Clean up debug overlay
+        if self.debug_mode and hasattr(self, 'debug_overlay') and self.debug_overlay:
+            self.debug_overlay.cleanup()
+            print("🐛 Debug overlay cleaned up")
+        
         # Send MIDI all notes off
         try:
             for channel in range(16):
@@ -875,6 +1124,45 @@ class KitchenSyncCollaborator:
                     print(f"MIDI triggered at {cue_time}s: {cue.get('type', 'unknown')}")
             
             time.sleep(0.01)  # 10ms precision
+    
+    def debug_update_loop(self):
+        """Update debug overlay display periodically"""
+        while self.is_running and self.debug_mode and hasattr(self, 'debug_overlay'):
+            try:
+                if self.synced_start is None:
+                    time.sleep(0.1)
+                    continue
+                
+                # Get current video time
+                current_time = time.time() - self.synced_start
+                video_position = self.get_video_position()
+                
+                # Estimate total video duration (VLC might provide this)
+                total_time = 300  # Default 5 minutes, could be improved with VLC duration
+                if hasattr(self.video_player, 'vlc_player') and self.video_player.vlc_player:
+                    try:
+                        duration_ms = self.video_player.vlc_player.get_length()
+                        if duration_ms > 0:
+                            total_time = duration_ms / 1000.0
+                    except:
+                        pass
+                
+                # Prepare additional debug info
+                additional_info = [
+                    f"Sync: {current_time:.1f}s",
+                    f"Video pos: {video_position:.1f}s" if video_position else "Video pos: N/A",
+                    f"MIDI cues: {len(self.triggered_cues)}/{len(self.schedule)}"
+                ]
+                
+                # Update debug overlay
+                self.debug_overlay.update_display(current_time, total_time, additional_info)
+                
+                # Update at 10 FPS to avoid overwhelming the system
+                time.sleep(0.1)
+                
+            except Exception as e:
+                print(f"Error in debug update loop: {e}")
+                time.sleep(1)  # Wait longer on error to avoid spam
     
     def send_midi_message(self, cue):
         """Send MIDI message based on cue data"""

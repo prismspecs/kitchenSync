@@ -1,4 +1,13 @@
-# KitchenSync - Synchronized Video Playback & MIDI Output System
+# Ki## ✨ Key Features
+
+- **🎬 Synchronized Video Playback**: Multiple Pis play videos in perfect sync using VLC with advanced drift correction
+- **🎹 Precise MIDI Output**: Timecoded MIDI events via USB interfaces with sub-50ms accuracy
+- **🔌 Plug-and-Play USB**: Automatic USB drive detection, mounting, and video file selection
+- **🎯 Automatic Role Detection**: USB-based configuration determines leader vs collaborator roles
+- **🚀 Auto-Start System**: Systemd service for boot-time initialization and hands-free operation
+- **📡 Network Synchronization**: UDP broadcast for real-time time sync across all devices
+- **🎛️ Centralized Control**: Leader Pi provides interactive interface for system management
+- **🐛 Debug Mode**: Visual overlays showing Pi ID, video files, timing, and MIDI event tracking - Synchronized Video Playback & MIDI Output System
 
 A modern, plug-and-play system for synchronized video playback and MIDI output across multiple Raspberry Pis. Features automatic USB drive detection, VLC-based video playback with drift correction, and seamless deployment.
 
@@ -409,6 +418,37 @@ sudo systemctl status kitchensync.service
 ```
 
 ## 🔧 Advanced Features
+
+### Debug Mode
+
+**Visual Debugging:**
+- **Pi ID Display**: Shows unique identifier prominently on each screen
+- **Video Information**: Displays currently playing video filename
+- **Time Counter**: Shows current/total time in MM:SS/MM:SS format
+- **MIDI Event Tracking**: Real-time display of MIDI events with color coding
+  - **Recent events**: Last 5 MIDI events (grayed out)
+  - **Current event**: Active MIDI event (yellow highlight)
+  - **Upcoming events**: Next 5 scheduled events (light blue)
+- **Sync Status**: Current sync time and video position information
+
+**Configuration:**
+```ini
+# In USB drive configuration (kitchensync.ini)
+[KITCHENSYNC]
+is_leader = true
+debug = true  # Enables debug mode for entire system
+
+# In local configuration files
+[DEFAULT]
+debug = true  # Can be overridden by leader
+```
+
+**Features:**
+- Leader Pi enables debug mode for all connected collaborators
+- Automatic pygame-based overlay when available
+- Fallback to console output when GUI not available
+- Monospace font for consistent display formatting
+- 10 FPS update rate to minimize performance impact
 
 ### Multiple Pi Configurations
 

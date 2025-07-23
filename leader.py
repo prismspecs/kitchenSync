@@ -34,11 +34,19 @@ class KitchenSyncLeader:
         self.CONTROL_PORT = 5006
         self.TICK_INTERVAL = 0.1  # seconds
         
+        # Debug configuration
+        self.debug_mode = False
+        self.load_leader_config()
+        
         # System state
         self.start_time = None
         self.is_running = False
         self.collaborator_pis = {}  # Track connected Pis
         self.system_schedule = self.load_schedule()
+        
+        # Debug state for MIDI history
+        self.midi_history = []  # List of recent MIDI events
+        self.upcoming_midi = []  # Upcoming MIDI events
         
         # Video player state
         self.vlc_instance = None
@@ -51,6 +59,54 @@ class KitchenSyncLeader:
         
         # Initialize video player
         self._setup_video_player()
+    
+    def load_leader_config(self):
+        """Load leader configuration including debug mode"""
+        import configparser
+        
+        # Try to load from USB drive first (same as collaborator pattern)
+        usb_config_path = None
+        try:
+            mount_result = subprocess.run(['mount'], capture_output=True, text=True)
+            if mount_result.returncode == 0:
+                for line in mount_result.stdout.split('\n'):
+                    if '/media/' in line and ('usb' in line.lower() or 'sd' in line or 'mmc' in line):
+                        parts = line.split(' on ')
+                        if len(parts) >= 2:
+                            mount_point = parts[1].split(' type ')[0]
+                            if os.path.exists(mount_point) and os.path.isdir(mount_point):
+                                config_path = os.path.join(mount_point, 'kitchensync.ini')
+                                if os.path.exists(config_path):
+                                    usb_config_path = config_path
+                                    break
+        except Exception as e:
+            print(f"Error checking USB drives for config: {e}")
+        
+        # Load configuration
+        config = configparser.ConfigParser()
+        if usb_config_path:
+            config.read(usb_config_path)
+            print(f"✓ Loaded leader config from USB: {usb_config_path}")
+        elif os.path.exists('leader_config.ini'):
+            config.read('leader_config.ini')
+            print("✓ Loaded leader config from leader_config.ini")
+        else:
+            # Create default leader config
+            config['KITCHENSYNC'] = {
+                'is_leader': 'true',
+                'debug': 'false',
+                'pi_id': 'leader-pi'
+            }
+            with open('leader_config.ini', 'w') as f:
+                config.write(f)
+            print("✓ Created default leader config")
+        
+        # Parse debug setting
+        if 'KITCHENSYNC' in config:
+            self.debug_mode = config.getboolean('KITCHENSYNC', 'debug', fallback=False)
+            print(f"✓ Debug mode: {'ENABLED' if self.debug_mode else 'DISABLED'}")
+        else:
+            self.debug_mode = False
     
     def _setup_video_player(self):
         """Initialize video player and find video file"""
@@ -268,6 +324,66 @@ class KitchenSyncLeader:
         except Exception as e:
             print(f"Error saving schedule: {e}")
     
+    def update_midi_history(self):
+        """Update MIDI history for debug display"""
+        if not self.debug_mode or not self.is_running or not self.start_time:
+            return
+        
+        current_time = time.time() - self.start_time
+        
+        # Find recently triggered MIDI events (last 5 seconds)
+        recent_events = []
+        for cue in self.system_schedule:
+            cue_time = cue.get('time', 0)
+            if current_time - 5 <= cue_time <= current_time:
+                recent_events.append({
+                    'time': cue_time,
+                    'type': cue.get('type', 'unknown'),
+                    'note': cue.get('note', ''),
+                    'channel': cue.get('channel', ''),
+                    'status': 'triggered'
+                })
+        
+        # Find current MIDI event (within 0.5 seconds)
+        current_events = []
+        for cue in self.system_schedule:
+            cue_time = cue.get('time', 0)
+            if abs(current_time - cue_time) <= 0.5:
+                current_events.append({
+                    'time': cue_time,
+                    'type': cue.get('type', 'unknown'),
+                    'note': cue.get('note', ''),
+                    'channel': cue.get('channel', ''),
+                    'status': 'current'
+                })
+        
+        # Find upcoming MIDI events (next 10 seconds)
+        upcoming_events = []
+        for cue in self.system_schedule:
+            cue_time = cue.get('time', 0)
+            if current_time < cue_time <= current_time + 10:
+                upcoming_events.append({
+                    'time': cue_time,
+                    'type': cue.get('type', 'unknown'),
+                    'note': cue.get('note', ''),
+                    'channel': cue.get('channel', ''),
+                    'status': 'upcoming'
+                })
+        
+        # Update history lists (keep last 5 recent events)
+        self.midi_history = sorted(recent_events, key=lambda x: x['time'])[-5:]
+        self.upcoming_midi = sorted(upcoming_events, key=lambda x: x['time'])[:5]
+        
+        # Print debug info to console (every few seconds)
+        if int(current_time) % 3 == 0:
+            print(f"\n🐛 MIDI DEBUG | Time: {current_time:.1f}s")
+            if current_events:
+                for event in current_events:
+                    print(f"🐛 ▶️  CURRENT: {event['type']} Ch:{event['channel']} Note:{event['note']} @{event['time']:.1f}s")
+            if upcoming_events:
+                next_event = upcoming_events[0]
+                print(f"🐛 ⏭️  NEXT: {next_event['type']} Ch:{next_event['channel']} Note:{next_event['note']} @{next_event['time']:.1f}s")
+    
     def broadcast_sync(self):
         """Continuously broadcast time sync"""
         while self.is_running:
@@ -282,6 +398,11 @@ class KitchenSyncLeader:
                     self.sync_sock.sendto(payload.encode(), (self.BROADCAST_IP, self.SYNC_PORT))
                 except Exception as e:
                     print(f"Error broadcasting sync: {e}")
+                
+                # Update MIDI history for debug mode
+                if self.debug_mode:
+                    self.update_midi_history()
+                    
             time.sleep(self.TICK_INTERVAL)
     
     def listen_for_collaborators(self):
@@ -357,7 +478,8 @@ class KitchenSyncLeader:
         self.send_command({
             'type': 'start',
             'schedule': self.system_schedule,
-            'start_time': self.start_time
+            'start_time': self.start_time,
+            'debug_mode': self.debug_mode  # Pass debug mode to collaborators
         })
         
         print("System started! Broadcasting time sync...")
