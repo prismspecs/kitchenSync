@@ -265,7 +265,7 @@ class KitchenSyncLeader:
                 '--no-snapshot-preview',  # Disable preview generation
                 '--network-caching=0',  # Minimize caching delay
                 '--file-caching=300',  # Reduce file caching (300ms)
-                '--audio-buffer=500',   # Increase audio buffer to prevent dropouts
+                '--audio-buffer-size=500',   # Increase audio buffer to prevent dropouts
                 '--clock-jitter=0',     # Reduce audio jitter
                 '--audio-resampler=soxr',  # Use high-quality audio resampler
             ]
@@ -366,7 +366,7 @@ class KitchenSyncLeader:
                 '--mouse-hide-timeout=0',
                 '--no-loop',
                 '--start-time=0',   # Start from beginning
-                '--audio-buffer=500',   # Increase audio buffer to prevent dropouts
+                '--audio-buffer-size=500',   # Increase audio buffer to prevent dropouts
                 '--clock-jitter=0',     # Reduce audio jitter
                 '--audio-resampler=soxr',  # Use high-quality audio resampler
             ]
