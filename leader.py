@@ -383,9 +383,33 @@ class KitchenSyncLeader:
 
 def main():
     """Main entry point"""
+    import argparse
+    
+    parser = argparse.ArgumentParser(description='KitchenSync Leader Pi')
+    parser.add_argument('--auto', action='store_true', help='Start automatically without interactive interface')
+    args = parser.parse_args()
+    
     try:
         leader = KitchenSyncLeader()
-        leader.user_interface()
+        
+        if args.auto:
+            print("🎯 Leader Pi starting in automatic mode...")
+            print("System will auto-start playback and run continuously.")
+            print("Press Ctrl+C to stop.\n")
+            
+            # Auto-start the system
+            leader.start_system()
+            
+            # Keep running until interrupted
+            try:
+                while True:
+                    time.sleep(1)
+            except KeyboardInterrupt:
+                print("\n🛑 Stopping system...")
+                leader.stop_system()
+        else:
+            leader.user_interface()
+            
     except KeyboardInterrupt:
         print("\nExiting...")
     except Exception as e:
