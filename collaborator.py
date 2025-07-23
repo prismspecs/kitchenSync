@@ -82,16 +82,21 @@ class VLCVideoPlayer:
     def _start_with_python_vlc(self, video_path, volume):
         """Start video using VLC Python bindings (preferred method)"""
         try:
-            # Create VLC instance with appropriate options
+            # Create VLC instance with appropriate options for fullscreen video
             vlc_args = [
-                '--intf', 'dummy',          # No interface
+                '--fullscreen',             # Start in fullscreen
                 '--no-video-title-show',    # Don't show title
                 '--no-osd',                 # No on-screen display
                 '--quiet',                  # Reduce log output
+                '--no-audio-display',       # Don't show audio visualization
+                '--mouse-hide-timeout=0',   # Hide mouse immediately
             ]
             
             self.vlc_instance = vlc.Instance(' '.join(vlc_args))
             self.vlc_player = self.vlc_instance.media_player_new()
+            
+            # Set fullscreen
+            self.vlc_player.set_fullscreen(True)
             
             # Load media
             self.vlc_media = self.vlc_instance.media_new(video_path)
@@ -108,11 +113,21 @@ class VLCVideoPlayer:
             self.vlc_player.audio_set_volume(vlc_volume)
             
             # Start playback
-            self.vlc_player.play()
+            result = self.vlc_player.play()
             self.start_time = time.time()
             self.using_python_vlc = True
             
-            print(f"Started VLC Python playback: {video_path} (volume: {vlc_volume}%)")
+            print(f"✓ Started VLC Python playback: {video_path} (volume: {vlc_volume}%)")
+            print(f"✓ VLC play result: {result}")
+            print(f"✓ Fullscreen mode enabled")
+            
+            # Wait a moment for VLC to initialize
+            time.sleep(1)
+            
+            # Check if video is actually playing
+            state = self.vlc_player.get_state()
+            print(f"✓ VLC player state: {state}")
+            
             return True
             
         except Exception as e:
@@ -122,14 +137,16 @@ class VLCVideoPlayer:
     def _start_with_command_line_vlc(self, video_path, volume):
         """Start video using VLC command line (fallback method)"""
         try:
-            # Build VLC command
+            # Build VLC command for fullscreen playback
             cmd = [
                 'vlc',
-                '--intf', 'dummy',          # No interface
+                '--fullscreen',             # Start in fullscreen
                 '--no-video-title-show',    # Don't show title
                 '--no-osd',                 # No on-screen display
                 '--play-and-exit',          # Exit when done
                 '--quiet',                  # Reduce log output
+                '--no-audio-display',       # Don't show audio visualization
+                '--mouse-hide-timeout=0',   # Hide mouse immediately
             ]
             
             # Add volume if specified
@@ -955,7 +972,75 @@ class KitchenSyncCollaborator:
                 pass
 
 def main():
+    import argparse
+    
+    parser = argparse.ArgumentParser(description='KitchenSync Collaborator Pi')
+    parser.add_argument('--test-video', action='store_true', help='Test video playback immediately')
+    parser.add_argument('--test-usb', action='store_true', help='Test USB drive detection')
+    args = parser.parse_args()
+    
     collaborator = KitchenSyncCollaborator()
+    
+    if args.test_usb:
+        print("🧪 USB Drive Detection Test")
+        print("=" * 40)
+        print("\n1. Testing USB drive detection...")
+        mounted_drives = collaborator.mount_usb_drives()
+        if not mounted_drives:
+            print("❌ No USB drives detected")
+            print("💡 Connect a USB drive and try again")
+            return
+        
+        print("\n2. Testing video file detection...")
+        all_videos = []
+        for mount_point in mounted_drives:
+            videos = collaborator.find_video_files_on_usb(mount_point)
+            print(f"   {mount_point}: {len(videos)} video file(s)")
+            for video in videos:
+                print(f"     - {video}")
+                all_videos.append(os.path.join(mount_point, video))
+        
+        print("\n3. Testing complete video file selection...")
+        selected_video = collaborator.get_video_file_path()
+        if selected_video:
+            print(f"✅ Selected video: {selected_video}")
+        else:
+            print("❌ No video selected")
+        
+        print("\n" + "=" * 40)
+        print("Test complete!")
+        return
+    
+    elif args.test_video:
+        print("🎬 Testing Video Playback")
+        print("=" * 30)
+        
+        # Get video file
+        video_path = collaborator.get_video_file_path()
+        if not video_path:
+            print("❌ No video file found")
+            return
+        
+        print(f"📹 Playing: {video_path}")
+        
+        # Start video immediately
+        if collaborator.video_player.start_video(video_path):
+            print("✅ Video started successfully")
+            print("🎬 Video should now be playing in fullscreen")
+            print("Press Ctrl+C to stop")
+            
+            try:
+                while True:
+                    time.sleep(1)
+            except KeyboardInterrupt:
+                print("\n🛑 Stopping video...")
+                collaborator.video_player.stop_video()
+                print("👋 Test complete!")
+        else:
+            print("❌ Failed to start video")
+        return
+    
+    # Normal operation
     collaborator.run()
 
 if __name__ == "__main__":
