@@ -257,7 +257,7 @@ class KitchenSyncLeader:
             print(f"🎬 Debug mode: {self.debug_mode}")
             print(f"🎬 Debug overlay available: {self.debug_overlay is not None}")
             
-            # Create VLC instance with optimized args for faster startup
+            # Create VLC instance with basic args that work on all VLC versions
             vlc_args = [
                 '--no-video-title-show',
                 '--no-osd',
@@ -265,9 +265,6 @@ class KitchenSyncLeader:
                 '--no-snapshot-preview',  # Disable preview generation
                 '--network-caching=0',  # Minimize caching delay
                 '--file-caching=300',  # Reduce file caching (300ms)
-                '--audio-buffer-size=500',   # Increase audio buffer to prevent dropouts
-                '--clock-jitter=0',     # Reduce audio jitter
-                '--audio-resampler=soxr',  # Use high-quality audio resampler
             ]
             
             # Conditional fullscreen based on debug mode
@@ -313,23 +310,41 @@ class KitchenSyncLeader:
             result = self.vlc_player.play()
             print(f"✅ VLC play() called (result: {result})")
 
-            # Allow the player to initialize
-            time.sleep(0.2)
-
             # Set window properties programmatically
             if self.debug_mode:
-                try:
-                    xid = self.vlc_player.get_xwindow()
-                    if xid:
-                        print(f"✅ Got X window ID: {xid}")
+                print("🐛 Waiting for VLC window to appear...")
+                xid = None
+                # Poll for window ID for up to 3 seconds
+                for attempt in range(30):  # 30 attempts * 0.1s = 3 seconds
+                    try:
+                        xid = self.vlc_player.get_xwindow()
+                        if xid and xid != 0:
+                            print(f"✅ Got X window ID: {xid} (attempt {attempt + 1})")
+                            break
+                    except:
+                        pass
+                    time.sleep(0.1)
+                
+                if xid and xid != 0:
+                    try:
                         # Use xdotool to move and resize the window
-                        subprocess.run(['xdotool', 'windowsize', str(xid), '1520', '1080'])
-                        subprocess.run(['xdotool', 'windowmove', str(xid), '0', '0'])
-                        print(f"✅ Resized and moved VLC window {xid}")
-                    else:
-                        print("⚠️ Could not get X window ID to resize/move.")
-                except Exception as e:
-                    print(f"⚠️ Error setting window geometry with xdotool: {e}")
+                        result1 = subprocess.run(['xdotool', 'windowsize', str(xid), '1520', '1080'], 
+                                                capture_output=True, text=True)
+                        result2 = subprocess.run(['xdotool', 'windowmove', str(xid), '0', '0'], 
+                                                capture_output=True, text=True)
+                        
+                        if result1.returncode == 0 and result2.returncode == 0:
+                            print(f"✅ Resized and moved VLC window {xid}")
+                        else:
+                            print(f"⚠️ xdotool failed: resize={result1.returncode}, move={result2.returncode}")
+                            if result1.stderr:
+                                print(f"⚠️ xdotool resize error: {result1.stderr}")
+                            if result2.stderr:
+                                print(f"⚠️ xdotool move error: {result2.stderr}")
+                    except Exception as e:
+                        print(f"⚠️ Error setting window geometry with xdotool: {e}")
+                else:
+                    print("⚠️ Could not get VLC window ID after 3 seconds - window may not be visible")
             else:
                 # Set fullscreen for non-debug mode
                 self.vlc_player.set_fullscreen(True)
@@ -375,9 +390,6 @@ class KitchenSyncLeader:
                 '--mouse-hide-timeout=0',
                 '--no-loop',
                 '--start-time=0',   # Start from beginning
-                '--audio-buffer-size=500',   # Increase audio buffer to prevent dropouts
-                '--clock-jitter=0',     # Reduce audio jitter
-                '--audio-resampler=soxr',  # Use high-quality audio resampler
             ]
             
             # Conditional fullscreen based on debug mode
