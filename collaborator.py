@@ -318,6 +318,11 @@ class KitchenSyncCollaborator:
         # Setup MIDI
         self.setup_midi()
         
+        # Test USB detection on startup
+        if "--test-usb" in sys.argv:
+            self.test_usb_detection()
+            sys.exit(0)
+        
         # Setup sockets
         self.sync_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.sync_sock.bind(('', self.SYNC_PORT))
@@ -395,28 +400,229 @@ class KitchenSyncCollaborator:
         
         return settings
     
+    def mount_usb_drives(self):
+        """Automatically detect and mount USB drives"""
+        import subprocess
+        import glob
+        
+        mounted_drives = []
+        
+        try:
+            # Look for USB block devices
+            usb_devices = []
+            
+            # Check for USB storage devices
+            for device in glob.glob('/sys/block/*/device'):
+                try:
+                    with open(f"{device}/uevent", 'r') as f:
+                        content = f.read()
+                        if 'usb' in content.lower():
+                            block_device = device.split('/')[-2]
+                            # Look for partitions
+                            for partition in glob.glob(f'/sys/block/{block_device}/{block_device}*'):
+                                partition_name = partition.split('/')[-1]
+                                if partition_name != block_device:  # It's a partition
+                                    usb_devices.append(f'/dev/{partition_name}')
+                            
+                            # If no partitions, use the whole device
+                            if not any(f'/dev/{block_device}' in d for d in usb_devices):
+                                usb_devices.append(f'/dev/{block_device}')
+                except:
+                    continue
+            
+            # Mount each USB device
+            for device in usb_devices:
+                device_name = device.split('/')[-1]
+                mount_point = f'/media/usb-{device_name}'
+                
+                # Create mount point if it doesn't exist
+                os.makedirs(mount_point, exist_ok=True)
+                
+                # Check if already mounted
+                result = subprocess.run(['mountpoint', '-q', mount_point], 
+                                      capture_output=True)
+                
+                if result.returncode != 0:  # Not mounted
+                    try:
+                        # Try to mount
+                        mount_result = subprocess.run([
+                            'sudo', 'mount', '-o', 'uid=1000,gid=1000', 
+                            device, mount_point
+                        ], capture_output=True, text=True, timeout=10)
+                        
+                        if mount_result.returncode == 0:
+                            mounted_drives.append(mount_point)
+                            print(f"✓ Mounted USB drive: {device} -> {mount_point}")
+                        else:
+                            print(f"✗ Failed to mount {device}: {mount_result.stderr}")
+                    except subprocess.TimeoutExpired:
+                        print(f"✗ Timeout mounting {device}")
+                    except Exception as e:
+                        print(f"✗ Error mounting {device}: {e}")
+                else:
+                    mounted_drives.append(mount_point)
+                    print(f"✓ USB drive already mounted: {mount_point}")
+        
+        except Exception as e:
+            print(f"Error detecting USB drives: {e}")
+        
+        return mounted_drives
+
+    def find_video_files_on_usb(self, mount_point):
+        """Find video files at the root of a USB drive"""
+        video_extensions = ['.mp4', '.avi', '.mkv', '.mov', '.m4v', '.wmv', '.flv', '.webm']
+        video_files = []
+        
+        try:
+            if os.path.exists(mount_point):
+                # Only look at root level files
+                for item in os.listdir(mount_point):
+                    item_path = os.path.join(mount_point, item)
+                    if os.path.isfile(item_path):
+                        _, ext = os.path.splitext(item.lower())
+                        if ext in video_extensions:
+                            video_files.append(item_path)
+        except Exception as e:
+            print(f"Error scanning USB drive {mount_point}: {e}")
+        
+        return sorted(video_files)
+
     def find_video_file(self):
-        """Find video file in configured locations"""
-        # Check current directory first
+        """Find video file with USB drive priority and intelligent detection"""
+        
+        # Step 1: Mount USB drives automatically
+        print("🔍 Scanning for USB drives...")
+        mounted_drives = self.mount_usb_drives()
+        
+        # Step 2: Check USB drives first (highest priority)
+        usb_video_files = []
+        for mount_point in mounted_drives:
+            videos = self.find_video_files_on_usb(mount_point)
+            usb_video_files.extend(videos)
+        
+        if usb_video_files:
+            if len(usb_video_files) == 1:
+                print(f"✓ Found video on USB drive: {usb_video_files[0]}")
+                return usb_video_files[0]
+            elif len(usb_video_files) > 1:
+                print("⚠ Multiple video files found on USB drives:")
+                for i, video in enumerate(usb_video_files, 1):
+                    print(f"   {i}. {os.path.basename(video)} ({os.path.dirname(video)})")
+                
+                # Use the first one but warn the user
+                selected_video = usb_video_files[0]
+                print(f"➤ Using first video file: {selected_video}")
+                print("💡 Tip: Use only one video file per USB drive for automatic selection")
+                return selected_video
+        
+        # Step 3: Check if specific video file exists in configured locations
         if os.path.exists(self.video_file):
+            print(f"✓ Found configured video file: {self.video_file}")
             return self.video_file
         
-        # Check video source directories
+        # Check video source directories for the configured file
         for source_dir in self.video_sources:
             video_path = os.path.join(source_dir, self.video_file)
             if os.path.exists(video_path):
+                print(f"✓ Found configured video file: {video_path}")
                 return video_path
         
-        # Look for any video files if specified file not found
+        # Step 4: Look for any video files in configured directories
+        print(f"⚠ Configured video file '{self.video_file}' not found")
+        print("🔍 Searching for alternative video files...")
+        
+        video_extensions = ['.mp4', '.avi', '.mkv', '.mov', '.m4v', '.wmv', '.flv', '.webm']
+        found_videos = []
+        
         for source_dir in self.video_sources:
             if os.path.exists(source_dir):
-                for ext in ['.mp4', '.avi', '.mkv', '.mov']:
-                    for file in os.listdir(source_dir):
-                        if file.lower().endswith(ext):
-                            print(f"Found alternative video: {file}")
-                            return os.path.join(source_dir, file)
+                for file in os.listdir(source_dir):
+                    file_path = os.path.join(source_dir, file)
+                    if os.path.isfile(file_path):
+                        _, ext = os.path.splitext(file.lower())
+                        if ext in video_extensions:
+                            found_videos.append(file_path)
         
+        if found_videos:
+            if len(found_videos) == 1:
+                print(f"✓ Found alternative video: {found_videos[0]}")
+                return found_videos[0]
+            else:
+                print("⚠ Multiple video files found in local directories:")
+                for i, video in enumerate(found_videos, 1):
+                    print(f"   {i}. {os.path.basename(video)} ({os.path.dirname(video)})")
+                
+                selected_video = found_videos[0]
+                print(f"➤ Using first video file: {selected_video}")
+                return selected_video
+        
+        # Step 5: No video files found anywhere
+        self.display_video_error("No video files found")
         return None
+
+    def display_video_error(self, error_message):
+        """Display error message for video issues"""
+        print("❌ VIDEO ERROR ❌")
+        print("=" * 50)
+        print(f"Error: {error_message}")
+        print("")
+        print("Expected locations:")
+        print("  1. USB drive (root directory) - HIGHEST PRIORITY")
+        
+        for mount_point in ['/media/usb', '/media/usb0', '/media/usb1']:
+            if os.path.exists(mount_point):
+                print(f"     ✓ {mount_point}/")
+            else:
+                print(f"     ✗ {mount_point}/ (not found)")
+        
+        print(f"  2. Configured file: {self.video_file}")
+        print("  3. Local directories:")
+        for source_dir in self.video_sources:
+            if os.path.exists(source_dir):
+                print(f"     ✓ {source_dir}")
+            else:
+                print(f"     ✗ {source_dir} (not found)")
+        
+        print("")
+        print("Supported formats: MP4, AVI, MKV, MOV, M4V, WMV, FLV, WebM")
+        print("💡 For automatic detection, place ONE video file at the root of your USB drive")
+        print("=" * 50)
+
+    def test_usb_detection(self):
+        """Test USB drive detection and video file finding"""
+        print("🧪 USB Drive Detection Test")
+        print("=" * 40)
+        
+        # Test USB mounting
+        print("\n1. Testing USB drive detection...")
+        mounted_drives = self.mount_usb_drives()
+        
+        if not mounted_drives:
+            print("❌ No USB drives detected")
+            print("💡 Connect a USB drive and try again")
+            return
+        
+        # Test video file detection
+        print(f"\n2. Testing video file detection...")
+        all_videos = []
+        for mount_point in mounted_drives:
+            videos = self.find_video_files_on_usb(mount_point)
+            all_videos.extend(videos)
+            print(f"   {mount_point}: {len(videos)} video file(s)")
+            for video in videos:
+                print(f"     - {os.path.basename(video)}")
+        
+        # Test overall file finding logic
+        print(f"\n3. Testing complete video file selection...")
+        selected_video = self.find_video_file()
+        
+        if selected_video:
+            print(f"✅ Selected video: {selected_video}")
+        else:
+            print("❌ No video file selected")
+        
+        print("\n" + "=" * 40)
+        print("Test complete!")
     
     def listen_sync(self):
         """Listen for time sync broadcasts from leader"""

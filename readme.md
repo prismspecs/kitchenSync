@@ -157,6 +157,8 @@ python3 collaborator.py
 
 ## 🖥️ Usage & Commands
 
+### Leader Pi Commands
+
 When running `leader.py`, you'll get an interactive command prompt:
 
 - `start` - Start synchronized playback across all Pis
@@ -167,10 +169,30 @@ When running `leader.py`, you'll get an interactive command prompt:
 
 ### Schedule Editor
 
+The schedule editor allows you to:
+
 - `add` - Add new MIDI cues (note on/off, control changes)
 - `remove <number>` - Remove specific cues
 - `clear` - Clear all cues
 - `save` - Save schedule and return to main menu
+
+### Multiple Collaborator Pis
+
+For multiple Pis, create separate config files:
+
+- `collaborator_config_pi2.ini`
+- `collaborator_config_pi3.ini`
+- etc.
+
+Run collaborators with specific configs:
+
+```bash
+# Activate virtual environment
+source kitchensync-env/bin/activate
+
+# Run with specific config
+python3 collaborator.py collaborator_config_pi2.ini
+```
 
 ## 📝 Collaborator Configuration
 
@@ -222,28 +244,50 @@ python3 collaborator.py collaborator_config_pi2.ini
 
 ## 🎬 Video File Management
 
-### Local Storage
+### USB Drive Auto-Detection (PRIORITY 1) 🔥
 
-Place video files in:
+The system automatically detects, mounts, and plays video files from USB drives:
 
-- `./videos/` directory
+**✅ Automatic Process:**
+1. **Detects** connected USB drives when collaborator starts
+2. **Mounts** drives to `/media/usb-*` directories  
+3. **Scans** root directory of each drive for video files
+4. **Plays** the video file automatically
+
+**📁 USB Drive Requirements:**
+- Place **ONE video file** at the root (top level) of the USB drive
+- Supported formats: MP4, AVI, MKV, MOV, M4V, WMV, FLV, WebM
+- File can have any name (automatic detection)
+
+**⚠️ Multiple Files Handling:**
+- **One file**: Automatically selected and played
+- **Multiple files**: First file used, warning displayed
+- **No files**: Error message with troubleshooting info
+
+### Local Storage (PRIORITY 2)
+
+If no USB drive is found, the system searches local directories:
+
+- `./videos/` directory  
 - Same directory as the scripts
-
-### USB Storage
-
-The system automatically searches USB drives:
-
-- `/media/usb/`
-- `/media/usb0/`
-- `/media/usb1/`
+- Configured `video_sources` directories
 
 ### Different Videos Per Pi
 
-Each Pi can play a different video file by setting different `video_file` values in their config files:
+Each Pi can play different videos by:
+1. **USB Method**: Different USB drive per Pi (recommended)
+2. **Config Method**: Different `video_file` settings per Pi
 
-- Pi 1: `video_file = intro.mp4`
-- Pi 2: `video_file = main_show.mp4`
-- Pi 3: `video_file = outro.mp4`
+```ini
+# Pi 1 config
+video_file = intro.mp4
+
+# Pi 2 config  
+video_file = main_show.mp4
+
+# Pi 3 config
+video_file = outro.mp4
+```
 
 ## 🎹 MIDI Output
 
@@ -327,6 +371,23 @@ KitchenSync incorporates advanced synchronization techniques with VLC:
 - Verify MIDI interface connectivity with `aconnect -l` or `amidi -l`
 - Check VLC installation: `vlc --version`
 
+### USB Drive Testing
+
+Test USB drive detection and video file finding:
+
+```bash
+# Activate virtual environment
+source kitchensync-env/bin/activate
+
+# Test USB drive detection
+python3 collaborator.py --test-usb
+```
+
+This will show:
+- Detected USB drives and mount points
+- Video files found on each drive  
+- Which video file would be selected for playback
+
 ## 🛠️ Troubleshooting
 
 ### Common Setup Issues
@@ -371,12 +432,58 @@ python3 leader.py
 - Check video file format (MP4 recommended)
 - Ensure `python-vlc` is installed: `pip install python-vlc`
 
+### USB Drive Issues
+
+**USB Drive Not Detected:**
+```bash
+# Check if USB drive is connected
+lsusb
+lsblk
+
+# Check mount points
+df -h | grep media
+
+# Manual mount (if needed)
+sudo mkdir -p /media/usb-manual
+sudo mount /dev/sdb1 /media/usb-manual
+```
+
+**Permission Issues:**
+```bash
+# Add user to required groups
+sudo usermod -a -G plugdev,disk $USER
+
+# Restart session or reboot for group changes to take effect
+```
+
+**Multiple Video Files:**
+- Place only ONE video file at the root of each USB drive
+- Use subdirectories for storage, but not for playback files
+- System will warn and use first file if multiple found
+
+**Video Format Issues:**
+- Supported: MP4, AVI, MKV, MOV, M4V, WMV, FLV, WebM
+- Recommended: MP4 with H.264 codec for best compatibility
+- Convert files if needed: `ffmpeg -i input.avi -c:v libx264 output.mp4`
+
 ### Performance Issues
 
 - Use wired network connection for best sync performance
 - Ensure all Pis are on the same network segment
 - Check CPU usage during playback
 - Consider video file resolution and bitrate
+
+### Auto-Discovery
+
+Collaborator Pis automatically register with the leader when started.
+
+### Heartbeat Monitoring
+
+Leader tracks collaborator Pi status with periodic heartbeats.
+
+### Flexible Video Sources
+
+Supports local files, USB drives, and multiple search directories.
 
 ### Auto-Discovery
 
