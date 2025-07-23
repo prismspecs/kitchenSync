@@ -1,15 +1,38 @@
-# Ki## ✨ Key Features
-
-- **🎬 Synchronized Video Playback**: Multiple Pis play videos in perfect sync using VLC with advanced drift correction
-- **🎹 Precise MIDI Output**: Timecoded MIDI events via USB interfaces with sub-50ms accuracy
-- **🔌 Plug-and-Play USB**: Automatic USB drive detection, mounting, and video file selection
-- **🎯 Automatic Role Detection**: USB-based configuration determines leader vs collaborator roles
-- **🚀 Auto-Start System**: Systemd service for boot-time initialization and hands-free operation
-- **📡 Network Synchronization**: UDP broadcast for real-time time sync across all devices
-- **🎛️ Centralized Control**: Leader Pi provides interactive interface for system management
-- **🐛 Debug Mode**: Visual overlays showing Pi ID, video files, timing, and MIDI event tracking - Synchronized Video Playback & MIDI Output System
+# KitchenSync - Synchronized Video Playback & MIDI Output System
 
 A modern, plug-and-play system for synchronized video playback and MIDI output across multiple Raspberry Pis. Features automatic USB drive detection, VLC-based video playback with drift correction, and seamless deployment.
+
+## 🔄 How It Works - Unified Startup System
+
+**� IMPORTANT: Every Pi runs the same installation and service!**
+
+### **Single Service, Multiple Roles**
+1. **Identical Setup**: All Pis have the same installation with `kitchensync.service` enabled
+2. **USB-Drive Configuration**: Each Pi gets its role from a USB drive configuration file
+3. **Automatic Detection**: `kitchensync.py` scans for USB drives and reads `kitchensync.ini`
+4. **Role Execution**: Based on the config, it automatically starts as leader or collaborator
+
+```bash
+# Same systemd service runs on ALL Pis:
+sudo systemctl start kitchensync.service
+# → Runs: python3 kitchensync.py
+
+# USB drive contains kitchensync.ini:
+[KITCHENSYNC]
+is_leader = true    # Makes this Pi the leader
+pi_id = leader-pi   # OR pi-002, pi-003, etc.
+debug = false       # Optional debug mode
+
+# kitchensync.py then automatically:
+# • If is_leader = true  → Starts leader.py
+# • If is_leader = false → Starts collaborator.py
+```
+
+### **Deployment Workflow**
+1. Install KitchenSync on all Pis (identical setup)
+2. Prepare USB drives with different `kitchensync.ini` files
+3. Plug USB drives into appropriate Pis
+4. Power on - system automatically starts in correct roles!
 
 ## ✨ Key Features
 
@@ -31,12 +54,53 @@ A modern, plug-and-play system for synchronized video playback and MIDI output a
 ## 📂 Project Structure
 
 - `kitchensync.py` — Main auto-start script with USB configuration detection
-- `leader.py` — Leader Pi script with video playback and system coordination
+- `leader.py` — Leader Pi script with video playbook and system coordination
 - `collaborator.py` — Collaborator Pi script for synchronized playback and MIDI output
 - `schedule.json` — MIDI cue timings and events
 - `kitchensync.service` — Systemd service for automatic startup
 - `requirements.txt` — Python dependencies
 - Configuration files for different Pi roles
+
+## 💾 USB Drive Configuration Examples
+
+### **Leader Pi USB Drive**
+```
+📁 Leader USB Drive
+├── kitchensync.ini
+├── leader_video.mp4
+└── schedule.json
+```
+
+**kitchensync.ini** (Leader):
+```ini
+[KITCHENSYNC]
+is_leader = true
+pi_id = leader-pi
+debug = false
+video_file = leader_video.mp4
+```
+
+### **Collaborator Pi USB Drive** 
+```
+📁 Collaborator USB Drive
+├── kitchensync.ini
+└── collaborator_video.mp4
+```
+
+**kitchensync.ini** (Collaborator):
+```ini
+[KITCHENSYNC]
+is_leader = false
+pi_id = pi-002
+debug = false
+video_file = collaborator_video.mp4
+midi_port = 0
+```
+
+### **Multiple Collaborators**
+- Create separate USB drives with unique `pi_id` values (pi-002, pi-003, pi-004, etc.)
+- Each can have different video files for unique content per Pi
+- All will automatically connect to the leader Pi
 
 ## � Quick Setup
 
@@ -66,32 +130,100 @@ sudo systemctl enable kitchensync.service
 sudo systemctl start kitchensync.service
 ```
 
-### 3. Prepare USB Drive Configuration
+## 🚀 Complete Deployment Workflow
 
-Create a `kitchensync.ini` file on your USB drive:
+### **Step-by-Step Deployment (All Pis Get Same Installation)**
 
-**For Leader Pi:**
-```ini
-[DEFAULT]
-role = leader
-video_file = your_video.mp4
+#### **1. Install on All Pis (Identical Setup)**
+```bash
+# Clone repository
+git clone https://github.com/prismspecs/kitchenSync.git
+cd kitchenSync
+
+# Install dependencies 
+sudo apt install -y vlc libvlc-dev python3-vlc python3-pip python3-dev libasound2-dev
+sudo pip install python-rtmidi python-vlc pygame --break-system-packages
+
+# Enable service on ALL Pis
+sudo cp kitchensync.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable kitchensync.service
 ```
 
-**For Collaborator Pi:**
+#### **2. Prepare USB Drives (Different Configs)**
+
+**Leader USB Drive:**
+```
+📁 USB Drive
+├── kitchensync.ini      (is_leader = true)
+├── leader_video.mp4     (main video)
+└── schedule.json        (MIDI schedule)
+```
+
+**Collaborator USB Drives:** (one per collaborator Pi)
+```
+📁 USB Drive Pi-002
+├── kitchensync.ini      (is_leader = false, pi_id = pi-002)
+└── video2.mp4           (video for this Pi)
+
+📁 USB Drive Pi-003  
+├── kitchensync.ini      (is_leader = false, pi_id = pi-003)
+└── video3.mp4           (video for this Pi)
+```
+
+#### **3. Deploy and Power On**
+1. **Plug USB drives** into respective Pis
+2. **Power on all Pis** 
+3. **Automatic startup** happens via systemd service:
+   - `kitchensync.py` scans for USB configuration
+   - Determines role from `is_leader` setting
+   - Automatically starts `leader.py` or `collaborator.py`
+4. **System starts playing** synchronized videos with MIDI output
+
+### **Production Deployment Benefits**
+- ✅ **Zero manual configuration** required on each Pi
+- ✅ **Same installation** on every Pi - no per-device setup
+- ✅ **USB-drive deployment** - just prepare drives and plug in
+- ✅ **Automatic role detection** - no manual script selection
+- ✅ **Boot-time startup** - no manual intervention needed
+- ✅ **Easy reconfiguration** - just swap USB drives to change roles
+
+### 3. Manual Testing (Optional)
+
+For testing purposes, you can run scripts manually:
+
+**Leader Pi:**
 ```ini
-[DEFAULT]
-role = collaborator
-pi_id = pi-001
-video_file = your_video.mp4
+# In your USB kitchensync.ini file:
+[KITCHENSYNC]
+is_leader = true
+pi_id = leader-pi  
+debug = false
+video_file = leader_video.mp4
+```
+
+**Collaborator Pi:**
+```ini
+# In your USB kitchensync.ini file:
+[KITCHENSYNC]
+is_leader = false
+pi_id = pi-002
+debug = false  
+video_file = collaborator_video.mp4
 midi_port = 0
 ```
 
-### 4. Plug and Play
+**Manual Commands:**
+```bash
+# Test auto-detection
+python3 kitchensync.py
 
-1. Insert USB drive with configuration and video file
-2. Power on Pi (auto-starts via systemd service)
-3. System automatically detects role and starts appropriate mode
-4. Videos play in sync across all connected Pis
+# Run leader manually
+python3 leader.py
+
+# Run collaborator manually  
+python3 collaborator.py
+```
 
 ## 🎮 Manual Operation
 

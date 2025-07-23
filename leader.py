@@ -101,12 +101,26 @@ class KitchenSyncLeader:
                 config.write(f)
             print("✓ Created default leader config")
         
+        # Store the full config for later use
+        self.config = config
+        
         # Parse debug setting
         if 'KITCHENSYNC' in config:
             self.debug_mode = config.getboolean('KITCHENSYNC', 'debug', fallback=False)
             print(f"✓ Debug mode: {'ENABLED' if self.debug_mode else 'DISABLED'}")
         else:
             self.debug_mode = False
+        
+        # Get configured video file name (fallback to leader_video.mp4)
+        self.configured_video_file = None
+        if 'DEFAULT' in config:
+            self.configured_video_file = config.get('DEFAULT', 'video_file', fallback='leader_video.mp4')
+        elif 'KITCHENSYNC' in config:
+            self.configured_video_file = config.get('KITCHENSYNC', 'video_file', fallback='leader_video.mp4')
+        else:
+            self.configured_video_file = 'leader_video.mp4'
+        
+        print(f"✓ Configured video file: {self.configured_video_file}")
     
     def _setup_video_player(self):
         """Initialize video player and find video file"""
@@ -121,8 +135,39 @@ class KitchenSyncLeader:
             print(f"Error setting up video player: {e}")
     
     def _find_video_file(self):
-        """Find video file on USB drives or local directory"""
-        # Check USB drives first
+        """Find video file with intelligent fallback logic"""
+        video_extensions = ['.mp4', '.avi', '.mov', '.mkv', '.wmv', '.flv', '.webm', '.m4v']
+        
+        # Step 1: Look for the specifically configured video file on USB drives
+        if self.configured_video_file:
+            mount_result = subprocess.run(['mount'], capture_output=True, text=True)
+            if mount_result.returncode == 0:
+                for line in mount_result.stdout.split('\n'):
+                    if '/media/' in line:
+                        parts = line.split(' on ')
+                        if len(parts) >= 2:
+                            mount_point = parts[1].split(' type ')[0]
+                            if os.path.exists(mount_point) and os.path.isdir(mount_point):
+                                # Look for specifically configured video file
+                                configured_path = os.path.join(mount_point, self.configured_video_file)
+                                if os.path.exists(configured_path):
+                                    print(f"✓ Found configured video file on USB: {configured_path}")
+                                    return configured_path
+        
+        # Step 2: Look for configured video file in local directories
+        if self.configured_video_file:
+            # Check current directory
+            if os.path.exists(self.configured_video_file):
+                print(f"✓ Found configured video file: {self.configured_video_file}")
+                return self.configured_video_file
+            
+            # Check videos directory
+            videos_path = os.path.join('./videos', self.configured_video_file)
+            if os.path.exists(videos_path):
+                print(f"✓ Found configured video file in videos/: {videos_path}")
+                return videos_path
+        
+        # Step 3: Fall back to any video files on USB drives (silent fallback)
         mount_result = subprocess.run(['mount'], capture_output=True, text=True)
         if mount_result.returncode == 0:
             for line in mount_result.stdout.split('\n'):
@@ -131,21 +176,29 @@ class KitchenSyncLeader:
                     if len(parts) >= 2:
                         mount_point = parts[1].split(' type ')[0]
                         if os.path.exists(mount_point) and os.path.isdir(mount_point):
-                            # Look for video files
-                            video_extensions = ['.mp4', '.avi', '.mov', '.mkv', '.wmv']
+                            # Look for any video files
                             for ext in video_extensions:
                                 videos = glob.glob(os.path.join(mount_point, f'*{ext}'))
                                 if videos:
+                                    print(f"⚠️ Using fallback video from USB: {videos[0]} (configured '{self.configured_video_file}' not found)")
                                     return videos[0]
         
-        # Check local videos directory
+        # Step 4: Fall back to any video files in local videos directory (silent fallback)
         if os.path.exists('./videos'):
-            video_extensions = ['.mp4', '.avi', '.mov', '.mkv', '.wmv']
             for ext in video_extensions:
                 videos = glob.glob(f'./videos/*{ext}')
                 if videos:
+                    print(f"⚠️ Using fallback video from videos/: {videos[0]} (configured '{self.configured_video_file}' not found)")
                     return videos[0]
         
+        # Step 5: Fall back to any video files in current directory (silent fallback)
+        for ext in video_extensions:
+            videos = glob.glob(f'*{ext}')
+            if videos:
+                print(f"⚠️ Using fallback video from current directory: {videos[0]} (configured '{self.configured_video_file}' not found)")
+                return videos[0]
+        
+        print(f"❌ No video files found. Looking for: {self.configured_video_file}")
         return None
     
     def _play_video(self):

@@ -1,5 +1,1 @@
-kitchensync@raspberrypi:~/kitchenSync $ sudo systemctl start kitchensync
-Failed to start kitchensync.service: Unit kitchensync.service not found.
-
-
-
+when it booted up after a restart it said "leader_video.mp4" had not been found, that it would play test_video.mp4 instead but it was a dialog box with an OK button. It should just do it automatically. There wont be a mouse/keyboard connected.

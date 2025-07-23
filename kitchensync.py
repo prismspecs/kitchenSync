@@ -102,60 +102,48 @@ class KitchenSyncAutoStart:
                 print(f"✓ Using specified video: {specified_video}")
                 return True
             else:
-                print(f"⚠️  Specified video '{specified_video}' not found, checking available videos...")
+                print(f"⚠️  Specified video '{specified_video}' not found, using automatic fallback...")
         
-        # Handle video file selection
+        # Handle video file selection with automatic fallback
         if len(video_files) == 0:
             self.show_error("No video files found on USB drive")
             return False
         elif len(video_files) == 1:
             self.video_file = os.path.join(self.usb_mount_point, video_files[0])
-            print(f"✓ Using single video file: {video_files[0]}")
+            if specified_video and specified_video != video_files[0]:
+                print(f"⚠️  Using fallback video: {video_files[0]} (configured '{specified_video}' not found)")
+            else:
+                print(f"✓ Using single video file: {video_files[0]}")
             return True
         else:
-            # Multiple videos and no specific file configured
-            if not specified_video:
-                self.show_error(f"Multiple video files found ({len(video_files)}) but no specific file configured in kitchensync.ini")
-                return False
+            # Multiple videos - use first one as fallback, but log the choice
+            self.video_file = os.path.join(self.usb_mount_point, video_files[0])
+            if specified_video:
+                print(f"⚠️  Using fallback video: {video_files[0]} (configured '{specified_video}' not found)")
+                print(f"💡 Available videos: {', '.join(video_files)}")
             else:
-                self.show_error(f"Specified video '{specified_video}' not found. Available: {', '.join(video_files)}")
-                return False
+                print(f"⚠️  Multiple videos found, using first one: {video_files[0]}")
+                print(f"💡 To avoid this warning, specify 'video_file = {video_files[0]}' in kitchensync.ini")
+                print(f"💡 Available videos: {', '.join(video_files)}")
+            return True
     
     def show_error(self, message):
-        """Display error message on HDMI output"""
+        """Display error message on HDMI output (non-blocking for headless operation)"""
         print(f"❌ ERROR: {message}")
         
-        # Try to display error with various methods
+        # Try to display error with various methods (non-blocking only)
         try:
-            # Method 1: Try to use notify-send (if available and DISPLAY is set)
+            # Method 1: Try to use notify-send (if available and DISPLAY is set) - non-blocking
             if os.environ.get('DISPLAY'):
-                subprocess.run(['notify-send', 'KitchenSync Error', message], 
-                             capture_output=True, timeout=5)
+                subprocess.Popen(['notify-send', 'KitchenSync Error', message], 
+                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         except:
             pass
         
-        try:
-            # Method 2: Try to create a simple GUI error dialog (if DISPLAY available)
-            if os.environ.get('DISPLAY'):
-                error_script = f'''
-import tkinter as tk
-from tkinter import messagebox
-import sys
-
-try:
-    root = tk.Tk()
-    root.withdraw()
-    messagebox.showerror("KitchenSync Error", "{message}")
-    root.quit()
-except:
-    pass
-'''
-                subprocess.run([sys.executable, '-c', error_script], 
-                             capture_output=True, timeout=10)
-        except:
-            pass
+        # Skip GUI dialog boxes as they require user interaction and block headless operation
+        # This avoids the blocking messagebox that would require mouse/keyboard interaction
         
-        # Method 3: Always log to syslog and console
+        # Method 2: Always log to syslog and console
         try:
             subprocess.run(['logger', '-t', 'kitchensync', f'ERROR: {message}'], 
                          capture_output=True, timeout=5)
