@@ -279,7 +279,7 @@ class KitchenSyncLeader:
                     '--fullscreen',
                     '--video-on-top',  # Ensure video stays on top
                 ])
-                print("🎬 Normal mode: Running VLC in fullscreen")
+                print("🎬 Normal mode: Running VLC in fullscreen") 
             
             print(f"🎬 VLC args: {vlc_args}")
 
