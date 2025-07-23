@@ -100,8 +100,11 @@ class KitchenSyncLeader:
         
         print(f"🎬 Starting video playback: {self.video_path}")
         
-        # Use command line VLC for better reliability
-        return self._play_with_command_vlc()
+        # Use Python VLC for programmatic control needed for drift correction
+        if VLC_PYTHON_AVAILABLE:
+            return self._play_with_python_vlc()
+        else:
+            return self._play_with_command_vlc()
     
     def _play_with_python_vlc(self):
         """Play video using VLC Python bindings"""

@@ -59,8 +59,11 @@ class SimpleVideoPlayer:
         """Play video using VLC"""
         print(f"🎬 Playing: {video_path}")
         
-        # Always use command line VLC for better reliability
-        return self._play_with_command_vlc(video_path)
+        # Use Python VLC for programmatic control needed for drift correction
+        if VLC_PYTHON_AVAILABLE:
+            return self._play_with_python_vlc(video_path)
+        else:
+            return self._play_with_command_vlc(video_path)
     
     def _play_with_python_vlc(self, video_path):
         """Play with VLC Python bindings"""
