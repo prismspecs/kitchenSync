@@ -408,7 +408,24 @@ class KitchenSyncCollaborator:
         mounted_drives = []
         
         try:
-            # Look for USB block devices
+            # First, check for already mounted USB drives in /media/
+            mount_result = subprocess.run(['mount'], capture_output=True, text=True)
+            if mount_result.returncode == 0:
+                for line in mount_result.stdout.split('\n'):
+                    if '/media/' in line and ('usb' in line.lower() or 'sd' in line or 'mmc' in line):
+                        # Extract mount point from mount output
+                        parts = line.split(' on ')
+                        if len(parts) >= 2:
+                            mount_point = parts[1].split(' type ')[0]
+                            if os.path.exists(mount_point) and os.path.isdir(mount_point):
+                                mounted_drives.append(mount_point)
+                                print(f"✓ Found mounted USB drive: {mount_point}")
+            
+            # If we found already-mounted drives, return them
+            if mounted_drives:
+                return mounted_drives
+            
+            # Otherwise, try to detect and mount USB devices manually
             usb_devices = []
             
             # Check for USB storage devices
