@@ -104,9 +104,20 @@ class SimpleVideoPlayer:
             # Wait for VLC to start
             time.sleep(2)
             
-            # Check player state
+            # Check player state and retry if needed
             state = self.vlc_player.get_state()
             print(f"📊 VLC player state: {state}")
+            
+            if state != vlc.State.Playing:
+                print("🔄 Video not playing, triggering play again...")
+                self.vlc_player.play()
+                time.sleep(1)
+                state = self.vlc_player.get_state()
+                print(f"📊 VLC player state after retry: {state}")
+            
+            # Set position to start and play again to ensure it's not stuck
+            self.vlc_player.set_position(0.0)
+            self.vlc_player.play()
             
             return True
             
