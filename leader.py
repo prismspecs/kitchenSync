@@ -104,12 +104,14 @@ class KitchenSyncLeader:
         # Store the full config for later use
         self.config = config
         
-        # Parse debug setting
+        # Parse debug setting (check both KITCHENSYNC and DEFAULT sections)
+        self.debug_mode = False
         if 'KITCHENSYNC' in config:
             self.debug_mode = config.getboolean('KITCHENSYNC', 'debug', fallback=False)
-            print(f"✓ Debug mode: {'ENABLED' if self.debug_mode else 'DISABLED'}")
-        else:
-            self.debug_mode = False
+        elif 'DEFAULT' in config:
+            self.debug_mode = config.getboolean('DEFAULT', 'debug', fallback=False)
+        
+        print(f"✓ Debug mode: {'ENABLED' if self.debug_mode else 'DISABLED'}")
         
         # Get configured video file name (fallback to leader_video.mp4)
         self.configured_video_file = None
