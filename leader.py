@@ -220,13 +220,18 @@ class KitchenSyncLeader:
     def _play_with_python_vlc(self):
         """Play video using VLC Python bindings"""
         try:
-            # Create VLC instance for fullscreen playbook
+            # Create VLC instance with optimized args for faster startup
             vlc_args = [
                 '--fullscreen',
                 '--no-video-title-show',
                 '--no-osd',
                 '--quiet',
                 '--mouse-hide-timeout=0',
+                '--no-audio',  # Disable audio processing for faster startup
+                '--video-on-top',  # Ensure video stays on top
+                '--no-snapshot-preview',  # Disable preview generation
+                '--network-caching=0',  # Minimize caching delay
+                '--file-caching=300',  # Reduce file caching (300ms)
             ]
             
             self.vlc_instance = vlc.Instance(' '.join(vlc_args))
@@ -239,28 +244,18 @@ class KitchenSyncLeader:
                 print("❌ Failed to create VLC player")
                 return False
             
-            # Load media first
+            # Load media and start immediately
             self.vlc_media = self.vlc_instance.media_new(self.video_path)
             if not self.vlc_media:
                 print("❌ Failed to create VLC media")
                 return False
                 
             self.vlc_player.set_media(self.vlc_media)
-            
-            # Set fullscreen (this should work since we already have the --fullscreen arg)
             self.vlc_player.set_fullscreen(True)
             
-            # Start playbook once
+            # Start playback immediately
             result = self.vlc_player.play()
-            print(f"✅ VLC play result: {result}")
-            print("🎬 Video should now be playing in fullscreen")
-            
-            # Wait briefly for VLC to initialize
-            time.sleep(1)
-            
-            # Check state but don't restart unless truly necessary
-            state = self.vlc_player.get_state()
-            print(f"📊 VLC player state: {state}")
+            print(f"✅ VLC started (result: {result}) - Video should appear shortly")
             
             return True
             
