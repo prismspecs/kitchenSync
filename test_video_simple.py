@@ -59,10 +59,8 @@ class SimpleVideoPlayer:
         """Play video using VLC"""
         print(f"🎬 Playing: {video_path}")
         
-        if VLC_PYTHON_AVAILABLE:
-            return self._play_with_python_vlc(video_path)
-        else:
-            return self._play_with_command_vlc(video_path)
+        # Always use command line VLC for better reliability
+        return self._play_with_command_vlc(video_path)
     
     def _play_with_python_vlc(self, video_path):
         """Play with VLC Python bindings"""
@@ -130,17 +128,32 @@ class SimpleVideoPlayer:
         try:
             cmd = [
                 'vlc',
+                '--intf', 'dummy',  # No interface
                 '--fullscreen',
                 '--no-video-title-show',
                 '--no-osd',
                 '--quiet',
                 '--mouse-hide-timeout=0',
+                '--play-and-exit',  # Exit when done
+                '--no-loop',
+                '--start-time=0',   # Start from beginning
                 video_path
             ]
             
             print(f"🔧 Running: {' '.join(cmd)}")
-            subprocess.Popen(cmd)
-            print("✅ VLC command started")
+            process = subprocess.Popen(cmd)
+            print(f"✅ VLC command started with PID: {process.pid}")
+            
+            # Give VLC a moment to start
+            time.sleep(3)
+            
+            # Check if process is still running
+            if process.poll() is None:
+                print("✅ VLC process is running")
+            else:
+                print(f"❌ VLC process exited with code: {process.returncode}")
+                return False
+            
             return True
             
         except Exception as e:
