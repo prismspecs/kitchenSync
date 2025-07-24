@@ -18,6 +18,9 @@ try:
 except ImportError:
     PYGAME_AVAILABLE = False
 
+# Global guard to prevent multiple pygame instances per process
+_PYGAME_INITIALIZED = False
+_PYGAME_DISPLAY_CREATED = False
 
 class DebugError(Exception):
     """Raised when debug overlay operations fail"""
@@ -28,6 +31,8 @@ class DebugOverlay:
     """Debug overlay system with pygame and text fallback modes"""
     
     def __init__(self, pi_id: str, video_file: str, use_pygame: bool = True):
+        global _PYGAME_INITIALIZED, _PYGAME_DISPLAY_CREATED
+        
         self.pi_id = pi_id
         self.video_file = video_file
         self.use_pygame = use_pygame and PYGAME_AVAILABLE
@@ -58,13 +63,21 @@ class DebugOverlay:
             'pi_id': pi_id
         }
         
-        # Initialize overlay
-        if self.use_pygame:
+        # Initialize overlay - but only if we haven't already created a display
+        if self.use_pygame and not _PYGAME_DISPLAY_CREATED:
             print(f"[DEBUG] Initializing pygame overlay for {self.pi_id} (video: {self.video_file})")
             self._init_pygame_overlay()
             self.running = True
             self.update_thread = threading.Thread(target=self._update_loop, daemon=True)
             self.update_thread.start()
+            _PYGAME_DISPLAY_CREATED = True
+            
+            # Draw initial state immediately
+            self._draw_initial_state()
+        elif self.use_pygame and _PYGAME_DISPLAY_CREATED:
+            print(f"[DEBUG] Pygame display already exists - cannot create another overlay for {self.pi_id}")
+            self.use_pygame = False
+            print(f"[DEBUG] Text-based debug overlay initialized for {self.pi_id}")
         else:
             print(f"[DEBUG] Text-based debug overlay initialized for {self.pi_id}")
     
@@ -95,11 +108,17 @@ class DebugOverlay:
     
     def _init_pygame_overlay(self) -> None:
         """Initialize pygame overlay for visual debug display"""
+        global _PYGAME_INITIALIZED
+        
         try:
             # VLC should already be positioned by now
             os.environ['SDL_VIDEO_WINDOW_POS'] = f'{self.overlay_x},{self.overlay_y}'
             
-            pygame.init()
+            if not _PYGAME_INITIALIZED:
+                pygame.init()
+                _PYGAME_INITIALIZED = True
+                print(f"[DEBUG] Pygame initialized for first time")
+            
             pygame.display.set_caption("KitchenSync Debug")
             
             self.screen = pygame.display.set_mode((self.overlay_width, self.overlay_height))
@@ -127,6 +146,23 @@ class DebugOverlay:
             except Exception:
                 pass
             time.sleep(5)  # Check every 5 seconds instead of 2
+    
+    def _draw_initial_state(self):
+        """Draw the initial state immediately when overlay is created"""
+        if self.use_pygame and self.screen:
+            try:
+                with self.state_lock:
+                    video_file = self.state['video_file']
+                    current_time = self.state['current_time']
+                    total_time = self.state['total_time']
+                    midi_data = self.state['midi_data']
+                    is_leader = self.state['is_leader']
+                    pi_id = self.state['pi_id']
+                
+                self._draw_overlay(video_file, current_time, total_time, midi_data, is_leader, pi_id)
+                print(f"[DEBUG] Initial state drawn for {self.pi_id}")
+            except Exception as e:
+                print(f"[DEBUG] Error drawing initial state: {e}")
     
     def _update_loop(self):
         while self.running:
@@ -273,6 +309,8 @@ class DebugOverlay:
     
     def cleanup(self) -> None:
         """Clean up overlay resources"""
+        global _PYGAME_DISPLAY_CREATED
+        
         self.running = False
         if self.use_pygame:
             try:
@@ -284,6 +322,7 @@ class DebugOverlay:
                     self.update_thread.join(timeout=1)
                 
                 pygame.quit()
+                _PYGAME_DISPLAY_CREATED = False
                 print(f"[DEBUG] ✓ Pygame debug overlay cleaned up for {self.pi_id}")
             except Exception as e:
                 print(f"[DEBUG] Error cleaning up pygame overlay: {e}")
