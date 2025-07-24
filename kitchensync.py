@@ -146,10 +146,10 @@ class KitchenSyncAutoStart:
         try:
             if self.config.is_leader:
                 print("🎯 Starting as LEADER...")
-                cmd = [sys.executable, 'leader_new.py', '--auto'] + debug_flag + sys.argv[1:]
+                cmd = [sys.executable, 'leader.py', '--auto'] + debug_flag + sys.argv[1:]
             else:
                 print("🎵 Starting as COLLABORATOR...")
-                cmd = [sys.executable, 'collaborator_new.py'] + debug_flag + sys.argv[1:]
+                cmd = [sys.executable, 'collaborator.py'] + debug_flag + sys.argv[1:]
             
             print(f"🚀 Executing: {' '.join(cmd)}")
             os.execv(sys.executable, cmd)
@@ -162,8 +162,8 @@ class KitchenSyncAutoStart:
         """Show manual operation instructions"""
         print("\n💡 No USB configuration found. Manual operation available:")
         print("Available commands:")
-        print("  python3 leader_new.py     - Start as leader")
-        print("  python3 collaborator_new.py - Start as collaborator")
+        print("  python3 leader.py     - Start as leader")
+        print("  python3 collaborator.py - Start as collaborator")
         print("")
         print("Or use the legacy scripts:")
         print("  python3 leader.py         - Original leader script")
