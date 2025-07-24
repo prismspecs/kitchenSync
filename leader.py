@@ -114,6 +114,19 @@ class LeaderPi:
                 True
             )
             print(f"[DEBUG] Debug overlay created for video: {self.video_player.video_path or self.video_path or self.config.video_file}")
+            
+            # Set initial state immediately
+            if self.debug_manager and getattr(self.debug_manager, 'overlay', None):
+                video_duration = self.video_player.get_duration() or 180.0
+                self.debug_manager.overlay.set_state(
+                    video_file=self.video_player.video_path or self.video_path or self.config.video_file,
+                    current_time=0.0,
+                    total_time=video_duration,
+                    midi_data={'recent': [], 'current': None, 'upcoming': []},
+                    is_leader=True,
+                    pi_id='leader-pi'
+                )
+                print("[DEBUG] Initial debug overlay state set.")
         
         # Start networking
         self.sync_broadcaster.start_broadcasting(self.system_state.start_time)
@@ -130,6 +143,10 @@ class LeaderPi:
             'debug_mode': self.config.debug_mode
         }
         self.command_manager.send_command(start_command)
+        
+        # Start debug update loop if enabled
+        if self.config.debug_mode:
+            self._start_debug_updates()
         
         print("✅ System started successfully!")
     
@@ -177,8 +194,48 @@ class LeaderPi:
         editor.run_editor()
     
     def _start_debug_updates(self) -> None:
-        """No longer needed: debug update loop is now managed by the overlay itself. Remove this method."""
-        pass
+        """Start debug update loop for leader"""
+        def debug_loop():
+            while self.system_state.is_running:
+                try:
+                    if self.debug_manager and getattr(self.debug_manager, 'overlay', None):
+                        current_time = self.system_state.update_time()
+                        video_position = self.video_player.get_position() or current_time
+                        video_duration = self.video_player.get_duration() or 180.0
+                        
+                        # Get MIDI info for debug
+                        current_cues = self.midi_scheduler.get_current_cues(current_time) if hasattr(self.midi_scheduler, 'get_current_cues') else []
+                        upcoming_cues = self.midi_scheduler.get_upcoming_cues(current_time) if hasattr(self.midi_scheduler, 'get_upcoming_cues') else []
+                        recent_cues = self.midi_scheduler.get_recent_cues(current_time) if hasattr(self.midi_scheduler, 'get_recent_cues') else []
+                        
+                        # Prepare MIDI info for overlay
+                        midi_data = {
+                            'recent': recent_cues[-3:] if recent_cues else [],
+                            'current': current_cues[0] if current_cues else None,
+                            'upcoming': upcoming_cues[:3] if upcoming_cues else []
+                        }
+                        
+                        self.debug_manager.overlay.set_state(
+                            video_file=self.video_player.video_path or self.video_path or self.config.video_file,
+                            current_time=video_position,
+                            total_time=video_duration,
+                            midi_data=midi_data,
+                            is_leader=True,
+                            pi_id='leader-pi'
+                        )
+                    
+                    time.sleep(0.5)  # Update every 0.5 seconds
+                    
+                except Exception as e:
+                    print(f"[DEBUG] Debug update error: {e}")
+                    time.sleep(1)
+        
+        if self.config.debug_mode and self.debug_manager and getattr(self.debug_manager, 'overlay', None):
+            print("[DEBUG] Starting debug update loop.")
+            thread = threading.Thread(target=debug_loop, daemon=True)
+            thread.start()
+        else:
+            print("[DEBUG] Debug update loop not started: overlay missing or debug mode off.")
     
     def cleanup(self) -> None:
         """Clean up resources"""

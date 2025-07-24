@@ -186,6 +186,19 @@ class CollaboratorPi:
                 True
             )
             print(f"[DEBUG] Debug overlay created for video: {self.video_player.video_path or self.video_path or self.config.video_file}")
+            
+            # Set initial state immediately
+            if self.debug_manager and getattr(self.debug_manager, 'overlay', None):
+                video_duration = self.video_player.get_duration() or 180.0
+                self.debug_manager.overlay.set_state(
+                    video_file=self.video_player.video_path or self.video_path or self.config.video_file,
+                    current_time=0.0,
+                    total_time=video_duration,
+                    midi_data={'recent': [], 'current': None, 'upcoming': []},
+                    is_leader=self.config.is_leader,
+                    pi_id=self.config.pi_id
+                )
+                print("[DEBUG] Initial debug overlay state set.")
         
         # Start MIDI playback
         self.midi_scheduler.start_playback(self.system_state.start_time)
@@ -275,6 +288,43 @@ class CollaboratorPi:
         
         heartbeat_thread = threading.Thread(target=heartbeat_loop, daemon=True)
         heartbeat_thread.start()
+        
+        # Start debug update loop if in debug mode
+        def debug_update_loop():
+            while True:
+                if self.debug_manager and getattr(self.debug_manager, 'overlay', None) and self.system_state.is_running:
+                    try:
+                        current_time = self.system_state.current_time
+                        video_position = self.video_player.get_position() or current_time
+                        video_duration = self.video_player.get_duration() or 180.0
+                        
+                        # Get MIDI info
+                        recent_cues = self.midi_scheduler.get_recent_cues(current_time, lookback=10.0) if hasattr(self.midi_scheduler, 'get_recent_cues') else []
+                        upcoming_cues = self.midi_scheduler.get_upcoming_cues(current_time, lookahead=30.0) if hasattr(self.midi_scheduler, 'get_upcoming_cues') else []
+                        current_cues = self.midi_scheduler.get_current_cues(current_time, window=1.0) if hasattr(self.midi_scheduler, 'get_current_cues') else []
+                        
+                        midi_data = {
+                            'recent': recent_cues[-3:] if recent_cues else [],
+                            'current': current_cues[0] if current_cues else None,
+                            'upcoming': upcoming_cues[:3] if upcoming_cues else []
+                        }
+                        
+                        self.debug_manager.overlay.set_state(
+                            video_file=self.video_player.video_path or self.video_path or self.config.video_file,
+                            current_time=video_position,
+                            total_time=video_duration,
+                            midi_data=midi_data,
+                            is_leader=self.config.is_leader,
+                            pi_id=self.config.pi_id
+                        )
+                    except Exception as e:
+                        print(f"[DEBUG] Error updating overlay: {e}")
+                time.sleep(0.5)  # Update every 0.5 seconds
+        
+        if self.config.debug_mode:
+            debug_thread = threading.Thread(target=debug_update_loop, daemon=True)
+            debug_thread.start()
+            print("[DEBUG] Debug update thread started.")
         
         print("Collaborator ready. Waiting for commands from leader...")
         print("Press Ctrl+C to exit")
