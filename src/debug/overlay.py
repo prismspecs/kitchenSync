@@ -308,15 +308,14 @@ class DebugManager:
         if debug_mode:
             self._initialize_debug_display()
     
-    def enable_debug(self) -> None:
-        """Enable debug mode and initialize display (for delayed activation)"""
-        if not self.debug_mode:
-            self.debug_mode = True
-            self._initialize_debug_display()
-    
     def _initialize_debug_display(self) -> None:
-        """Initialize appropriate debug display"""
+        """Initialize appropriate debug display (idempotent - only creates once)"""
         print(f"Initializing debug display for: {self.pi_id}")
+        
+        # GUARD: Only initialize once - prevent multiple window creation
+        if self.overlay is not None:
+            print(f"Debug display already initialized for {self.pi_id} - skipping")
+            return
         
         # ALWAYS use pygame overlay - no terminal debugger ever
         print(f"Creating pygame overlay for Pi: {self.pi_id}")
