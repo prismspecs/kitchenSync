@@ -73,7 +73,7 @@ class CollaboratorPi:
         # Setup command handlers
         self._setup_command_handlers()
         
-        print(f"✅ KitchenSync Collaborator '{self.config.pi_id}' initialized")
+        print(f"KitchenSync Collaborator '{self.config.pi_id}' initialized")
     
     def _setup_command_handlers(self) -> None:
         """Setup command handlers"""
@@ -110,9 +110,9 @@ class CollaboratorPi:
         leader_debug_mode = msg.get('debug_mode', False)
         if leader_debug_mode and not self.config.debug_mode:
             self.debug_manager.debug_mode = True
-            print("🐛 Debug mode enabled by leader")
+            print("Debug mode enabled by leader")
         
-        print(f"📋 Received start command with {len(schedule)} cues")
+        print(f"Received start command with {len(schedule)} cues")
         
         # Wait for sync to be established
         print("⏳ Waiting for time sync...")
@@ -123,9 +123,9 @@ class CollaboratorPi:
             time.sleep(0.1)
         
         if not self.sync_tracker.is_synced():
-            print("⚠️ Starting without sync (timeout)")
+            print("Starting without sync (timeout)")
         else:
-            print("✅ Sync established")
+            print("Sync established")
         
         # Start playback
         self.start_playback()
@@ -133,13 +133,13 @@ class CollaboratorPi:
     def _handle_stop_command(self, msg: dict, addr: tuple) -> None:
         """Handle stop command from leader"""
         self.stop_playback()
-        print("🛑 Stopped by leader command")
+        print("Stopped by leader command")
     
     def _handle_schedule_update(self, msg: dict, addr: tuple) -> None:
         """Handle schedule update from leader"""
         schedule = msg.get('schedule', [])
         self.midi_scheduler.load_schedule(schedule)
-        print(f"📋 Updated schedule: {len(schedule)} cues")
+        print(f"Updated schedule: {len(schedule)} cues")
     
     def start_playback(self) -> None:
         """Start video and MIDI playback"""
@@ -161,11 +161,11 @@ class CollaboratorPi:
         if self.config.debug_mode:
             self._start_debug_updates()
         
-        print("✅ Playback started")
+        print("Playback started")
     
     def stop_playback(self) -> None:
         """Stop video and MIDI playback"""
-        print("🛑 Stopping playback...")
+        print("Stopping playback...")
         
         # Stop video
         self.video_player.stop_playback()
@@ -180,7 +180,7 @@ class CollaboratorPi:
         self.video_start_time = None
         self.deviation_samples.clear()
         
-        print("✅ Playback stopped")
+        print("Playback stopped")
     
     def _check_video_sync(self, leader_time: float) -> None:
         """Check and correct video sync using median filtering"""
@@ -230,18 +230,26 @@ class CollaboratorPi:
                 try:
                     current_time = self.system_state.current_time
                     video_position = self.video_player.get_position()
-                    sync_stats = self.sync_tracker.get_stats()
-                    midi_stats = self.midi_scheduler.get_stats()
+                    video_duration = self.video_player.get_duration()
                     
-                    # Prepare debug info
-                    debug_info = [
-                        f"Sync: {sync_stats.get('sync_quality', 'Unknown')}",
-                        f"Video pos: {video_position:.1f}s" if video_position else "Video pos: N/A",
-                        f"MIDI: {midi_stats.get('triggered_cues', 0)}/{midi_stats.get('total_cues', 0)}"
-                    ]
+                    # Get MIDI information for debug display
+                    midi_data = None
+                    if hasattr(self, 'midi_scheduler') and self.midi_scheduler:
+                        recent_cues = self.midi_scheduler.get_recent_cues(current_time, lookback=10.0)
+                        upcoming_cues = self.midi_scheduler.get_upcoming_cues(current_time, lookahead=30.0)
+                        current_cues = self.midi_scheduler.get_current_cues(current_time, window=1.0)
+                        
+                        midi_data = {
+                            'recent': recent_cues[-3:] if recent_cues else [],  # Last 3
+                            'current': current_cues[0] if current_cues else None,  # Most recent
+                            'upcoming': upcoming_cues[:3] if upcoming_cues else []  # Next 3
+                        }
                     
-                    # Update debug display
-                    self.debug_manager.update_display(current_time, 180.0, debug_info)
+                    # Use video duration if available, otherwise use a default
+                    total_time = video_duration if video_duration else 180.0
+                    
+                    # Update debug display with new format
+                    self.debug_manager.update_display(current_time, total_time, midi_data)
                     
                     time.sleep(0.1)  # 10 FPS
                     
@@ -255,7 +263,7 @@ class CollaboratorPi:
     
     def run(self) -> None:
         """Main run loop"""
-        print(f"🎵 Starting KitchenSync Collaborator '{self.config.pi_id}'")
+        print(f"Starting KitchenSync Collaborator '{self.config.pi_id}'")
         
         # Start networking
         self.sync_receiver.start_listening()
@@ -277,14 +285,14 @@ class CollaboratorPi:
         heartbeat_thread = threading.Thread(target=heartbeat_loop, daemon=True)
         heartbeat_thread.start()
         
-        print("✅ Collaborator ready. Waiting for commands from leader...")
+        print("Collaborator ready. Waiting for commands from leader...")
         print("Press Ctrl+C to exit")
         
         try:
             while True:
                 time.sleep(1)
         except KeyboardInterrupt:
-            print("\n🛑 Shutting down...")
+            print("\nShutting down...")
             self.stop_playback()
         finally:
             self.cleanup()

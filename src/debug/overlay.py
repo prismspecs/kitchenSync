@@ -32,11 +32,11 @@ class DebugOverlay:
         self.video_file = video_file
         self.use_pygame = use_pygame and PYGAME_AVAILABLE
         
-        # Display settings
-        self.overlay_width = 400
-        self.overlay_height = 200
-        self.overlay_x = 1520  # Position to right of video
-        self.overlay_y = 0
+        # Display settings - position debug window on left side
+        self.overlay_width = 500
+        self.overlay_height = 400
+        self.overlay_x = 50  # Position to left of video
+        self.overlay_y = 50
         
         # State
         self.screen = None
@@ -45,11 +45,16 @@ class DebugOverlay:
         self.keep_on_top = False
         self.raise_thread = None
         
+        # Debug data tracking
+        self.recent_midi_triggers = []  # Last 3 triggered events
+        self.current_midi_trigger = None  # Most recent trigger (highlighted)
+        self.upcoming_midi_triggers = []  # Next 3 events
+        
         # Initialize overlay
         if self.use_pygame:
             self._init_pygame_overlay()
         else:
-            print(f"🐛 Text-based debug overlay initialized for {pi_id}")
+            print(f"Text-based debug overlay initialized for {self.pi_id}")
     
     def _init_pygame_overlay(self) -> None:
         """Initialize pygame overlay for visual debug display"""
@@ -60,7 +65,7 @@ class DebugOverlay:
             pygame.display.set_caption("KitchenSync Debug")
             
             self.screen = pygame.display.set_mode((self.overlay_width, self.overlay_height))
-            self.font = pygame.font.Font(None, 24)
+            self.font = pygame.font.Font(None, 20)  # Smaller font for more info
             self.clock = pygame.time.Clock()
             
             # Set window to stay on top
@@ -68,10 +73,10 @@ class DebugOverlay:
             self.raise_thread = threading.Thread(target=self._window_raise_loop, daemon=True)
             self.raise_thread.start()
             
-            print(f"✓ Pygame debug overlay initialized for {self.pi_id}")
+            print(f"Pygame debug overlay initialized for {self.pi_id}")
             
         except Exception as e:
-            print(f"⚠️ Pygame overlay init failed: {e}, falling back to text mode")
+            print(f"Pygame overlay init failed: {e}, falling back to text mode")
             self.use_pygame = False
     
     def _window_raise_loop(self) -> None:
@@ -86,85 +91,173 @@ class DebugOverlay:
             time.sleep(2)  # Check every 2 seconds
     
     def update_display(self, current_time: float = 0, total_time: float = 0, 
-                      additional_info: Optional[List[str]] = None) -> None:
+                      midi_data: Optional[Dict[str, Any]] = None) -> None:
         """Update the debug overlay display"""
         if self.use_pygame:
-            self._update_pygame_display(current_time, total_time, additional_info)
+            self._update_pygame_display(current_time, total_time, midi_data)
         else:
-            self._update_text_display(current_time, total_time, additional_info)
+            self._update_text_display(current_time, total_time, midi_data)
     
     def _update_pygame_display(self, current_time: float, total_time: float, 
-                              additional_info: Optional[List[str]]) -> None:
-        """Update pygame-based visual overlay"""
+                              midi_data: Optional[Dict[str, Any]]) -> None:
+        """Update pygame-based visual overlay with fixed display"""
         try:
             # Handle pygame events
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     return
             
-            # Clear screen
-            self.screen.fill((0, 0, 0))  # Black background
+            # Clear screen with dark background
+            self.screen.fill((20, 20, 20))
             
-            # Format time display
+            # Update MIDI data if provided
+            if midi_data:
+                self.recent_midi_triggers = midi_data.get('recent', [])
+                self.current_midi_trigger = midi_data.get('current', None)
+                self.upcoming_midi_triggers = midi_data.get('upcoming', [])
+            
+            y_pos = 10
+            line_height = 22
+            
+            # Title
+            title_color = (255, 255, 255)
+            text = self.font.render(f"KitchenSync Debug - Pi {self.pi_id}", True, title_color)
+            self.screen.blit(text, (10, y_pos))
+            y_pos += line_height + 5
+            
+            # Separator line
+            pygame.draw.line(self.screen, (100, 100, 100), (10, y_pos), (self.overlay_width - 10, y_pos))
+            y_pos += 10
+            
+            # Video file name
+            video_name = os.path.basename(self.video_file) if self.video_file else "No video"
+            if len(video_name) > 35:
+                video_name = video_name[:32] + "..."
+            text = self.font.render(f"Video: {video_name}", True, (200, 200, 255))
+            self.screen.blit(text, (10, y_pos))
+            y_pos += line_height
+            
+            # Time display
             current_min = int(current_time // 60)
             current_sec = int(current_time % 60)
-            total_min = int(total_time // 60)
-            total_sec = int(total_time % 60)
-            time_str = f"{current_min:02d}:{current_sec:02d}/{total_min:02d}:{total_sec:02d}"
+            total_min = int(total_time // 60) if total_time > 0 else 0
+            total_sec = int(total_time % 60) if total_time > 0 else 0
+            time_str = f"Time: {current_min:02d}:{current_sec:02d} / {total_min:02d}:{total_sec:02d}"
+            text = self.font.render(time_str, True, (100, 255, 100))
+            self.screen.blit(text, (10, y_pos))
+            y_pos += line_height + 10
             
-            # Basic info
-            y_offset = 10
-            line_height = 25
+            # MIDI section header
+            text = self.font.render("MIDI Events:", True, (255, 200, 100))
+            self.screen.blit(text, (10, y_pos))
+            y_pos += line_height
             
-            # Pi ID and video
-            text = self.font.render(f"Pi: {self.pi_id}", True, (255, 255, 255))
-            self.screen.blit(text, (10, y_offset))
-            y_offset += line_height
+            # Past 3 MIDI triggers
+            text = self.font.render("Recent triggers:", True, (180, 180, 180))
+            self.screen.blit(text, (20, y_pos))
+            y_pos += line_height - 5
             
-            # Time
-            text = self.font.render(f"Time: {time_str}", True, (0, 255, 0))
-            self.screen.blit(text, (10, y_offset))
-            y_offset += line_height
+            if self.recent_midi_triggers:
+                for i, trigger in enumerate(self.recent_midi_triggers[-3:]):
+                    trigger_str = self._format_midi_event(trigger)
+                    text = self.font.render(f"  {i+1}. {trigger_str}", True, (150, 150, 150))
+                    self.screen.blit(text, (20, y_pos))
+                    y_pos += line_height - 3
+            else:
+                text = self.font.render("  None", True, (100, 100, 100))
+                self.screen.blit(text, (20, y_pos))
+                y_pos += line_height - 3
             
-            # Video file
-            video_name = os.path.basename(self.video_file)
-            if len(video_name) > 20:
-                video_name = video_name[:17] + "..."
-            text = self.font.render(f"Video: {video_name}", True, (200, 200, 200))
-            self.screen.blit(text, (10, y_offset))
-            y_offset += line_height
+            y_pos += 5
             
-            # Additional info
-            if additional_info:
-                for info in additional_info[:4]:  # Limit to 4 lines
-                    if len(info) > 30:
-                        info = info[:27] + "..."
-                    text = self.font.render(info, True, (255, 255, 0))
-                    self.screen.blit(text, (10, y_offset))
-                    y_offset += line_height
+            # Current/most recent MIDI trigger (highlighted in yellow)
+            text = self.font.render("Current trigger:", True, (180, 180, 180))
+            self.screen.blit(text, (20, y_pos))
+            y_pos += line_height - 5
+            
+            if self.current_midi_trigger:
+                trigger_str = self._format_midi_event(self.current_midi_trigger)
+                text = self.font.render(f"  -> {trigger_str}", True, (255, 255, 100))  # Yellow
+                self.screen.blit(text, (20, y_pos))
+            else:
+                text = self.font.render("  None", True, (100, 100, 100))
+                self.screen.blit(text, (20, y_pos))
+            y_pos += line_height + 5
+            
+            # Upcoming 3 MIDI triggers
+            text = self.font.render("Upcoming triggers:", True, (180, 180, 180))
+            self.screen.blit(text, (20, y_pos))
+            y_pos += line_height - 5
+            
+            if self.upcoming_midi_triggers:
+                for i, trigger in enumerate(self.upcoming_midi_triggers[:3]):
+                    trigger_str = self._format_midi_event(trigger)
+                    time_until = trigger.get('time', 0) - current_time
+                    if time_until > 0:
+                        trigger_str += f" (in {time_until:.1f}s)"
+                    text = self.font.render(f"  {i+1}. {trigger_str}", True, (200, 255, 200))
+                    self.screen.blit(text, (20, y_pos))
+                    y_pos += line_height - 3
+            else:
+                text = self.font.render("  None", True, (100, 100, 100))
+                self.screen.blit(text, (20, y_pos))
             
             pygame.display.flip()
-            self.clock.tick(10)  # 10 FPS to avoid overwhelming system
+            self.clock.tick(10)  # 10 FPS
             
         except Exception as e:
             print(f"Error updating pygame overlay: {e}")
     
+    def _format_midi_event(self, event: Dict[str, Any]) -> str:
+        """Format MIDI event for display"""
+        if not event:
+            return "Unknown"
+        
+        event_type = event.get('type', 'unknown')
+        time_val = event.get('time', 0)
+        
+        if event_type == 'note_on':
+            note = event.get('note', 0)
+            channel = event.get('channel', 1)
+            velocity = event.get('velocity', 127)
+            return f"{time_val:.1f}s: Note ON Ch{channel} N{note} V{velocity}"
+        elif event_type == 'note_off':
+            note = event.get('note', 0)
+            channel = event.get('channel', 1)
+            return f"{time_val:.1f}s: Note OFF Ch{channel} N{note}"
+        elif event_type == 'control_change':
+            control = event.get('control', 0)
+            value = event.get('value', 0)
+            channel = event.get('channel', 1)
+            return f"{time_val:.1f}s: CC Ch{channel} C{control} V{value}"
+        else:
+            return f"{time_val:.1f}s: {event_type}"
+    
     def _update_text_display(self, current_time: float, total_time: float, 
-                            additional_info: Optional[List[str]]) -> None:
+                            midi_data: Optional[Dict[str, Any]]) -> None:
         """Update text-based debug display (fallback)"""
         # Format time
         current_min = int(current_time // 60)
         current_sec = int(current_time % 60)
-        total_min = int(total_time // 60)
-        total_sec = int(total_time % 60)
+        total_min = int(total_time // 60) if total_time > 0 else 0
+        total_sec = int(total_time % 60) if total_time > 0 else 0
         time_str = f"{current_min:02d}:{current_sec:02d}/{total_min:02d}:{total_sec:02d}"
         
         # Print debug info to console (every 5 seconds to avoid spam)
         if int(current_time) % 5 == 0 and current_time > 0:
-            print(f"🐛 DEBUG | Pi: {self.pi_id} | Video: {self.video_file} | Time: {time_str}")
-            if additional_info:
-                for info in additional_info[:2]:
-                    print(f"🐛        | {info}")
+            video_name = os.path.basename(self.video_file) if self.video_file else "No video"
+            print(f"DEBUG | Pi: {self.pi_id} | Video: {video_name} | Time: {time_str}")
+            
+            if midi_data:
+                current_trigger = midi_data.get('current')
+                if current_trigger:
+                    trigger_str = self._format_midi_event(current_trigger)
+                    print(f"DEBUG |        | Current MIDI: {trigger_str}")
+                
+                upcoming = midi_data.get('upcoming', [])
+                if upcoming:
+                    next_trigger = self._format_midi_event(upcoming[0])
+                    print(f"DEBUG |        | Next MIDI: {next_trigger}")
     
     def cleanup(self) -> None:
         """Clean up overlay resources"""
@@ -176,7 +269,7 @@ class DebugOverlay:
                     self.raise_thread.join(timeout=1)
                 
                 pygame.quit()
-                print("✓ Pygame debug overlay cleaned up")
+                print(f"✓ Pygame debug overlay cleaned up")
             except Exception as e:
                 print(f"Error cleaning up pygame overlay: {e}")
 
@@ -195,8 +288,8 @@ class TerminalDebugger:
             # Create a temporary script that displays debug info
             script_content = '''#!/bin/bash
 # KitchenSync Debug Terminal
-echo "🐛 KitchenSync Debug Monitor"
-echo "=========================="
+echo "KitchenSync Debug Monitor"
+echo "========================="
 echo "Debug information will appear here..."
 echo ""
 
@@ -234,7 +327,7 @@ done
                     self.terminal_process = subprocess.Popen(cmd, 
                                                             stdout=subprocess.DEVNULL, 
                                                             stderr=subprocess.DEVNULL)
-                    print(f"✓ Debug terminal started with {cmd[0]}")
+                    print(f"Debug terminal started with {cmd[0]}")
                     time.sleep(1)  # Give terminal time to start
                     return True
                 except Exception:
@@ -243,7 +336,7 @@ done
             raise DebugError("No suitable terminal emulator found")
             
         except Exception as e:
-            print(f"⚠️ Could not start debug terminal: {e}")
+            print(f"Could not start debug terminal: {e}")
             return False
     
     def send_message(self, message: str) -> None:
@@ -265,9 +358,9 @@ done
             if os.path.exists(self.pipe_path):
                 os.unlink(self.pipe_path)
             
-            print("✓ Debug terminal cleaned up")
+            print("Debug terminal cleaned up")
         except Exception as e:
-            print(f"⚠️ Debug terminal cleanup error: {e}")
+            print(f"Debug terminal cleanup error: {e}")
 
 
 class DebugManager:
@@ -290,32 +383,54 @@ class DebugManager:
             try:
                 self.terminal_debugger = TerminalDebugger()
             except Exception as e:
-                print(f"⚠️ Could not initialize terminal debugger: {e}")
+                print(f"Could not initialize terminal debugger: {e}")
         else:
             # Use overlay for collaborators
             try:
                 self.overlay = DebugOverlay(self.pi_id, self.video_file, use_pygame=True)
             except Exception as e:
-                print(f"⚠️ Could not initialize debug overlay: {e}")
+                print(f"Could not initialize debug overlay: {e}")
                 try:
                     self.overlay = DebugOverlay(self.pi_id, self.video_file, use_pygame=False)
                 except Exception as e2:
-                    print(f"⚠️ Could not initialize text debug: {e2}")
+                    print(f"Could not initialize text debug: {e2}")
     
     def update_display(self, current_time: float = 0, total_time: float = 0, 
-                      additional_info: Optional[List[str]] = None) -> None:
-        """Update debug display"""
+                      midi_data: Optional[Dict[str, Any]] = None) -> None:
+        """Update debug display with MIDI information"""
         if not self.debug_mode:
             return
         
         if self.overlay:
-            self.overlay.update_display(current_time, total_time, additional_info)
-        elif self.terminal_debugger and additional_info:
-            # Send first line of additional info to terminal
-            message = f"🐛 {self.pi_id} - {current_time:.1f}s"
-            if additional_info:
-                message += f" | {additional_info[0]}"
+            self.overlay.update_display(current_time, total_time, midi_data)
+        elif self.terminal_debugger and midi_data:
+            # Send formatted message to terminal
+            current_trigger = midi_data.get('current')
+            if current_trigger:
+                trigger_str = self._format_midi_event_simple(current_trigger)
+                message = f"{self.pi_id} - {current_time:.1f}s | Current: {trigger_str}"
+            else:
+                message = f"{self.pi_id} - {current_time:.1f}s | No current MIDI trigger"
             self.terminal_debugger.send_message(message)
+    
+    def _format_midi_event_simple(self, event: Dict[str, Any]) -> str:
+        """Simple MIDI event formatting for terminal"""
+        if not event:
+            return "Unknown"
+        
+        event_type = event.get('type', 'unknown')
+        time_val = event.get('time', 0)
+        
+        if event_type == 'note_on':
+            note = event.get('note', 0)
+            channel = event.get('channel', 1)
+            return f"{time_val:.1f}s: Note ON Ch{channel} N{note}"
+        elif event_type == 'note_off':
+            note = event.get('note', 0)
+            channel = event.get('channel', 1)
+            return f"{time_val:.1f}s: Note OFF Ch{channel} N{note}"
+        else:
+            return f"{time_val:.1f}s: {event_type}"
     
     def cleanup(self) -> None:
         """Clean up debug resources"""

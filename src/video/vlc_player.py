@@ -40,7 +40,7 @@ class VLCVideoPlayer:
             raise VLCPlayerError(f"Video file not found: {video_path}")
         
         self.video_path = video_path
-        print(f"🎬 Loaded video: {video_path}")
+        print(f"Loaded video: {video_path}")
         return True
     
     def start_playback(self) -> bool:
@@ -104,6 +104,18 @@ class VLCVideoPlayer:
             print(f"Error setting position: {e}")
             return False
     
+    def get_duration(self) -> Optional[float]:
+        """Get video duration in seconds"""
+        try:
+            if self.vlc_player and VLC_PYTHON_AVAILABLE:
+                length_ms = self.vlc_player.get_length()
+                if length_ms > 0:
+                    return length_ms / 1000.0
+            return None
+        except Exception as e:
+            print(f"Error getting duration: {e}")
+            return None
+    
     def pause(self) -> bool:
         """Pause playback"""
         try:
@@ -129,7 +141,7 @@ class VLCVideoPlayer:
     def _start_with_python_vlc(self) -> bool:
         """Start video using VLC Python bindings"""
         try:
-            print("🎬 Starting VLC with Python bindings")
+            print("Starting VLC with Python bindings")
             
             # Create VLC instance with appropriate args
             vlc_args = self._get_vlc_args()
@@ -160,6 +172,46 @@ class VLCVideoPlayer:
                 self.vlc_player.set_fullscreen(True)
             
             self.is_playing = True
+            print("VLC playback started successfully")
+            return True
+            
+        except Exception as e:
+            print(f"Error with VLC Python: {e}")
+            return False
+    
+    def _configure_debug_window(self) -> None:
+        """Configure VLC window for debug mode - position on right side"""
+        try:
+            # Give VLC time to initialize window
+            time.sleep(1)
+            
+            # Position video window on the right side
+            # Debug overlay is on left (50, 50, 500x400)
+            # Video should be on right side
+            import subprocess
+            
+            # Try to set window position using wmctrl
+            try:
+                # Wait a bit more for VLC window to appear
+                time.sleep(1)
+                subprocess.run(['wmctrl', '-r', 'VLC', '-e', '0,600,50,1000,700'], 
+                              capture_output=True, timeout=2)
+                print("Positioned VLC window on right side")
+            except Exception:
+                # Fallback: try with xdotool
+                try:
+                    subprocess.run(['xdotool', 'search', '--name', 'VLC', 
+                                   'windowmove', '600', '50', 
+                                   'windowsize', '1000', '700'], 
+                                  capture_output=True, timeout=2)
+                    print("Positioned VLC window with xdotool")
+                except Exception:
+                    print("Could not position VLC window - tools not available")
+                    
+        except Exception as e:
+            print(f"Error configuring debug window: {e}")
+            
+            self.is_playing = True
             print("✅ VLC playback started successfully")
             return True
             
@@ -170,7 +222,7 @@ class VLCVideoPlayer:
     def _start_with_command_vlc(self) -> bool:
         """Start video using VLC command line"""
         try:
-            print("🎬 Starting VLC with command line")
+            print("Starting VLC with command line")
             
             cmd = ['vlc', '--intf', 'dummy']  # No interface
             cmd.extend(self._get_vlc_args())
@@ -178,10 +230,10 @@ class VLCVideoPlayer:
             if self.debug_mode:
                 cmd.extend([
                     '--no-fullscreen',
-                    '--width=1520',
-                    '--height=1080',
-                    '--video-x=0',
-                    '--video-y=0',
+                    '--width=1000',
+                    '--height=700',
+                    '--video-x=600',
+                    '--video-y=50',
                     '--no-video-deco',
                 ])
             else:
