@@ -377,7 +377,7 @@ class DebugManager:
         self.overlay = None
         self.terminal_debugger = None
         
-        print(f"DebugManager init: pi_id={pi_id}, debug_mode={debug_mode}")
+        print(f"DebugManager init: PID={os.getpid()}, pi_id={pi_id}, debug_mode={debug_mode}")
         
         if debug_mode:
             self._initialize_debug_display()
@@ -386,31 +386,22 @@ class DebugManager:
         """Initialize appropriate debug display"""
         print(f"Initializing debug display for: {self.pi_id}")
         
-        if self.pi_id == 'leader-pi' or 'leader' in self.pi_id.lower():
-            # Use terminal debugger for leader ONLY
-            print(f"Creating terminal debugger for leader: {self.pi_id}")
+        # TEMPORARY FIX: Only use pygame overlay, disable terminal debugger completely
+        # This eliminates the dual window problem
+        print(f"Creating pygame overlay for Pi: {self.pi_id}")
+        try:
+            self.overlay = DebugOverlay(self.pi_id, self.video_file, use_pygame=True)
+            print(f"SUCCESS: Pygame overlay created for Pi: {self.pi_id}")
+        except Exception as e:
+            print(f"FAILED pygame overlay: {e}")
+            # Fall back to text mode if pygame fails
             try:
-                self.terminal_debugger = TerminalDebugger()
-                print(f"SUCCESS: Terminal debugger created for leader: {self.pi_id}")
-            except Exception as e:
-                print(f"FAILED: Could not initialize terminal debugger: {e}")
-                
-        else:
-            # Use pygame overlay for collaborators ONLY - never create terminal debugger
-            print(f"Creating pygame overlay for collaborator: {self.pi_id}")
-            try:
-                self.overlay = DebugOverlay(self.pi_id, self.video_file, use_pygame=True)
-                print(f"SUCCESS: Pygame overlay created for collaborator: {self.pi_id}")
-            except Exception as e:
-                print(f"FAILED pygame overlay: {e}")
-                # Only fall back to text mode if pygame fails, never create terminal debugger for collaborators
-                try:
-                    self.overlay = DebugOverlay(self.pi_id, self.video_file, use_pygame=False)
-                    print(f"SUCCESS: Text debug fallback for collaborator: {self.pi_id}")
-                except Exception as e2:
-                    print(f"FAILED: Could not initialize any debug display: {e2}")
+                self.overlay = DebugOverlay(self.pi_id, self.video_file, use_pygame=False)
+                print(f"SUCCESS: Text debug fallback for Pi: {self.pi_id}")
+            except Exception as e2:
+                print(f"FAILED: Could not initialize any debug display: {e2}")
                     
-        print(f"Debug initialization complete. overlay={self.overlay is not None}, terminal={self.terminal_debugger is not None}")
+        print(f"Debug initialization complete. overlay={self.overlay is not None}, terminal=False")
     
     def update_display(self, current_time: float = 0, total_time: float = 0, 
                       midi_data: Optional[Dict[str, Any]] = None) -> None:
@@ -418,17 +409,9 @@ class DebugManager:
         if not self.debug_mode:
             return
         
+        # Only use overlay - terminal debugger is disabled
         if self.overlay:
             self.overlay.update_display(current_time, total_time, midi_data)
-        elif self.terminal_debugger and midi_data:
-            # Send formatted message to terminal
-            current_trigger = midi_data.get('current')
-            if current_trigger:
-                trigger_str = self._format_midi_event_simple(current_trigger)
-                message = f"{self.pi_id} - {current_time:.1f}s | Current: {trigger_str}"
-            else:
-                message = f"{self.pi_id} - {current_time:.1f}s | No current MIDI trigger"
-            self.terminal_debugger.send_message(message)
     
     def _format_midi_event_simple(self, event: Dict[str, Any]) -> str:
         """Simple MIDI event formatting for terminal"""
@@ -453,5 +436,6 @@ class DebugManager:
         """Clean up debug resources"""
         if self.overlay:
             self.overlay.cleanup()
-        if self.terminal_debugger:
-            self.terminal_debugger.cleanup()
+        # Terminal debugger is disabled
+        # if self.terminal_debugger:
+        #     self.terminal_debugger.cleanup()
