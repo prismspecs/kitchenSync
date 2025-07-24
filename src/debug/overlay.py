@@ -60,9 +60,7 @@ class DebugOverlay:
     def _init_pygame_overlay(self) -> None:
         """Initialize pygame overlay for visual debug display"""
         try:
-            # Give VLC time to start and position itself first
-            time.sleep(2)
-            
+            # VLC should already be positioned by now
             os.environ['SDL_VIDEO_WINDOW_POS'] = f'{self.overlay_x},{self.overlay_y}'
             
             pygame.init()
@@ -310,6 +308,12 @@ class DebugManager:
         if debug_mode:
             self._initialize_debug_display()
     
+    def enable_debug(self) -> None:
+        """Enable debug mode and initialize display (for delayed activation)"""
+        if not self.debug_mode:
+            self.debug_mode = True
+            self._initialize_debug_display()
+    
     def _initialize_debug_display(self) -> None:
         """Initialize appropriate debug display"""
         print(f"Initializing debug display for: {self.pi_id}")
@@ -336,9 +340,15 @@ class DebugManager:
         if not self.debug_mode:
             return
         
+        # Debug: Print data flow every 5 seconds
+        if int(current_time) % 5 == 0 and current_time > 0:
+            print(f"DEBUG UPDATE: time={current_time:.1f}, total={total_time:.1f}, midi_events={len(midi_data.get('recent', [])) if midi_data else 0}")
+        
         # Only use overlay - terminal debugger is disabled
         if self.overlay:
             self.overlay.update_display(current_time, total_time, midi_data)
+        else:
+            print(f"WARNING: No debug overlay available for update at {current_time:.1f}s")
     
     def _format_midi_event_simple(self, event: Dict[str, Any]) -> str:
         """Simple MIDI event formatting for terminal"""

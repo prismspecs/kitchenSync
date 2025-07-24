@@ -54,11 +54,15 @@ class CollaboratorPi:
         if video_path:
             self.video_player.load_video(video_path)
         
+        # Initialize debug system (but don't create windows yet)
         self.debug_manager = DebugManager(
             self.config.pi_id,
             self.config.video_file,
-            self.config.debug_mode
+            debug_mode=False  # Will enable after VLC starts
         )
+        
+        # Store debug mode for later activation
+        self._debug_mode_requested = self.config.debug_mode
         
         # Sync settings
         self.sync_tolerance = self.config.getfloat('sync_tolerance', 1.0)
@@ -143,7 +147,7 @@ class CollaboratorPi:
     
     def start_playback(self) -> None:
         """Start video and MIDI playback"""
-        print("🚀 Starting playback...")
+        print("Starting playback...")
         
         # Start system state
         self.system_state.start_session()
@@ -151,14 +155,16 @@ class CollaboratorPi:
         
         # Start video playback
         if self.video_player.video_path:
-            print("🎬 Starting video...")
+            print("Starting video...")
             self.video_player.start_playback()
         
         # Start MIDI playback
         self.midi_scheduler.start_playback(self.system_state.start_time)
         
-        # Start debug updates if enabled
-        if self.config.debug_mode:
+        # Activate debug system AFTER VLC has started (prevents timing conflicts)
+        if self._debug_mode_requested:
+            print("Activating debug system after VLC startup...")
+            self.debug_manager.enable_debug()
             self._start_debug_updates()
         
         print("Playback started")
