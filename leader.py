@@ -131,10 +131,6 @@ class LeaderPi:
         }
         self.command_manager.send_command(start_command)
         
-        # Start debug updates if enabled
-        if self.config.debug_mode:
-            self._start_debug_updates()
-        
         print("✅ System started successfully!")
     
     def stop_system(self) -> None:
@@ -181,45 +177,8 @@ class LeaderPi:
         editor.run_editor()
     
     def _start_debug_updates(self) -> None:
-        """Start debug update loop"""
-        def debug_loop():
-            while self.system_state.is_running:
-                try:
-                    current_time = self.system_state.update_time()
-                    
-                    # Get MIDI info for debug
-                    current_cues = self.midi_scheduler.get_current_cues(current_time)
-                    upcoming_cues = self.midi_scheduler.get_upcoming_cues(current_time)
-                    
-                    # Prepare MIDI info for overlay
-                    midi_data = {
-                        'recent': [],  # Could be filled with history if needed
-                        'current': current_cues[0] if current_cues else None,
-                        'upcoming': upcoming_cues[:3] if upcoming_cues else []
-                    }
-                    
-                    # Use video duration if available, otherwise use a default
-                    video_duration = self.video_player.get_duration()
-                    total_time = video_duration if video_duration else 180.0
-                    
-                    # Only update if debug_manager and overlay are valid
-                    if self.debug_manager and getattr(self.debug_manager, 'overlay', None):
-                        self.debug_manager.update_display(current_time, total_time, midi_data)
-                    else:
-                        print("[DEBUG] No valid debug overlay to update.")
-                    
-                    time.sleep(0.1)  # 10 FPS
-                    
-                except Exception as e:
-                    print(f"Debug update error: {e}")
-                    time.sleep(1)
-        
-        if self.config.debug_mode and self.debug_manager and getattr(self.debug_manager, 'overlay', None):
-            print("[DEBUG] Starting debug update loop.")
-            thread = threading.Thread(target=debug_loop, daemon=True)
-            thread.start()
-        else:
-            print("[DEBUG] Debug update loop not started: overlay missing or debug mode off.")
+        """No longer needed: debug update loop is now managed by the overlay itself. Remove this method."""
+        pass
     
     def cleanup(self) -> None:
         """Clean up resources"""

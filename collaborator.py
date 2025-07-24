@@ -95,6 +95,27 @@ class CollaboratorPi:
             
             # Check video sync
             self._check_video_sync(leader_time)
+            
+            # Update debug overlay state (if present)
+            if self.debug_manager and getattr(self.debug_manager, 'overlay', None):
+                video_position = self.video_player.get_position() or 0.0
+                video_duration = self.video_player.get_duration() or 0.0
+                recent_cues = self.midi_scheduler.get_recent_cues(leader_time, lookback=10.0)
+                upcoming_cues = self.midi_scheduler.get_upcoming_cues(leader_time, lookahead=30.0)
+                current_cues = self.midi_scheduler.get_current_cues(leader_time, window=1.0)
+                midi_data = {
+                    'recent': recent_cues[-3:] if recent_cues else [],
+                    'current': current_cues[0] if current_cues else None,
+                    'upcoming': upcoming_cues[:3] if upcoming_cues else []
+                }
+                self.debug_manager.overlay.set_state(
+                    video_file=self.video_player.video_path or self.video_path or self.config.video_file,
+                    current_time=video_position,
+                    total_time=video_duration,
+                    midi_data=midi_data,
+                    is_leader=self.config.is_leader,
+                    pi_id=self.config.pi_id
+                )
     
     def _handle_start_command(self, msg: dict, addr: tuple) -> None:
         """Handle start command from leader"""
@@ -169,10 +190,6 @@ class CollaboratorPi:
         # Start MIDI playback
         self.midi_scheduler.start_playback(self.system_state.start_time)
         
-        # Debug system is already initialized properly
-        if self.config.debug_mode:
-            self._start_debug_updates()
-        
         print("Playback started")
     
     def stop_playback(self) -> None:
@@ -234,49 +251,6 @@ class CollaboratorPi:
             if self.video_player.set_position(target_position):
                 self.last_correction_time = current_time
                 self.deviation_samples.clear()
-    
-    def _start_debug_updates(self) -> None:
-        """Start debug update loop"""
-        def debug_loop():
-            while self.system_state.is_running:
-                try:
-                    current_time = self.system_state.current_time
-                    video_position = self.video_player.get_position()
-                    video_duration = self.video_player.get_duration()
-                    
-                    # Get MIDI information for debug display
-                    midi_data = None
-                    if hasattr(self, 'midi_scheduler') and self.midi_scheduler:
-                        recent_cues = self.midi_scheduler.get_recent_cues(current_time, lookback=10.0)
-                        upcoming_cues = self.midi_scheduler.get_upcoming_cues(current_time, lookahead=30.0)
-                        current_cues = self.midi_scheduler.get_current_cues(current_time, window=1.0)
-                        
-                        midi_data = {
-                            'recent': recent_cues[-3:] if recent_cues else [],  # Last 3
-                            'current': current_cues[0] if current_cues else None,  # Most recent
-                            'upcoming': upcoming_cues[:3] if upcoming_cues else []  # Next 3
-                        }
-                    
-                    total_time = video_duration if video_duration else 180.0
-                    
-                    # Only update if debug_manager and overlay are valid
-                    if self.debug_manager and getattr(self.debug_manager, 'overlay', None):
-                        self.debug_manager.update_display(current_time, total_time, midi_data)
-                    else:
-                        print("[DEBUG] No valid debug overlay to update.")
-                    
-                    time.sleep(0.1)  # 10 FPS
-                    
-                except Exception as e:
-                    print(f"Debug update error: {e}")
-                    time.sleep(1)
-        
-        if self.config.debug_mode and self.debug_manager and getattr(self.debug_manager, 'overlay', None):
-            print("[DEBUG] Starting debug update loop.")
-            thread = threading.Thread(target=debug_loop, daemon=True)
-            thread.start()
-        else:
-            print("[DEBUG] Debug update loop not started: overlay missing or debug mode off.")
     
     def run(self) -> None:
         """Main run loop"""
