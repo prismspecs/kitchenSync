@@ -70,18 +70,28 @@ class DebugOverlay:
     
     def set_state(self, *, video_file=None, current_time=None, total_time=None, midi_data=None, is_leader=None, pi_id=None):
         with self.state_lock:
+            updated_fields = []
             if video_file is not None:
                 self.state['video_file'] = video_file
+                updated_fields.append(f"video_file={video_file}")
             if current_time is not None:
                 self.state['current_time'] = current_time
+                updated_fields.append(f"current_time={current_time:.1f}")
             if total_time is not None:
                 self.state['total_time'] = total_time
+                updated_fields.append(f"total_time={total_time:.1f}")
             if midi_data is not None:
                 self.state['midi_data'] = midi_data
+                updated_fields.append(f"midi_data={len(midi_data.get('recent', []))} recent, {len(midi_data.get('upcoming', []))} upcoming")
             if is_leader is not None:
                 self.state['is_leader'] = is_leader
+                updated_fields.append(f"is_leader={is_leader}")
             if pi_id is not None:
                 self.state['pi_id'] = pi_id
+                updated_fields.append(f"pi_id={pi_id}")
+            
+            if updated_fields:
+                print(f"[DEBUG] set_state called: {', '.join(updated_fields)}")
     
     def _init_pygame_overlay(self) -> None:
         """Initialize pygame overlay for visual debug display"""
@@ -143,12 +153,6 @@ class DebugOverlay:
         try:
             # Clear screen with dark background
             self.screen.fill((20, 20, 20))
-            
-            # Update MIDI data if provided
-            if midi_data:
-                # The recent, current, upcoming triggers are now part of midi_data
-                # No need to re-calculate or store them separately here.
-                pass
             
             y_pos = 10
             line_height = 22
@@ -212,7 +216,7 @@ class DebugOverlay:
             
             if midi_data and midi_data.get('current'):
                 trigger_str = self._format_midi_event(midi_data['current'])
-                text = self.font.render(f"  -> {trigger_str}", True, (255, 255, 100))  # Yellow
+                text = self.font.render(f"  -> {trigger_str}", True, (255, 255, 100))
                 self.screen.blit(text, (20, y_pos))
             else:
                 text = self.font.render("  None", True, (100, 100, 100))
@@ -240,7 +244,7 @@ class DebugOverlay:
             pygame.display.flip()
             
         except Exception as e:
-            print(f"Error updating pygame overlay: {e}")
+            print(f"[DEBUG] Error drawing overlay: {e}")
     
     def _format_midi_event(self, event: Dict[str, Any]) -> str:
         """Format MIDI event for display"""
@@ -304,7 +308,6 @@ class DebugOverlay:
 
 class DebugManager:
     """Manages debug information and overlays"""
-    _overlay_created = False  # Class-level guard to prevent duplicate overlays
     
     def __init__(self, pi_id: str, video_file: str, debug_mode: bool = False):
         self.pi_id = pi_id
@@ -322,8 +325,8 @@ class DebugManager:
         """Initialize appropriate debug display (idempotent - only creates once)"""
         print(f"[DEBUG] Initializing debug display for: {self.pi_id}")
         
-        # GUARD: Only initialize once - prevent multiple window creation
-        if self.overlay is not None or DebugManager._overlay_created:
+        # GUARD: Only initialize once per manager instance
+        if self.overlay is not None:
             print(f"[DEBUG] Debug display already initialized for {self.pi_id} - skipping")
             return
         
@@ -331,14 +334,12 @@ class DebugManager:
         print(f"[DEBUG] Creating pygame overlay for Pi: {self.pi_id}")
         try:
             self.overlay = DebugOverlay(self.pi_id, self.video_file, use_pygame=True)
-            DebugManager._overlay_created = True
             print(f"[DEBUG] SUCCESS: Pygame overlay created for Pi: {self.pi_id}")
         except Exception as e:
             print(f"[DEBUG] FAILED pygame overlay: {e}")
             # Fall back to text mode if pygame fails
             try:
                 self.overlay = DebugOverlay(self.pi_id, self.video_file, use_pygame=False)
-                DebugManager._overlay_created = True
                 print(f"[DEBUG] SUCCESS: Text debug fallback for Pi: {self.pi_id}")
             except Exception as e2:
                 print(f"[DEBUG] FAILED: Could not initialize any debug display: {e2}")
@@ -385,7 +386,6 @@ class DebugManager:
         if self.overlay:
             print(f"[DEBUG] Cleaning up debug overlay for {self.pi_id}")
             self.overlay.cleanup()
-            DebugManager._overlay_created = False
         # Terminal debugger is disabled
         # if self.terminal_debugger:
         #     self.terminal_debugger.cleanup()

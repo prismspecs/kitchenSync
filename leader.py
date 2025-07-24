@@ -57,7 +57,7 @@ class LeaderPi:
         else:
             print("[DEBUG] No video file found at startup.")
         
-        # DebugManager will be created after video is loaded
+        # DebugManager will be created in start_system() when needed
         self.debug_manager = None
         
         # Setup command handlers
@@ -103,11 +103,9 @@ class LeaderPi:
             print("🎬 Starting video playback...")
             self.video_player.start_playback()
         
-        # (Re)create DebugManager with correct video file after video is loaded
-        if self.config.debug_mode:
-            if self.debug_manager is not None:
-                print("[DEBUG] Cleaning up previous debug overlay before creating new one.")
-                self.debug_manager.cleanup()
+        # Create DebugManager ONLY if debug mode is enabled and not already created
+        if self.config.debug_mode and self.debug_manager is None:
+            print("[DEBUG] Creating debug overlay for leader...")
             self.debug_manager = DebugManager(
                 'leader-pi',
                 self.video_player.video_path or self.video_path or self.config.video_file,
@@ -145,7 +143,7 @@ class LeaderPi:
         self.command_manager.send_command(start_command)
         
         # Start debug update loop if enabled
-        if self.config.debug_mode:
+        if self.config.debug_mode and self.debug_manager:
             self._start_debug_updates()
         
         print("✅ System started successfully!")

@@ -57,7 +57,7 @@ class CollaboratorPi:
         else:
             print("[DEBUG] No video file found at startup.")
         
-        # DebugManager will be created after video is loaded
+        # DebugManager will be created when playback starts if needed
         self.debug_manager = None
         
         # Sync settings
@@ -175,11 +175,9 @@ class CollaboratorPi:
             print("Starting video...")
             self.video_player.start_playback()
         
-        # (Re)create DebugManager with correct video file after video is loaded
-        if self.config.debug_mode:
-            if self.debug_manager is not None:
-                print("[DEBUG] Cleaning up previous debug overlay before creating new one.")
-                self.debug_manager.cleanup()
+        # Create DebugManager ONLY if debug mode is enabled and not already created
+        if self.config.debug_mode and self.debug_manager is None:
+            print("[DEBUG] Creating debug overlay for collaborator...")
             self.debug_manager = DebugManager(
                 self.config.pi_id,
                 self.video_player.video_path or self.video_path or self.config.video_file,
@@ -289,7 +287,7 @@ class CollaboratorPi:
         heartbeat_thread = threading.Thread(target=heartbeat_loop, daemon=True)
         heartbeat_thread.start()
         
-        # Start debug update loop if in debug mode
+        # Start debug update loop if in debug mode (only once per process)
         def debug_update_loop():
             while True:
                 if self.debug_manager and getattr(self.debug_manager, 'overlay', None) and self.system_state.is_running:
@@ -321,6 +319,7 @@ class CollaboratorPi:
                         print(f"[DEBUG] Error updating overlay: {e}")
                 time.sleep(0.5)  # Update every 0.5 seconds
         
+        # Start the debug update thread only once and only if debug mode is enabled
         if self.config.debug_mode:
             debug_thread = threading.Thread(target=debug_update_loop, daemon=True)
             debug_thread.start()
