@@ -1,1 +1,0 @@
-Since the desktop is visible when the device boots up, I would like the top menu bar to be hidden and no desktop icons to be shown.

@@ -4,6 +4,8 @@
 
 KitchenSync is a modern, production-ready system for synchronized video playback and MIDI output across multiple Raspberry Pis. The system features plug-and-play USB drive configuration, automatic role detection, VLC-based video playback with advanced drift correction, and systemd auto-start capabilities. One Pi acts as the leader, broadcasting synchronized time via UDP and coordinating the entire system, while collaborator Pis receive time sync and execute precisely timed MIDI events. The system supports different videos per Pi, automatic USB drive detection, and professional deployment workflows.
 
+I am developing this on a separate computer than the one on which it will run. Commands given to the system will be through SSH (for development).
+
 ## Technical Stack
 
 - **Language:** Python 3 (system-wide installation, no virtual environment)
