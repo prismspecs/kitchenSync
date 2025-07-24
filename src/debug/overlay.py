@@ -278,93 +278,21 @@ class DebugOverlay:
                 print(f"Error cleaning up pygame overlay: {e}")
 
 
-class TerminalDebugger:
-    """Terminal-based debug display for leader"""
-    
-    def __init__(self):
-        self.terminal_process = None
-        self.pipe_path = "/tmp/kitchensync_debug"
-        self._start_debug_terminal()
-    
-    def _start_debug_terminal(self) -> bool:
-        """Start a separate terminal window for debug display"""
-        try:
-            # Create a temporary script that displays debug info
-            script_content = '''#!/bin/bash
-# KitchenSync Debug Terminal
-echo "KitchenSync Debug Monitor - Leader Pi"
-echo "===================================="
-echo "Waiting for debug data..."
-echo ""
-
-# Create a named pipe for communication
-PIPE="/tmp/kitchensync_debug"
-mkfifo "$PIPE" 2>/dev/null || true
-
-# Read from pipe and display with timestamp
-while true; do
-    if read line <"$PIPE"; then
-        echo "$(date '+%H:%M:%S') $line"
-    else
-        sleep 0.1
-    fi
-done
-'''
-            
-            # Write script to temporary file
-            with tempfile.NamedTemporaryFile(mode='w', suffix='.sh', delete=False) as f:
-                f.write(script_content)
-                script_path = f.name
-            
-            # Make script executable
-            os.chmod(script_path, 0o755)
-            
-            # Try different terminal emulators - position on right side, not overlapping video
-            terminal_commands = [
-                ['gnome-terminal', '--geometry=60x20+1600+400', '--title=KitchenSync Debug', '--', 'bash', script_path],
-                ['xterm', '-geometry', '60x20+1600+400', '-title', 'KitchenSync Debug', '-e', 'bash', script_path],
-                ['lxterminal', '--geometry=60x20', '--title=KitchenSync Debug', '-e', 'bash ' + script_path],
-            ]
-            
-            for cmd in terminal_commands:
-                try:
-                    self.terminal_process = subprocess.Popen(cmd, 
-                                                            stdout=subprocess.DEVNULL, 
-                                                            stderr=subprocess.DEVNULL)
-                    print(f"Debug terminal started with {cmd[0]}")
-                    time.sleep(1)  # Give terminal time to start
-                    return True
-                except Exception:
-                    continue
-            
-            raise DebugError("No suitable terminal emulator found")
-            
-        except Exception as e:
-            print(f"Could not start debug terminal: {e}")
-            return False
-    
-    def send_message(self, message: str) -> None:
-        """Send a message to the debug terminal"""
-        try:
-            with open(self.pipe_path, 'w') as pipe:
-                pipe.write(f"{message}\n")
-                pipe.flush()
-        except Exception:
-            pass  # Ignore pipe errors
-    
-    def cleanup(self) -> None:
-        """Clean up terminal debugger"""
-        try:
-            if self.terminal_process:
-                self.terminal_process.terminate()
-            
-            # Clean up the named pipe
-            if os.path.exists(self.pipe_path):
-                os.unlink(self.pipe_path)
-            
-            print("Debug terminal cleaned up")
-        except Exception as e:
-            print(f"Debug terminal cleanup error: {e}")
+# TERMINAL DEBUGGER DISABLED - ONLY PYGAME OVERLAY USED
+# class TerminalDebugger:
+#     """Terminal-based debug display for leader"""
+#     
+#     def __init__(self):
+#         pass  # Disabled
+#     
+#     def _start_debug_terminal(self) -> bool:
+#         pass  # Disabled
+#     
+#     def send_message(self, message: str) -> None:
+#         pass  # Disabled
+#     
+#     def cleanup(self) -> None:
+#         pass  # Disabled
 
 
 class DebugManager:
@@ -386,8 +314,7 @@ class DebugManager:
         """Initialize appropriate debug display"""
         print(f"Initializing debug display for: {self.pi_id}")
         
-        # TEMPORARY FIX: Only use pygame overlay, disable terminal debugger completely
-        # This eliminates the dual window problem
+        # ALWAYS use pygame overlay - no terminal debugger ever
         print(f"Creating pygame overlay for Pi: {self.pi_id}")
         try:
             self.overlay = DebugOverlay(self.pi_id, self.video_file, use_pygame=True)
