@@ -52,10 +52,10 @@ class DebugOverlay:
         
         # Initialize overlay
         if self.use_pygame:
-            print(f"Initializing pygame overlay for {self.pi_id}")
+            print(f"[DEBUG] Initializing pygame overlay for {self.pi_id} (video: {self.video_file})")
             self._init_pygame_overlay()
         else:
-            print(f"Text-based debug overlay initialized for {self.pi_id}")
+            print(f"[DEBUG] Text-based debug overlay initialized for {self.pi_id}")
     
     def _init_pygame_overlay(self) -> None:
         """Initialize pygame overlay for visual debug display"""
@@ -271,9 +271,9 @@ class DebugOverlay:
                     self.raise_thread.join(timeout=1)
                 
                 pygame.quit()
-                print(f"✓ Pygame debug overlay cleaned up")
+                print(f"[DEBUG] ✓ Pygame debug overlay cleaned up for {self.pi_id}")
             except Exception as e:
-                print(f"Error cleaning up pygame overlay: {e}")
+                print(f"[DEBUG] Error cleaning up pygame overlay: {e}")
 
 
 # TERMINAL DEBUGGER DISABLED - ONLY PYGAME OVERLAY USED
@@ -295,6 +295,7 @@ class DebugOverlay:
 
 class DebugManager:
     """Manages debug information and overlays"""
+    _overlay_created = False  # Class-level guard to prevent duplicate overlays
     
     def __init__(self, pi_id: str, video_file: str, debug_mode: bool = False):
         self.pi_id = pi_id
@@ -303,35 +304,37 @@ class DebugManager:
         self.overlay = None
         self.terminal_debugger = None
         
-        print(f"DebugManager init: PID={os.getpid()}, pi_id={pi_id}, debug_mode={debug_mode}")
+        print(f"[DEBUG] DebugManager init: PID={os.getpid()}, pi_id={pi_id}, debug_mode={debug_mode}, video_file={video_file}")
         
         if debug_mode:
             self._initialize_debug_display()
     
     def _initialize_debug_display(self) -> None:
         """Initialize appropriate debug display (idempotent - only creates once)"""
-        print(f"Initializing debug display for: {self.pi_id}")
+        print(f"[DEBUG] Initializing debug display for: {self.pi_id}")
         
         # GUARD: Only initialize once - prevent multiple window creation
-        if self.overlay is not None:
-            print(f"Debug display already initialized for {self.pi_id} - skipping")
+        if self.overlay is not None or DebugManager._overlay_created:
+            print(f"[DEBUG] Debug display already initialized for {self.pi_id} - skipping")
             return
         
         # ALWAYS use pygame overlay - no terminal debugger ever
-        print(f"Creating pygame overlay for Pi: {self.pi_id}")
+        print(f"[DEBUG] Creating pygame overlay for Pi: {self.pi_id}")
         try:
             self.overlay = DebugOverlay(self.pi_id, self.video_file, use_pygame=True)
-            print(f"SUCCESS: Pygame overlay created for Pi: {self.pi_id}")
+            DebugManager._overlay_created = True
+            print(f"[DEBUG] SUCCESS: Pygame overlay created for Pi: {self.pi_id}")
         except Exception as e:
-            print(f"FAILED pygame overlay: {e}")
+            print(f"[DEBUG] FAILED pygame overlay: {e}")
             # Fall back to text mode if pygame fails
             try:
                 self.overlay = DebugOverlay(self.pi_id, self.video_file, use_pygame=False)
-                print(f"SUCCESS: Text debug fallback for Pi: {self.pi_id}")
+                DebugManager._overlay_created = True
+                print(f"[DEBUG] SUCCESS: Text debug fallback for Pi: {self.pi_id}")
             except Exception as e2:
-                print(f"FAILED: Could not initialize any debug display: {e2}")
+                print(f"[DEBUG] FAILED: Could not initialize any debug display: {e2}")
                     
-        print(f"Debug initialization complete. overlay={self.overlay is not None}, terminal=False")
+        print(f"[DEBUG] Debug initialization complete. overlay={self.overlay is not None}, terminal=False")
     
     def update_display(self, current_time: float = 0, total_time: float = 0, 
                       midi_data: Optional[Dict[str, Any]] = None) -> None:
@@ -371,7 +374,9 @@ class DebugManager:
     def cleanup(self) -> None:
         """Clean up debug resources"""
         if self.overlay:
+            print(f"[DEBUG] Cleaning up debug overlay for {self.pi_id}")
             self.overlay.cleanup()
+            DebugManager._overlay_created = False
         # Terminal debugger is disabled
         # if self.terminal_debugger:
         #     self.terminal_debugger.cleanup()

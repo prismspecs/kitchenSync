@@ -49,17 +49,16 @@ class CollaboratorPi:
         self.sync_receiver = SyncReceiver(sync_callback=self._handle_sync)
         self.command_listener = CommandListener()
         
-        # Initialize debug system
-        video_path = self.video_manager.find_video_file()
-        if video_path:
-            self.video_player.load_video(video_path)
+        # Find and load video file before creating debug overlay
+        self.video_path = self.video_manager.find_video_file()
+        if self.video_path:
+            self.video_player.load_video(self.video_path)
+            print(f"[DEBUG] Video file loaded: {self.video_path}")
+        else:
+            print("[DEBUG] No video file found at startup.")
         
-        # Initialize debug system properly from the start
-        self.debug_manager = DebugManager(
-            self.config.pi_id,
-            self.config.video_file,
-            self.config.debug_mode  # Use actual debug mode setting
-        )
+        # DebugManager will be created after video is loaded
+        self.debug_manager = None
         
         # Sync settings
         self.sync_tolerance = self.config.getfloat('sync_tolerance', 1.0)
@@ -155,6 +154,18 @@ class CollaboratorPi:
             print("Starting video...")
             self.video_player.start_playback()
         
+        # (Re)create DebugManager with correct video file after video is loaded
+        if self.config.debug_mode:
+            if self.debug_manager is not None:
+                print("[DEBUG] Cleaning up previous debug overlay before creating new one.")
+                self.debug_manager.cleanup()
+            self.debug_manager = DebugManager(
+                self.config.pi_id,
+                self.video_player.video_path or self.video_path or self.config.video_file,
+                True
+            )
+            print(f"[DEBUG] Debug overlay created for video: {self.video_player.video_path or self.video_path or self.config.video_file}")
+        
         # Start MIDI playback
         self.midi_scheduler.start_playback(self.system_state.start_time)
         
@@ -246,11 +257,13 @@ class CollaboratorPi:
                             'upcoming': upcoming_cues[:3] if upcoming_cues else []  # Next 3
                         }
                     
-                    # Use video duration if available, otherwise use a default
                     total_time = video_duration if video_duration else 180.0
                     
-                    # Update debug display with new format
-                    self.debug_manager.update_display(current_time, total_time, midi_data)
+                    # Only update if debug_manager and overlay are valid
+                    if self.debug_manager and getattr(self.debug_manager, 'overlay', None):
+                        self.debug_manager.update_display(current_time, total_time, midi_data)
+                    else:
+                        print("[DEBUG] No valid debug overlay to update.")
                     
                     time.sleep(0.1)  # 10 FPS
                     
@@ -258,9 +271,12 @@ class CollaboratorPi:
                     print(f"Debug update error: {e}")
                     time.sleep(1)
         
-        if self.config.debug_mode:
+        if self.config.debug_mode and self.debug_manager and getattr(self.debug_manager, 'overlay', None):
+            print("[DEBUG] Starting debug update loop.")
             thread = threading.Thread(target=debug_loop, daemon=True)
             thread.start()
+        else:
+            print("[DEBUG] Debug update loop not started: overlay missing or debug mode off.")
     
     def run(self) -> None:
         """Main run loop"""
@@ -304,7 +320,9 @@ class CollaboratorPi:
         self.command_listener.stop_listening()
         self.video_player.cleanup()
         self.midi_manager.cleanup()
-        self.debug_manager.cleanup()
+        if self.debug_manager:
+            print("[DEBUG] Cleaning up debug overlay.")
+            self.debug_manager.cleanup()
         print("🧹 Cleanup completed")
 
 

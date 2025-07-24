@@ -49,22 +49,19 @@ class LeaderPi:
         self.midi_manager = MidiManager(use_mock=True)
         self.midi_scheduler = MidiScheduler(self.midi_manager)
         
-        # Initialize debug system
-        self.debug_manager = DebugManager(
-            'leader-pi', 
-            self.config.video_file, 
-            self.config.debug_mode
-        )
+        # Find video file before creating debug overlay
+        self.video_path = self.video_manager.find_video_file()
+        if self.video_path:
+            self.video_player.load_video(self.video_path)
+            print(f"[DEBUG] Video file loaded: {self.video_path}")
+        else:
+            print("[DEBUG] No video file found at startup.")
+        
+        # DebugManager will be created after video is loaded
+        self.debug_manager = None
         
         # Setup command handlers
         self._setup_command_handlers()
-        
-        # Find video file
-        video_path = self.video_manager.find_video_file()
-        if video_path:
-            self.video_player.load_video(video_path)
-        else:
-            print("⚠️ No video file found")
     
     def _setup_command_handlers(self) -> None:
         """Setup networking command handlers"""
@@ -105,6 +102,18 @@ class LeaderPi:
         if self.video_player.video_path:
             print("🎬 Starting video playback...")
             self.video_player.start_playback()
+        
+        # (Re)create DebugManager with correct video file after video is loaded
+        if self.config.debug_mode:
+            if self.debug_manager is not None:
+                print("[DEBUG] Cleaning up previous debug overlay before creating new one.")
+                self.debug_manager.cleanup()
+            self.debug_manager = DebugManager(
+                'leader-pi',
+                self.video_player.video_path or self.video_path or self.config.video_file,
+                True
+            )
+            print(f"[DEBUG] Debug overlay created for video: {self.video_player.video_path or self.video_path or self.config.video_file}")
         
         # Start networking
         self.sync_broadcaster.start_broadcasting(self.system_state.start_time)
@@ -182,19 +191,22 @@ class LeaderPi:
                     current_cues = self.midi_scheduler.get_current_cues(current_time)
                     upcoming_cues = self.midi_scheduler.get_upcoming_cues(current_time)
                     
-                    # Prepare debug info
-                    debug_info = [f"Connected Pis: {self.collaborators.get_online_count()}"]
+                    # Prepare MIDI info for overlay
+                    midi_data = {
+                        'recent': [],  # Could be filled with history if needed
+                        'current': current_cues[0] if current_cues else None,
+                        'upcoming': upcoming_cues[:3] if upcoming_cues else []
+                    }
                     
-                    if current_cues:
-                        cue = current_cues[0]
-                        debug_info.append(f"▶️ {cue.get('type', 'unknown')} Ch:{cue.get('channel', 1)}")
+                    # Use video duration if available, otherwise use a default
+                    video_duration = self.video_player.get_duration()
+                    total_time = video_duration if video_duration else 180.0
                     
-                    if upcoming_cues:
-                        next_cue = upcoming_cues[0]
-                        debug_info.append(f"⏭️ Next: {next_cue.get('type', 'unknown')} @{next_cue.get('time', 0):.1f}s")
-                    
-                    # Update debug display
-                    self.debug_manager.update_display(current_time, 180.0, debug_info)
+                    # Only update if debug_manager and overlay are valid
+                    if self.debug_manager and getattr(self.debug_manager, 'overlay', None):
+                        self.debug_manager.update_display(current_time, total_time, midi_data)
+                    else:
+                        print("[DEBUG] No valid debug overlay to update.")
                     
                     time.sleep(0.1)  # 10 FPS
                     
@@ -202,9 +214,12 @@ class LeaderPi:
                     print(f"Debug update error: {e}")
                     time.sleep(1)
         
-        if self.config.debug_mode:
+        if self.config.debug_mode and self.debug_manager and getattr(self.debug_manager, 'overlay', None):
+            print("[DEBUG] Starting debug update loop.")
             thread = threading.Thread(target=debug_loop, daemon=True)
             thread.start()
+        else:
+            print("[DEBUG] Debug update loop not started: overlay missing or debug mode off.")
     
     def cleanup(self) -> None:
         """Clean up resources"""
@@ -213,7 +228,9 @@ class LeaderPi:
         
         self.video_player.cleanup()
         self.midi_manager.cleanup()
-        self.debug_manager.cleanup()
+        if self.debug_manager:
+            print("[DEBUG] Cleaning up debug overlay.")
+            self.debug_manager.cleanup()
         print("🧹 Cleanup completed")
 
 
