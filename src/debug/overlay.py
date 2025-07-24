@@ -52,6 +52,7 @@ class DebugOverlay:
         
         # Initialize overlay
         if self.use_pygame:
+            print(f"Initializing pygame overlay for {self.pi_id}")
             self._init_pygame_overlay()
         else:
             print(f"Text-based debug overlay initialized for {self.pi_id}")
@@ -59,6 +60,9 @@ class DebugOverlay:
     def _init_pygame_overlay(self) -> None:
         """Initialize pygame overlay for visual debug display"""
         try:
+            # Give VLC time to start and position itself first
+            time.sleep(2)
+            
             os.environ['SDL_VIDEO_WINDOW_POS'] = f'{self.overlay_x},{self.overlay_y}'
             
             pygame.init()
@@ -68,7 +72,7 @@ class DebugOverlay:
             self.font = pygame.font.Font(None, 20)  # Smaller font for more info
             self.clock = pygame.time.Clock()
             
-            # Set window to stay on top
+            # Set window to stay on top but not interfere with VLC
             self.keep_on_top = True
             self.raise_thread = threading.Thread(target=self._window_raise_loop, daemon=True)
             self.raise_thread.start()
@@ -80,15 +84,15 @@ class DebugOverlay:
             self.use_pygame = False
     
     def _window_raise_loop(self) -> None:
-        """Keep debug window on top"""
+        """Keep debug window on top but not too aggressively"""
         while self.keep_on_top:
             try:
-                # Use wmctrl to keep window on top
+                # Use wmctrl to keep window on top, but less frequently
                 subprocess.run(['wmctrl', '-r', 'KitchenSync Debug', '-b', 'add,above'], 
                               capture_output=True, timeout=1)
             except Exception:
                 pass
-            time.sleep(2)  # Check every 2 seconds
+            time.sleep(5)  # Check every 5 seconds instead of 2
     
     def update_display(self, current_time: float = 0, total_time: float = 0, 
                       midi_data: Optional[Dict[str, Any]] = None) -> None:
@@ -288,19 +292,19 @@ class TerminalDebugger:
             # Create a temporary script that displays debug info
             script_content = '''#!/bin/bash
 # KitchenSync Debug Terminal
-echo "KitchenSync Debug Monitor"
-echo "========================="
-echo "Debug information will appear here..."
+echo "KitchenSync Debug Monitor - Leader Pi"
+echo "===================================="
+echo "Waiting for debug data..."
 echo ""
 
 # Create a named pipe for communication
 PIPE="/tmp/kitchensync_debug"
 mkfifo "$PIPE" 2>/dev/null || true
 
-# Read from pipe and display
+# Read from pipe and display with timestamp
 while true; do
     if read line <"$PIPE"; then
-        echo "$line"
+        echo "$(date '+%H:%M:%S') $line"
     else
         sleep 0.1
     fi
@@ -315,10 +319,10 @@ done
             # Make script executable
             os.chmod(script_path, 0o755)
             
-            # Try different terminal emulators
+            # Try different terminal emulators - position on right side, not overlapping video
             terminal_commands = [
-                ['gnome-terminal', '--geometry=60x20+1520+0', '--title=KitchenSync Debug', '--', 'bash', script_path],
-                ['xterm', '-geometry', '60x20+1520+0', '-title', 'KitchenSync Debug', '-e', 'bash', script_path],
+                ['gnome-terminal', '--geometry=60x20+1600+400', '--title=KitchenSync Debug', '--', 'bash', script_path],
+                ['xterm', '-geometry', '60x20+1600+400', '-title', 'KitchenSync Debug', '-e', 'bash', script_path],
                 ['lxterminal', '--geometry=60x20', '--title=KitchenSync Debug', '-e', 'bash ' + script_path],
             ]
             
@@ -373,27 +377,40 @@ class DebugManager:
         self.overlay = None
         self.terminal_debugger = None
         
+        print(f"DebugManager init: pi_id={pi_id}, debug_mode={debug_mode}")
+        
         if debug_mode:
             self._initialize_debug_display()
     
     def _initialize_debug_display(self) -> None:
         """Initialize appropriate debug display"""
-        if self.pi_id == 'leader-pi' or 'leader' in self.pi_id:
-            # Use terminal debugger for leader
+        print(f"Initializing debug display for: {self.pi_id}")
+        
+        if self.pi_id == 'leader-pi' or 'leader' in self.pi_id.lower():
+            # Use terminal debugger for leader ONLY
+            print(f"Creating terminal debugger for leader: {self.pi_id}")
             try:
                 self.terminal_debugger = TerminalDebugger()
+                print(f"SUCCESS: Terminal debugger created for leader: {self.pi_id}")
             except Exception as e:
-                print(f"Could not initialize terminal debugger: {e}")
+                print(f"FAILED: Could not initialize terminal debugger: {e}")
+                
         else:
-            # Use overlay for collaborators
+            # Use pygame overlay for collaborators ONLY - never create terminal debugger
+            print(f"Creating pygame overlay for collaborator: {self.pi_id}")
             try:
                 self.overlay = DebugOverlay(self.pi_id, self.video_file, use_pygame=True)
+                print(f"SUCCESS: Pygame overlay created for collaborator: {self.pi_id}")
             except Exception as e:
-                print(f"Could not initialize debug overlay: {e}")
+                print(f"FAILED pygame overlay: {e}")
+                # Only fall back to text mode if pygame fails, never create terminal debugger for collaborators
                 try:
                     self.overlay = DebugOverlay(self.pi_id, self.video_file, use_pygame=False)
+                    print(f"SUCCESS: Text debug fallback for collaborator: {self.pi_id}")
                 except Exception as e2:
-                    print(f"Could not initialize text debug: {e2}")
+                    print(f"FAILED: Could not initialize any debug display: {e2}")
+                    
+        print(f"Debug initialization complete. overlay={self.overlay is not None}, terminal={self.terminal_debugger is not None}")
     
     def update_display(self, current_time: float = 0, total_time: float = 0, 
                       midi_data: Optional[Dict[str, Any]] = None) -> None:
