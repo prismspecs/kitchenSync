@@ -289,11 +289,18 @@ class CollaboratorPi:
         
         # Start debug update loop if in debug mode (only once per process)
         def debug_update_loop():
+            last_update_time = 0
             while True:
                 if self.debug_manager and getattr(self.debug_manager, 'overlay', None) and self.system_state.is_running:
                     try:
                         current_time = self.system_state.current_time
-                        video_position = self.video_player.get_position() or current_time
+                        
+                        # Only update if time has changed significantly (avoid spam)
+                        if abs(current_time - last_update_time) < 1.0:
+                            time.sleep(1.0)
+                            continue
+                            
+                        last_update_time = current_time
                         video_duration = self.video_player.get_duration() or 180.0
                         
                         # Get MIDI info
@@ -309,7 +316,7 @@ class CollaboratorPi:
                         
                         self.debug_manager.overlay.set_state(
                             video_file=self.video_player.video_path or self.video_path or self.config.video_file,
-                            current_time=video_position,
+                            current_time=current_time,  # Use system time consistently
                             total_time=video_duration,
                             midi_data=midi_data,
                             is_leader=self.config.is_leader,
@@ -317,7 +324,7 @@ class CollaboratorPi:
                         )
                     except Exception as e:
                         print(f"[DEBUG] Error updating overlay: {e}")
-                time.sleep(0.5)  # Update every 0.5 seconds
+                time.sleep(1.0)  # Update every 1 second instead of 0.5
         
         # Start the debug update thread only once and only if debug mode is enabled
         if self.config.debug_mode:

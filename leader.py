@@ -194,11 +194,18 @@ class LeaderPi:
     def _start_debug_updates(self) -> None:
         """Start debug update loop for leader"""
         def debug_loop():
+            last_update_time = 0
             while self.system_state.is_running:
                 try:
                     if self.debug_manager and getattr(self.debug_manager, 'overlay', None):
-                        current_time = self.system_state.update_time()
-                        video_position = self.video_player.get_position() or current_time
+                        current_time = self.system_state.current_time  # Use system time, not video position
+                        
+                        # Only update if time has changed significantly (avoid spam)
+                        if abs(current_time - last_update_time) < 0.5:
+                            time.sleep(0.5)
+                            continue
+                        
+                        last_update_time = current_time
                         video_duration = self.video_player.get_duration() or 180.0
                         
                         # Get MIDI info for debug
@@ -215,18 +222,18 @@ class LeaderPi:
                         
                         self.debug_manager.overlay.set_state(
                             video_file=self.video_player.video_path or self.video_path or self.config.video_file,
-                            current_time=video_position,
+                            current_time=current_time,  # Use system time
                             total_time=video_duration,
                             midi_data=midi_data,
                             is_leader=True,
                             pi_id='leader-pi'
                         )
                     
-                    time.sleep(0.5)  # Update every 0.5 seconds
+                    time.sleep(1.0)  # Update every 1 second, not 0.5
                     
                 except Exception as e:
                     print(f"[DEBUG] Debug update error: {e}")
-                    time.sleep(1)
+                    time.sleep(2)
         
         if self.config.debug_mode and self.debug_manager and getattr(self.debug_manager, 'overlay', None):
             print("[DEBUG] Starting debug update loop.")

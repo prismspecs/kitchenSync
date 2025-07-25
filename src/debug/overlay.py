@@ -84,27 +84,47 @@ class DebugOverlay:
     def set_state(self, *, video_file=None, current_time=None, total_time=None, midi_data=None, is_leader=None, pi_id=None):
         with self.state_lock:
             updated_fields = []
-            if video_file is not None:
+            significant_change = False
+            
+            if video_file is not None and video_file != self.state.get('video_file'):
                 self.state['video_file'] = video_file
                 updated_fields.append(f"video_file={video_file}")
+                significant_change = True
+                
             if current_time is not None:
-                self.state['current_time'] = current_time
-                updated_fields.append(f"current_time={current_time:.1f}")
-            if total_time is not None:
+                old_time = self.state.get('current_time', 0)
+                if abs(current_time - old_time) >= 1.0:  # Only log time changes of 1+ seconds
+                    self.state['current_time'] = current_time
+                    updated_fields.append(f"current_time={current_time:.1f}")
+                    significant_change = True
+                else:
+                    self.state['current_time'] = current_time  # Update silently
+                    
+            if total_time is not None and total_time != self.state.get('total_time'):
                 self.state['total_time'] = total_time
                 updated_fields.append(f"total_time={total_time:.1f}")
+                significant_change = True
+                
             if midi_data is not None:
                 self.state['midi_data'] = midi_data
-                updated_fields.append(f"midi_data={len(midi_data.get('recent', []))} recent, {len(midi_data.get('upcoming', []))} upcoming")
-            if is_leader is not None:
+                # Only log MIDI changes if there are actual events
+                if midi_data.get('current') or midi_data.get('recent') or midi_data.get('upcoming'):
+                    updated_fields.append(f"midi_data={len(midi_data.get('recent', []))} recent, {len(midi_data.get('upcoming', []))} upcoming")
+                    significant_change = True
+                    
+            if is_leader is not None and is_leader != self.state.get('is_leader'):
                 self.state['is_leader'] = is_leader
                 updated_fields.append(f"is_leader={is_leader}")
-            if pi_id is not None:
+                significant_change = True
+                
+            if pi_id is not None and pi_id != self.state.get('pi_id'):
                 self.state['pi_id'] = pi_id
                 updated_fields.append(f"pi_id={pi_id}")
+                significant_change = True
             
-            if updated_fields:
-                print(f"[DEBUG] set_state called: {', '.join(updated_fields)}")
+            # Only log if there are significant changes
+            if updated_fields and significant_change:
+                print(f"[DEBUG] set_state: {', '.join(updated_fields)}")
     
     def _init_pygame_overlay(self) -> None:
         """Initialize pygame overlay for visual debug display"""
