@@ -21,6 +21,11 @@ from midi import MidiScheduler, MidiManager
 from core import Schedule, ScheduleEditor, SystemState, CollaboratorRegistry
 from debug import DebugManager
 from ui import CommandInterface, StatusDisplay
+from src.video.vlc_player import VLCVideoPlayer
+from src.networking.communication import SyncBroadcaster, CommandManager
+from src.midi.manager import MidiManager, MidiScheduler
+from src.debug.simple_overlay import SimpleDebugManager
+from src.core.system_state import SystemState
 
 
 class LeaderPi:
@@ -58,19 +63,24 @@ class LeaderPi:
         else:
             print("[DEBUG] No video file found at startup.")
         
-        # Simple debug file (no complex overlay)
-        self.debug_file = "/tmp/kitchensync_leader_debug.txt" if self.config.debug_mode else None
-        if self.debug_file:
-            with open(self.debug_file, 'w') as f:
-                f.write("KitchenSync Leader Debug\n")
-                f.write("=" * 40 + "\n")
-                f.write(f"Started: {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
-                f.write(f"Video: {os.path.basename(self.video_path) if self.video_path else 'None'}\n")
-                f.write("=" * 40 + "\n\n")
-            print(f"[DEBUG] Debug file: {self.debug_file}")
-            print(f"[DEBUG] Monitor with: ssh kitchensync@192.168.178.59 'tail -f {self.debug_file}'")
+        # Simple debug overlay (displays on Pi screen)
+        self.simple_debug = None
+        if self.config.debug_mode:
+            self.simple_debug = SimpleDebugManager('leader-pi', is_leader=True)
+            if self.simple_debug.overlay:
+                print(f"[DEBUG] Simple overlay created and will display on Pi screen")
+            else:
+                print(f"[DEBUG] Failed to create overlay - falling back to file debug")
+                # Fallback to file debug if pygame fails
+                self.debug_file = "/tmp/kitchensync_leader_debug.txt"
+                with open(self.debug_file, 'w') as f:
+                    f.write("KitchenSync Leader Debug (Fallback)\n")
+                    f.write("=" * 40 + "\n")
+                    f.write(f"Started: {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
+                    f.write(f"Video: {os.path.basename(self.video_path) if self.video_path else 'None'}\n")
+                    f.write("=" * 40 + "\n\n")
         
-        self.debug_manager = None  # Disabled - using simple file debug
+        self.debug_manager = None  # Disabled - using simple overlay
         
         # Setup command handlers
         self._setup_command_handlers()
@@ -132,7 +142,7 @@ class LeaderPi:
         self.command_manager.send_command(start_command)
         
         # Start simple debug updates if enabled
-        if self.config.debug_mode and self.debug_file:
+        if self.config.debug_mode:
             self._start_simple_debug()
         
         print("✅ System started successfully!")
@@ -181,7 +191,7 @@ class LeaderPi:
         editor.run_editor()
     
     def _start_simple_debug(self) -> None:
-        """Start simple file-based debug updates"""
+        """Start simple visual debug updates"""
         def simple_debug_loop():
             last_time = 0
             while self.system_state.is_running:
@@ -197,44 +207,59 @@ class LeaderPi:
                     else:
                         current_time = session_time % video_duration if video_duration > 0 else session_time
                     
-                    # Only update every 5 seconds
-                    if int(current_time) % 5 == 0 and abs(current_time - last_time) >= 5:
+                    # Update debug overlay every second
+                    if abs(current_time - last_time) >= 1.0:
                         last_time = current_time
-                        
-                        # Format time
-                        current_min = int(current_time // 60)
-                        current_sec = int(current_time % 60)
-                        total_min = int(video_duration // 60)
-                        total_sec = int(video_duration % 60)
-                        time_str = f"{current_min:02d}:{current_sec:02d} / {total_min:02d}:{total_sec:02d}"
                         
                         # Get MIDI info
                         current_cues = self.midi_scheduler.get_current_cues(current_time) if hasattr(self.midi_scheduler, 'get_current_cues') else []
                         upcoming_cues = self.midi_scheduler.get_upcoming_cues(current_time) if hasattr(self.midi_scheduler, 'get_upcoming_cues') else []
                         
-                        # Write debug info
-                        with open(self.debug_file, 'a') as f:
-                            timestamp = time.strftime('%H:%M:%S')
-                            video_name = os.path.basename(self.video_player.video_path or self.video_path or 'Unknown')
+                        # Update visual overlay
+                        if self.simple_debug and self.simple_debug.overlay:
+                            video_file = self.video_player.video_path or self.video_path or 'Unknown'
+                            self.simple_debug.update_debug_info(
+                                video_file=video_file,
+                                current_time=current_time,
+                                total_time=video_duration,
+                                session_time=session_time,
+                                video_position=video_position,
+                                current_cues=current_cues,
+                                upcoming_cues=upcoming_cues
+                            )
+                        
+                        # Fallback to file debug if overlay failed
+                        elif hasattr(self, 'debug_file') and self.debug_file:
+                            # Format time
+                            current_min = int(current_time // 60)
+                            current_sec = int(current_time % 60)
+                            total_min = int(video_duration // 60)
+                            total_sec = int(video_duration % 60)
+                            time_str = f"{current_min:02d}:{current_sec:02d} / {total_min:02d}:{total_sec:02d}"
                             
-                            f.write(f"[{timestamp}] KitchenSync Leader\n")
-                            f.write(f"  Video: {video_name}\n")
-                            f.write(f"  Time: {time_str}\n")
-                            f.write(f"  Session: {session_time:.1f}s, Video pos: {video_position or 'N/A'}\n")
-                            
-                            if current_cues:
-                                cue = current_cues[0]
-                                f.write(f"  Current MIDI: {cue.get('type', 'unknown')} Ch{cue.get('channel', 1)}\n")
-                            
-                            if upcoming_cues:
-                                next_cue = upcoming_cues[0]
-                                time_until = next_cue.get('time', 0) - current_time
-                                f.write(f"  Next MIDI: {next_cue.get('type', 'unknown')} in {time_until:.1f}s\n")
-                            
-                            f.write("  " + "-" * 30 + "\n")
-                            f.flush()
+                            # Write debug info
+                            with open(self.debug_file, 'a') as f:
+                                timestamp = time.strftime('%H:%M:%S')
+                                video_name = os.path.basename(self.video_player.video_path or self.video_path or 'Unknown')
+                                
+                                f.write(f"[{timestamp}] KitchenSync Leader\n")
+                                f.write(f"  Video: {video_name}\n")
+                                f.write(f"  Time: {time_str}\n")
+                                f.write(f"  Session: {session_time:.1f}s, Video pos: {video_position or 'N/A'}\n")
+                                
+                                if current_cues:
+                                    cue = current_cues[0]
+                                    f.write(f"  Current MIDI: {cue.get('type', 'unknown')} Ch{cue.get('channel', 1)}\n")
+                                
+                                if upcoming_cues:
+                                    next_cue = upcoming_cues[0]
+                                    time_until = next_cue.get('time', 0) - current_time
+                                    f.write(f"  Next MIDI: {next_cue.get('type', 'unknown')} in {time_until:.1f}s\n")
+                                
+                                f.write("  " + "-" * 30 + "\n")
+                                f.flush()
                     
-                    time.sleep(1)
+                    time.sleep(0.5)  # Check twice per second for smoother updates
                     
                 except Exception as e:
                     print(f"[DEBUG] Simple debug error: {e}")
@@ -255,7 +280,9 @@ class LeaderPi:
         
         self.video_player.cleanup()
         self.midi_manager.cleanup()
-        if self.debug_file:
+        if self.simple_debug:
+            self.simple_debug.cleanup()
+        if hasattr(self, 'debug_file') and self.debug_file:
             try:
                 with open(self.debug_file, 'a') as f:
                     f.write(f"\n[{time.strftime('%H:%M:%S')}] Leader shutdown\n")

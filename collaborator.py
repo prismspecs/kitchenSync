@@ -20,6 +20,7 @@ from networking import SyncReceiver, CommandListener
 from midi import MidiScheduler, MidiManager
 from core import SystemState, SyncTracker
 from debug import DebugManager
+from src.debug.simple_overlay import SimpleDebugManager
 
 
 class CollaboratorPi:
@@ -57,8 +58,16 @@ class CollaboratorPi:
         else:
             print("[DEBUG] No video file found at startup.")
         
-        # DebugManager will be created when playback starts if needed
-        self.debug_manager = None
+        # Simple debug overlay (displays on Pi screen)
+        self.simple_debug = None
+        if self.config.debug_mode:
+            self.simple_debug = SimpleDebugManager(self.config.device_id, is_leader=False)
+            if self.simple_debug.overlay:
+                print(f"[DEBUG] Simple overlay created for {self.config.device_id}")
+            else:
+                print(f"[DEBUG] Failed to create overlay for {self.config.device_id}")
+        
+        self.debug_manager = None  # Disabled - using simple overlay
         
         # Sync settings
         self.sync_tolerance = self.config.getfloat('sync_tolerance', 1.0)
@@ -287,50 +296,11 @@ class CollaboratorPi:
         heartbeat_thread = threading.Thread(target=heartbeat_loop, daemon=True)
         heartbeat_thread.start()
         
-        # Start debug update loop if in debug mode (only once per process)
-        def debug_update_loop():
-            last_update_time = 0
-            while True:
-                if self.debug_manager and getattr(self.debug_manager, 'overlay', None) and self.system_state.is_running:
-                    try:
-                        current_time = self.system_state.current_time
-                        
-                        # Only update if time has changed significantly (avoid spam)
-                        if abs(current_time - last_update_time) < 1.0:
-                            time.sleep(1.0)
-                            continue
-                            
-                        last_update_time = current_time
-                        video_duration = self.video_player.get_duration() or 180.0
-                        
-                        # Get MIDI info
-                        recent_cues = self.midi_scheduler.get_recent_cues(current_time, lookback=10.0) if hasattr(self.midi_scheduler, 'get_recent_cues') else []
-                        upcoming_cues = self.midi_scheduler.get_upcoming_cues(current_time, lookahead=30.0) if hasattr(self.midi_scheduler, 'get_upcoming_cues') else []
-                        current_cues = self.midi_scheduler.get_current_cues(current_time, window=1.0) if hasattr(self.midi_scheduler, 'get_current_cues') else []
-                        
-                        midi_data = {
-                            'recent': recent_cues[-3:] if recent_cues else [],
-                            'current': current_cues[0] if current_cues else None,
-                            'upcoming': upcoming_cues[:3] if upcoming_cues else []
-                        }
-                        
-                        self.debug_manager.overlay.set_state(
-                            video_file=self.video_player.video_path or self.video_path or self.config.video_file,
-                            current_time=current_time,  # Use system time consistently
-                            total_time=video_duration,
-                            midi_data=midi_data,
-                            is_leader=self.config.is_leader,
-                            pi_id=self.config.pi_id
-                        )
-                    except Exception as e:
-                        print(f"[DEBUG] Error updating overlay: {e}")
-                time.sleep(1.0)  # Update every 1 second instead of 0.5
-        
-        # Start the debug update thread only once and only if debug mode is enabled
+        # Start simple debug updates if enabled
         if self.config.debug_mode:
-            debug_thread = threading.Thread(target=debug_update_loop, daemon=True)
-            debug_thread.start()
-            print("[DEBUG] Debug update thread started.")
+            self._start_simple_debug()
+        
+        print(f"✅ Collaborator {self.config.device_id} started successfully!")
         
         print("Collaborator ready. Waiting for commands from leader...")
         print("Press Ctrl+C to exit")
@@ -344,15 +314,67 @@ class CollaboratorPi:
         finally:
             self.cleanup()
     
+    def _start_simple_debug(self) -> None:
+        """Start simple visual debug updates for collaborator"""
+        def simple_debug_loop():
+            last_time = 0
+            while self.system_state.is_running:
+                try:
+                    # Get actual video position and timing
+                    session_time = self.system_state.current_time
+                    video_position = self.video_player.get_position()
+                    video_duration = self.video_player.get_duration() or 180.0
+                    
+                    # Use video position if available, otherwise session time
+                    if video_position is not None and 0 <= video_position <= video_duration:
+                        current_time = video_position
+                    else:
+                        current_time = session_time % video_duration if video_duration > 0 else session_time
+                    
+                    # Update debug overlay every second
+                    if abs(current_time - last_time) >= 1.0:
+                        last_time = current_time
+                        
+                        # Get MIDI info
+                        current_cues = self.midi_scheduler.get_current_cues(current_time) if hasattr(self.midi_scheduler, 'get_current_cues') else []
+                        upcoming_cues = self.midi_scheduler.get_upcoming_cues(current_time) if hasattr(self.midi_scheduler, 'get_upcoming_cues') else []
+                        
+                        # Update visual overlay
+                        if self.simple_debug and self.simple_debug.overlay:
+                            video_file = self.video_player.video_path or 'Unknown'
+                            self.simple_debug.update_debug_info(
+                                video_file=video_file,
+                                current_time=current_time,
+                                total_time=video_duration,
+                                session_time=session_time,
+                                video_position=video_position,
+                                current_cues=current_cues,
+                                upcoming_cues=upcoming_cues
+                            )
+                    
+                    time.sleep(0.5)  # Check twice per second for smoother updates
+                    
+                except Exception as e:
+                    print(f"[DEBUG] Collaborator debug error: {e}")
+                    time.sleep(5)
+        
+        print(f"[DEBUG] Starting simple debug loop for {self.config.device_id}")
+        thread = threading.Thread(target=simple_debug_loop, daemon=True)
+        thread.start()
+    
+    def _start_debug_updates(self) -> None:
+        """No longer needed - using simple debug"""
+        pass
+    
     def cleanup(self) -> None:
         """Clean up resources"""
-        self.sync_receiver.stop_listening()
-        self.command_listener.stop_listening()
+        if self.system_state.is_running:
+            self.stop_playback()
+        
         self.video_player.cleanup()
         self.midi_manager.cleanup()
-        if self.debug_manager:
-            print("[DEBUG] Cleaning up debug overlay.")
-            self.debug_manager.cleanup()
+        if self.simple_debug:
+            self.simple_debug.cleanup()
         print("🧹 Cleanup completed")
 
 
