@@ -198,7 +198,17 @@ class LeaderPi:
             while self.system_state.is_running:
                 try:
                     if self.debug_manager and getattr(self.debug_manager, 'overlay', None):
-                        current_time = self.system_state.current_time  # Use system time, not video position
+                        # Get actual video playback position
+                        video_position = self.video_player.get_position()
+                        video_duration = self.video_player.get_duration() or 180.0
+                        
+                        # If video position is available and reasonable, use it
+                        if video_position is not None and 0 <= video_position <= video_duration:
+                            current_time = video_position
+                        else:
+                            # Fall back to session elapsed time, but loop if it exceeds video duration
+                            session_time = self.system_state.current_time
+                            current_time = session_time % video_duration if video_duration > 0 else session_time
                         
                         # Only update if time has changed significantly (avoid spam)
                         if abs(current_time - last_update_time) < 0.5:
@@ -206,7 +216,6 @@ class LeaderPi:
                             continue
                         
                         last_update_time = current_time
-                        video_duration = self.video_player.get_duration() or 180.0
                         
                         # Get MIDI info for debug
                         current_cues = self.midi_scheduler.get_current_cues(current_time) if hasattr(self.midi_scheduler, 'get_current_cues') else []
@@ -222,7 +231,7 @@ class LeaderPi:
                         
                         self.debug_manager.overlay.set_state(
                             video_file=self.video_player.video_path or self.video_path or self.config.video_file,
-                            current_time=current_time,  # Use system time
+                            current_time=current_time,  # Use video position
                             total_time=video_duration,
                             midi_data=midi_data,
                             is_leader=True,
