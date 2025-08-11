@@ -278,19 +278,37 @@ class HTMLDebugOverlay:
         try:
             # Simple browser open without blocking
             import subprocess
+            import threading
+            import time
 
-            # Open chromium with positioning arguments (non-blocking)
+            # Open chromium (non-blocking)
             subprocess.Popen(
                 [
                     "chromium",
                     "--new-window",
-                    "--window-size=640,1080",
-                    "--window-position=1280,0",
                     f"file://{self.html_file}",
                 ],
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
             )
+
+            # Position window after a delay (in background thread)
+            def position_window():
+                time.sleep(3)  # Wait for window to appear
+                try:
+                    # Position Chrome on the right side
+                    subprocess.run(
+                        ["wmctrl", "-r", "chromium", "-e", "0,1280,0,640,1080"],
+                        check=False,
+                        timeout=5,
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                    )
+                    log_info("Positioned Chrome window on right side")
+                except:
+                    pass  # Fail silently
+
+            threading.Thread(target=position_window, daemon=True).start()
 
             log_info(f"HTML debug overlay opened in browser: {self.html_file}")
         except Exception as e:
