@@ -191,16 +191,18 @@ The system features a clean, consolidated debug architecture:
   - Side-by-side Service Status and VLC Status sections
   - Combined refresh controls on single line
   - Clean title without emoji decorations
-  - Dedicated MIDI Information section showing recent and upcoming MIDI events
+  - Streamlined MIDI Information with comprehensive Recent/Upcoming lists
   - Scrollable MIDI event lists with color-coded indicators
   - Reduced log section heights to prevent scroll overflow
+  - Removed redundant Current/Next MIDI fields for cleaner display
 - **Template System (Jan 2025)**: Modular architecture with:
   - Separate HTML templates in `src/debug/templates/`
   - External CSS stylesheets for easier customization
-  - External JavaScript files for better maintainability
-  - Simple template engine with variable substitution
+  - External JavaScript files with improved auto-refresh reliability
+  - Simple template engine with variable substitution and HTML escaping
   - Automatic static file copying and management
   - Fallback system for template errors
+  - Enhanced error handling for OS module scope issues
 
 **Collaborator Pi (Simple Debug Overlay)**
 - `SimpleDebugManager` - Lightweight debug overlay system
@@ -215,6 +217,9 @@ The system features a clean, consolidated debug architecture:
 - **No Debug Print Pollution**: Eliminated print statements in favor of proper logging
 - **Production Ready**: Debug systems designed for reliable systemd operation
 - **Enhanced UX**: Improved debug window layout maximizes information visibility within viewport
+- **Modular Design**: Template system allows easy customization without touching Python code
+- **Reliable Auto-refresh**: Enhanced JavaScript with error handling and refresh counting
+- **Streamlined Information**: Removed redundant MIDI fields, focusing on comprehensive data display
 
 ## Diagnostics and Logs (2025-08)
 
