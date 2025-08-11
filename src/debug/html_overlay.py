@@ -38,6 +38,9 @@ class HTMLDebugOverlay:
             "looping_enabled": True,
         }
 
+        # Track Firefox state
+        self.firefox_opened = False
+
         # Create initial HTML file
         self._create_html_file()
 
@@ -275,11 +278,21 @@ class HTMLDebugOverlay:
         except Exception as e:
             log_warning(f"Could not remove HTML file: {e}", component="overlay")
 
+        # Reset Firefox flag
+        self.firefox_opened = False
         log_info("HTML overlay cleaned up", component="overlay")
 
     def open_in_browser(self):
         """Open the HTML file in the default browser"""
         try:
+            # Prevent multiple Firefox instances
+            if self.firefox_opened:
+                log_info(
+                    "Firefox already opened, skipping duplicate launch",
+                    component="overlay",
+                )
+                return
+
             # Simple browser open without blocking
             import subprocess
             import threading
@@ -289,6 +302,7 @@ class HTMLDebugOverlay:
             try:
                 subprocess.run(["pkill", "-f", "firefox"], check=False, timeout=5)
                 time.sleep(1)  # Give it time to close
+                self.firefox_opened = False  # Reset flag after killing
             except:
                 pass
 
@@ -312,11 +326,15 @@ class HTMLDebugOverlay:
                 stderr=subprocess.DEVNULL,
             )
 
+            # Mark Firefox as opened
+            self.firefox_opened = True
+            log_info("Firefox launched successfully", component="overlay")
+
             # Position window after a longer delay (in background thread)
             def position_window():
                 time.sleep(
-                    12
-                )  # Wait much longer to avoid conflict with VLC positioning
+                    20
+                )  # Wait longer for Firefox to fully load before positioning
                 try:
                     # Get list of all windows and find Firefox
                     result = subprocess.run(
