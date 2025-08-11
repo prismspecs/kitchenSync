@@ -1,11 +1,13 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <title>KitchenSync Debug - {{pi_id}}</title>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="static/css/debug.css">
 </head>
+
 <body>
     <div class="header">
         <h1>KitchenSync Debug - {{pi_id}}</h1>
@@ -40,9 +42,10 @@
 
     <div class="midi-section">
         <h3>MIDI Information</h3>
-        <div><strong>Current:</strong> <span id="midi-current" class="{{midi_current_class}}">{{midi_current}}</span></div>
+        <div><strong>Current:</strong> <span id="midi-current" class="{{midi_current_class}}">{{midi_current}}</span>
+        </div>
         <div><strong>Next:</strong> <span id="midi-next" class="{{midi_next_class}}">{{midi_next}}</span></div>
-        
+
         <div class="midi-columns">
             <div class="midi-column">
                 <strong>Recent MIDI:</strong>
@@ -71,7 +74,9 @@
 
     <div class="refresh-info">
         <div class="refresh-controls">
-            <span>This overlay automatically refreshes every 5 seconds</span>
+            <button class="refresh-button" onclick="location.reload()">Manual Refresh</button>
+            <span>|</span>
+            <span>Auto-refresh: <span id="refresh-status">Active</span></span>
             <span>|</span>
             <span>Last refresh: <span id="last-refresh">{{timestamp}}</span></span>
         </div>
@@ -79,4 +84,5 @@
 
     <script src="static/js/debug.js"></script>
 </body>
+
 </html>
