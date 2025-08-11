@@ -293,6 +293,7 @@ class HTMLDebugOverlay:
         try:
             # Open new browser instance with positioning arguments
             import subprocess
+
             subprocess.run(
                 [
                     "chromium",
@@ -305,7 +306,7 @@ class HTMLDebugOverlay:
                 ],
                 check=False,
             )
-            
+
             log_info(f"HTML debug overlay opened in browser: {self.html_file}")
         except Exception as e:
             log_error(f"Failed to open HTML overlay in browser: {e}")

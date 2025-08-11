@@ -169,9 +169,6 @@ class VLCVideoPlayer:
             # Start playback
             self.vlc_player.play()
 
-            # Force VLC window positioning after it starts
-            self._force_vlc_position()
-
             log_info("VLC playback started successfully")
             return True
 
@@ -179,43 +176,6 @@ class VLCVideoPlayer:
             log_error(f"Error with VLC Python: {e}", component="vlc")
             log_info("Falling back to command-line VLC", component="vlc")
             return self._start_with_command_vlc()
-
-    def _force_vlc_position(self):
-        """Force VLC window to the left side using wmctrl"""
-        try:
-            import subprocess
-            import time
-
-            # Wait for VLC window to appear
-            time.sleep(3)
-
-            # Find VLC windows and force position
-            result = subprocess.run(
-                ["wmctrl", "-l"], capture_output=True, text=True, timeout=10
-            )
-            if result.returncode == 0:
-                for line in result.stdout.split("\n"):
-                    if "vlc" in line.lower() or "test_video" in line.lower():
-                        parts = line.split()
-                        if len(parts) >= 2:
-                            window_id = parts[0]
-                            # Force VLC to left side: x=0, y=0, width=1280, height=720
-                            subprocess.run(
-                                ["wmctrl", "-ir", window_id, "-e", "0,0,0,1280,720"],
-                                check=False,
-                                timeout=5,
-                            )
-                            log_info(
-                                f"Forced VLC window {window_id} to left side (0,0,1280,720)"
-                            )
-
-                            # Bring to front
-                            subprocess.run(
-                                ["wmctrl", "-ia", window_id], check=False, timeout=5
-                            )
-
-        except Exception as e:
-            log_warning(f"Failed to force VLC window position: {e}")
 
     def _start_with_command_vlc(self) -> bool:
         """Start video using VLC command line"""
@@ -331,13 +291,6 @@ class VLCVideoPlayer:
         """Get VLC command line arguments"""
         paths = log_file_paths()
         return [
-            # Window positioning - place VLC on left side, leave space for debug overlay
-            "--no-fullscreen",
-            "--width=1280",
-            "--height=720",
-            "--video-x=0",  # Left side of screen
-            "--video-y=0",  # Top of screen
-            "--no-video-deco",  # No window decorations
             # Minimal config - let VLC use defaults
             "--file-logging",
             f"--logfile={paths['vlc_main']}",
@@ -355,77 +308,6 @@ class VLCVideoPlayer:
             f"--logfile={paths['vlc_main']}",
             "--verbose=2",
         ]
-
-    def _configure_debug_window(self) -> None:
-        """Configure VLC window for debug mode: position to the right side"""
-        if not VLC_PYTHON_AVAILABLE or not self.vlc_player:
-            return
-
-        try:
-            # Wait for window to appear and get XID (X11 only)
-            xid = None
-            for _ in range(40):  # ~4 seconds max
-                try:
-                    xid = self.vlc_player.get_xwindow()
-                    if xid and xid != 0:
-                        break
-                except Exception:
-                    pass
-                time.sleep(0.1)
-
-            if not xid:
-                log_warning(
-                    "Could not get VLC window ID for debug configuration",
-                    component="vlc",
-                )
-                return
-
-            # Compute a safe region for video (leave left/top margin for overlay)
-            video_x = 460
-            video_y = 60
-            video_w = 1440
-            video_h = 900
-
-            # Try xdotool first (most predictable)
-            try:
-                subprocess.run(
-                    ["xdotool", "windowsize", str(xid), str(video_w), str(video_h)],
-                    capture_output=True,
-                    timeout=1,
-                )
-                subprocess.run(
-                    ["xdotool", "windowmove", str(xid), str(video_x), str(video_y)],
-                    capture_output=True,
-                    timeout=1,
-                )
-                log_info(
-                    f"Configured debug window via xdotool: xid={xid}", component="vlc"
-                )
-                return
-            except Exception:
-                pass
-
-            # Fallback to wmctrl by matching VLC title
-            try:
-                subprocess.run(
-                    [
-                        "wmctrl",
-                        "-r",
-                        "VLC",
-                        "-e",
-                        f"0,{video_x},{video_y},{video_w},{video_h}",
-                    ],
-                    capture_output=True,
-                    timeout=1,
-                )
-                log_info("Configured debug window via wmctrl", component="vlc")
-            except Exception:
-                log_warning(
-                    "Could not position VLC window - xdotool/wmctrl not available",
-                    component="vlc",
-                )
-        except Exception as e:
-            log_warning(f"Error configuring debug window: {e}", component="vlc")
 
     def cleanup(self) -> None:
         """Clean up resources"""
