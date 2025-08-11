@@ -296,17 +296,23 @@ class HTMLDebugOverlay:
             def position_window():
                 time.sleep(3)  # Wait for window to appear
                 try:
-                    # Position Chrome on the right side
-                    subprocess.run(
-                        ["wmctrl", "-r", "chromium", "-e", "0,1280,0,640,1080"],
-                        check=False,
-                        timeout=5,
-                        stdout=subprocess.DEVNULL,
-                        stderr=subprocess.DEVNULL,
-                    )
-                    log_info("Positioned Chrome window on right side")
-                except:
-                    pass  # Fail silently
+                    # Try multiple window title patterns for Chrome
+                    patterns = ["KitchenSync Debug", "Chromium", "chromium", "Google Chrome"]
+                    for pattern in patterns:
+                        result = subprocess.run(
+                            ["wmctrl", "-r", pattern, "-e", "0,1280,0,640,1080"],
+                            check=False,
+                            timeout=5,
+                            stdout=subprocess.DEVNULL,
+                            stderr=subprocess.DEVNULL,
+                        )
+                        if result.returncode == 0:
+                            log_info(f"Positioned Chrome window on right side using pattern: {pattern}")
+                            break
+                    else:
+                        log_warning("Could not position Chrome window - no matching pattern found")
+                except Exception as e:
+                    log_warning(f"Failed to position Chrome window: {e}")
 
             threading.Thread(target=position_window, daemon=True).start()
 

@@ -112,6 +112,29 @@ class LeaderPi:
                 log_info(f"Video playback start result: {result}", component="leader")
                 if not result:
                     log_error("Video playback failed to start", component="leader")
+                else:
+                    # Position VLC window on the left side after it starts
+                    import threading
+                    import time
+                    def position_vlc_window():
+                        time.sleep(5)  # Wait longer for VLC window to appear
+                        try:
+                            import subprocess
+                            result = subprocess.run(
+                                ["wmctrl", "-r", "VLC media player", "-e", "0,0,0,1280,1080"],
+                                check=False,
+                                timeout=5,
+                                stdout=subprocess.DEVNULL,
+                                stderr=subprocess.DEVNULL,
+                            )
+                            if result.returncode == 0:
+                                log_info("Positioned VLC window on left side", component="leader")
+                            else:
+                                log_warning("Could not position VLC window", component="leader")
+                        except Exception as e:
+                            log_warning(f"Failed to position VLC window: {e}", component="leader")
+                    
+                    threading.Thread(target=position_vlc_window, daemon=True).start()
             except Exception as e:
                 log_error(f"Exception starting video playback: {e}", component="leader")
 
