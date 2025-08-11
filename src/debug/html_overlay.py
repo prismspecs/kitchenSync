@@ -422,6 +422,9 @@ class HTMLDebugOverlay:
         <p><strong>Status:</strong> {system_info.get('vlc_status', 'Unknown')}</p>
         <p><strong>Video File:</strong> {system_info.get('video_file', 'None')}</p>
         <p><strong>VLC Process:</strong> {system_info.get('vlc_process', 'None')}</p>
+        <p><strong>Current Time:</strong> {system_info.get('video_current_time', 0):.1f}s / {system_info.get('video_total_time', 0):.1f}s</p>
+        <p><strong>Position:</strong> {system_info.get('video_position', 0)*100:.1f}%</p>
+        <p><strong>State:</strong> {system_info.get('video_state', 'unknown')}</p>
     </div>
 
     <div class="log-section">
@@ -604,9 +607,46 @@ class HTMLDebugOverlay:
                     info["vlc_status"] = f"Running (embedded in PID: {vlc_pid})"
                     info["vlc_status_class"] = "good"
                     info["vlc_process"] = f"Python VLC bindings in PID: {vlc_pid}"
+
+                    # Try to get video playback information
+                    try:
+                        # Access the video player through the leader instance
+                        # This is a bit hacky but works since we're in the same process
+                        import sys
+
+                        for obj in (
+                            sys.modules.get("__main__", []).__dict__.values()
+                            if hasattr(sys.modules.get("__main__", {}), "__dict__")
+                            else []
+                        ):
+                            if hasattr(obj, "video_player") and hasattr(
+                                obj.video_player, "get_video_info"
+                            ):
+                                video_info = obj.video_player.get_video_info()
+                                info["video_current_time"] = video_info["current_time"]
+                                info["video_total_time"] = video_info["total_time"]
+                                info["video_position"] = video_info["position"]
+                                info["video_state"] = video_info["state"]
+                                break
+                        else:
+                            # Fallback - set default values
+                            info["video_current_time"] = 0.0
+                            info["video_total_time"] = 0.0
+                            info["video_position"] = 0.0
+                            info["video_state"] = "unknown"
+                    except Exception as e:
+                        log_error(f"Error getting video info: {e}", component="overlay")
+                        info["video_current_time"] = 0.0
+                        info["video_total_time"] = 0.0
+                        info["video_position"] = 0.0
+                        info["video_state"] = "error"
                 else:
                     info["vlc_status"] = "Not running (Python VLC not detected)"
                     info["vlc_status_class"] = "error"
+                    info["video_current_time"] = 0.0
+                    info["video_total_time"] = 0.0
+                    info["video_position"] = 0.0
+                    info["video_state"] = "stopped"
 
             except Exception as e:
                 info["vlc_status"] = f"Check failed: {e}"

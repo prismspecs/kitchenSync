@@ -375,3 +375,46 @@ class VLCVideoPlayer:
         self.vlc_instance = None
         self.vlc_player = None
         self.vlc_media = None
+
+    def get_video_info(self) -> dict:
+        """Get current video playback information"""
+        info = {
+            "current_time": 0.0,
+            "total_time": 0.0,
+            "position": 0.0,
+            "is_playing": False,
+            "state": "stopped",
+        }
+
+        try:
+            if self.vlc_player:
+                # Get current playback time in seconds
+                current_ms = self.vlc_player.get_time()
+                if current_ms >= 0:
+                    info["current_time"] = current_ms / 1000.0
+
+                # Get total video length in seconds
+                length_ms = self.vlc_player.get_length()
+                if length_ms > 0:
+                    info["total_time"] = length_ms / 1000.0
+
+                # Get position as percentage (0.0 to 1.0)
+                position = self.vlc_player.get_position()
+                if position >= 0:
+                    info["position"] = position
+
+                # Get player state
+                if VLC_PYTHON_AVAILABLE:
+                    import vlc
+
+                    state = self.vlc_player.get_state()
+                    if state:
+                        info["state"] = (
+                            str(state).split(".")[-1].lower()
+                        )  # Extract state name
+                        info["is_playing"] = state == vlc.State.Playing
+
+        except Exception as e:
+            log_error(f"Error getting video info: {e}", component="vlc")
+
+        return info
