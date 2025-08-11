@@ -8,15 +8,9 @@ Type=simple
 User=kitchensync
 Group=kitchensync
 WorkingDirectory=/home/kitchensync/kitchenSync
-ExecStart=/usr/bin/python3 /home/kitchensync/kitchenSync/kitchensync.py
+ExecStart=/home/kitchensync/kitchenSync/start_clean.sh
 Restart=always
 RestartSec=10
-
-# Essential display environment
-Environment=DISPLAY=:0
-Environment=XAUTHORITY=/home/kitchensync/.Xauthority
-Environment=XDG_RUNTIME_DIR=/run/user/1000
-Environment=HOME=/home/kitchensync
 
 # Wait for desktop to be ready
 ExecStartPre=/bin/sleep 30

@@ -306,9 +306,8 @@ class VLCVideoPlayer:
             "--no-snapshot-preview",
             "--network-caching=0",
             "--file-caching=300",
-            "--vout=x11",
-            "--aout=alsa",  # Try ALSA first
-            "--x11-display=:0",
+            # Let VLC auto-detect display backend instead of forcing X11
+            "--aout=alsa",
             "--file-logging",
             f"--logfile={paths['vlc_main']}",
             "--verbose=2",
@@ -324,10 +323,9 @@ class VLCVideoPlayer:
             "--no-snapshot-preview",
             "--network-caching=0",
             "--file-caching=300",
-            "--vout=x11",
+            # Let VLC auto-detect display backend
             "--aout=dummy",  # Use dummy audio to prevent ALSA crashes
             "--no-audio",  # Disable audio output completely
-            "--x11-display=:0",
             "--file-logging",
             f"--logfile={paths['vlc_main']}",
             "--verbose=2",
