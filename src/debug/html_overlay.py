@@ -571,30 +571,34 @@ class HTMLDebugOverlay:
                             with self.state_lock:
                                 state_video_file = self.state.get("video_file", "None")
 
-                            # If we have a valid video file from update_debug_info, use it
-                            if (
-                                state_video_file
-                                and state_video_file != "No video"
-                                and state_video_file != "None"
-                            ):
-                                info["video_file"] = os.path.basename(state_video_file)
-                            # Otherwise try to get from video player
-                            elif (
-                                hasattr(self.video_player, "video_file")
-                                and self.video_player.video_file
-                            ):
-                                info["video_file"] = os.path.basename(
-                                    self.video_player.video_file
-                                )
-                            elif (
-                                hasattr(self.video_player, "current_video")
-                                and self.video_player.current_video
-                            ):
-                                info["video_file"] = os.path.basename(
-                                    self.video_player.current_video
-                                )
-                            else:
-                                info["video_file"] = "None"
+                            # Get video file - prioritize state from update_debug_info
+                            try:
+                                if (
+                                    state_video_file
+                                    and state_video_file != "No video"
+                                    and state_video_file != "None"
+                                ):
+                                    info["video_file"] = os.path.basename(state_video_file)
+                                # Otherwise try to get from video player
+                                elif (
+                                    hasattr(self.video_player, "video_file")
+                                    and self.video_player.video_file
+                                ):
+                                    info["video_file"] = os.path.basename(
+                                        self.video_player.video_file
+                                    )
+                                elif (
+                                    hasattr(self.video_player, "current_video")
+                                    and self.video_player.current_video
+                                ):
+                                    info["video_file"] = os.path.basename(
+                                        self.video_player.current_video
+                                    )
+                                else:
+                                    info["video_file"] = "None"
+                            except Exception as e:
+                                log_error(f"Error getting video file name: {e}", component="overlay")
+                                info["video_file"] = "Error getting filename"
 
                             log_info(
                                 f"Video info: {video_info['current_time']:.1f}s / {video_info['total_time']:.1f}s ({video_info['state']}) - {info.get('video_file', 'No file')}",
@@ -677,35 +681,45 @@ class HTMLDebugOverlay:
                 log_info(f"Log paths: {paths}", component="overlay")
 
                 # Recent system logs
-                if os.path.exists(paths["system"]):
-                    with open(paths["system"], "r") as f:
-                        lines = f.readlines()
-                        recent = lines[-20:] if len(lines) > 20 else lines
-                        info["recent_logs"] = "".join(recent)
-                        log_info(
-                            f"Read {len(recent)} lines from system log",
-                            component="overlay",
-                        )
+                system_path = paths["system"]
+                if system_path and os.path.exists(system_path):
+                    try:
+                        with open(system_path, "r") as f:
+                            lines = f.readlines()
+                            recent = lines[-20:] if len(lines) > 20 else lines
+                            info["recent_logs"] = "".join(recent)
+                            log_info(
+                                f"Read {len(recent)} lines from system log",
+                                component="overlay",
+                            )
+                    except Exception as e:
+                        info["recent_logs"] = f"Error reading system log: {e}"
+                        log_error(f"Error reading system log: {e}", component="overlay")
                 else:
                     log_warning(
-                        f"System log file not found: {paths['system']}",
+                        f"System log file not found: {system_path}",
                         component="overlay",
                     )
                     info["recent_logs"] = "System log file not found"
 
                 # Recent VLC logs
-                if os.path.exists(paths["vlc_main"]):
-                    with open(paths["vlc_main"], "r") as f:
-                        lines = f.readlines()
-                        recent = lines[-20:] if len(lines) > 20 else lines
-                        info["vlc_logs"] = "".join(recent)
-                        log_info(
-                            f"Read {len(recent)} lines from VLC log",
-                            component="overlay",
-                        )
+                vlc_path = paths["vlc_main"]
+                if vlc_path and os.path.exists(vlc_path):
+                    try:
+                        with open(vlc_path, "r") as f:
+                            lines = f.readlines()
+                            recent = lines[-20:] if len(lines) > 20 else lines
+                            info["vlc_logs"] = "".join(recent)
+                            log_info(
+                                f"Read {len(recent)} lines from VLC log",
+                                component="overlay",
+                            )
+                    except Exception as e:
+                        info["vlc_logs"] = f"Error reading VLC log: {e}"
+                        log_error(f"Error reading VLC log: {e}", component="overlay")
                 else:
                     log_warning(
-                        f"VLC log file not found: {paths['vlc_main']}",
+                        f"VLC log file not found: {vlc_path}",
                         component="overlay",
                     )
                     info["vlc_logs"] = "VLC log file not found"
