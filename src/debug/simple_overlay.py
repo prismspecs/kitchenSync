@@ -39,6 +39,15 @@ class SimpleDebugOverlay:
             if not os.environ.get("DISPLAY") and not os.environ.get("SDL_VIDEODRIVER"):
                 raise Exception("No display available")
 
+            # Force software rendering and disable OpenGL completely
+            os.environ["SDL_VIDEODRIVER"] = "x11"
+            os.environ["SDL_VIDEO_GL"] = "0"
+            os.environ["SDL_VIDEO_OPENGL"] = "0"
+            os.environ["SDL_VIDEO_OPENGL_ES"] = "0"
+            os.environ["SDL_VIDEO_OPENGL_ES2"] = "0"
+            os.environ["SDL_VIDEO_VULKAN"] = "0"
+            os.environ["SDL_VIDEO_METAL"] = "0"
+
             pygame.init()
             pygame.font.init()
             pygame.display.init()
@@ -88,11 +97,11 @@ class SimpleDebugOverlay:
             # IMPORTANT: set position before creating the window
             os.environ["SDL_VIDEO_WINDOW_POS"] = f"{pos_x},{pos_y}"
 
-            # Create a small overlay window
+            # Create a small overlay window with minimal flags
             self.width = overlay_width
             self.height = overlay_height
-            # Use software rendering to avoid GL context issues
-            flags = pygame.SWSURFACE | pygame.DOUBLEBUF | pygame.RESIZABLE
+            # Use only software rendering, no double buffering or resizing
+            flags = pygame.SWSURFACE
             self.screen = pygame.display.set_mode((self.width, self.height), flags)
             pygame.display.set_caption(f"KitchenSync Debug - {pi_id}")
 
@@ -155,7 +164,7 @@ class SimpleDebugOverlay:
 
         clock = pygame.time.Clock()
         error_count = 0
-        max_errors = 3
+        max_errors = 5  # Give it more chances
 
         while self.running and self.screen:
             try:
@@ -170,9 +179,9 @@ class SimpleDebugOverlay:
                 # Draw debug info
                 self._draw_debug_info()
 
-                # Update display
-                pygame.display.flip()
-                clock.tick(30)  # 30 FPS
+                # Update display - use update() instead of flip() for software rendering
+                pygame.display.update()
+                clock.tick(10)  # Lower FPS for software rendering
 
                 # Reset error count on successful frame
                 error_count = 0
@@ -189,6 +198,7 @@ class SimpleDebugOverlay:
                     error_count >= max_errors
                     or "GL context" in str(e)
                     or "BadAccess" in str(e)
+                    or "OpenGL" in str(e)
                 ):
                     log_warning(
                         "Switching to file debug due to persistent display errors",
@@ -199,7 +209,7 @@ class SimpleDebugOverlay:
                     break
 
                 # Wait a bit before retrying
-                time.sleep(1)
+                time.sleep(2)
 
     def _init_file_fallback(self):
         """Initialize file debug as fallback"""
