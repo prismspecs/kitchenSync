@@ -281,20 +281,30 @@ class HTMLDebugOverlay:
             import threading
             import time
 
-            # Open Firefox (non-blocking)
+            # Kill any existing Firefox processes first to avoid tab accumulation
+            try:
+                subprocess.run(["pkill", "-f", "firefox"], check=False, timeout=5)
+                time.sleep(1)  # Give it time to close
+            except:
+                pass
+
+            # Open Firefox with a new profile (non-blocking)
             subprocess.Popen(
                 [
                     "firefox",
+                    "--new-instance",
                     "--new-window",
+                    "--profile",
+                    "/tmp/firefox-debug-profile",
                     f"file://{self.html_file}",
                 ],
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
             )
 
-            # Position window after a delay (in background thread)
+            # Position window after a longer delay (in background thread)
             def position_window():
-                time.sleep(3)  # Wait for window to appear
+                time.sleep(8)  # Wait longer for Firefox to fully load
                 try:
                     # Try multiple window title patterns for Firefox
                     patterns = [
