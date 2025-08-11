@@ -276,19 +276,34 @@ class HTMLDebugOverlay:
     def open_in_browser(self):
         """Open the HTML file in the default browser"""
         try:
-            # Simple browser open with positioning
+            # Open browser and then position with wmctrl
             import subprocess
+            import time
 
+            # Open chromium
             subprocess.run(
                 [
                     "chromium",
                     "--new-window",
-                    "--window-size=640,1080",
-                    "--window-position=1280,0",
                     f"file://{self.html_file}",
                 ],
                 check=False,
             )
+
+            # Wait a moment for window to appear
+            time.sleep(2)
+
+            # Use wmctrl to position and resize the window
+            try:
+                subprocess.run(
+                    ["wmctrl", "-r", "KitchenSync Debug", "-e", "0,1280,0,640,1080"],
+                    check=False,
+                    timeout=5,
+                )
+                log_info("Positioned Chrome window with wmctrl")
+            except:
+                log_warning("Could not position Chrome window with wmctrl")
+
             log_info(f"HTML debug overlay opened in browser: {self.html_file}")
         except Exception as e:
             log_error(f"Failed to open HTML overlay in browser: {e}")

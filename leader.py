@@ -104,7 +104,14 @@ class LeaderPi:
         # Start video playback first so VLC creates its window
         if self.video_player.video_path:
             print("🎬 Starting video playback...")
-            self.video_player.start_playback()
+            log_info("About to start video playback", component="leader")
+            try:
+                result = self.video_player.start_playback()
+                log_info(f"Video playback start result: {result}", component="leader")
+                if not result:
+                    log_error("Video playback failed to start", component="leader")
+            except Exception as e:
+                log_error(f"Exception starting video playback: {e}", component="leader")
 
         # Now create overlay (after VLC window exists) so both windows are visible
         if self.config.debug_mode and self.html_debug is not None:
