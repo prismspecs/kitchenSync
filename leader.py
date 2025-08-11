@@ -107,25 +107,24 @@ class LeaderPi:
             self.video_player.start_playback()
 
         # Now create overlay (after VLC window exists) so both windows are visible
-        if self.config.debug_mode and self.html_debug is None:
-            self.html_debug = HTMLDebugManager("leader-pi", is_leader=True)
-            if self.html_debug.overlay:
-                log_info("HTML overlay created", component="leader")
-            else:
-                log_warning(
-                    "Failed to create overlay - falling back to file debug",
-                    component="leader",
+        if self.config.debug_mode and self.html_debug is not None:
+            # HTML overlay already exists from __init__, just ensure it's visible
+            log_info("HTML overlay already exists", component="leader")
+        else:
+            log_warning(
+                "HTML overlay not found - falling back to file debug",
+                component="leader",
+            )
+            # Fallback to file debug if overlay fails
+            self.debug_file = "/tmp/kitchensync_leader_debug.txt"
+            with open(self.debug_file, "w") as f:
+                f.write("KitchenSync Leader Debug (Fallback)\n")
+                f.write("=" * 40 + "\n")
+                f.write(f"Started: {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
+                f.write(
+                    f"Video: {os.path.basename(self.video_path) if self.video_path else 'None'}\n"
                 )
-                # Fallback to file debug if pygame fails
-                self.debug_file = "/tmp/kitchensync_leader_debug.txt"
-                with open(self.debug_file, "w") as f:
-                    f.write("KitchenSync Leader Debug (Fallback)\n")
-                    f.write("=" * 40 + "\n")
-                    f.write(f"Started: {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
-                    f.write(
-                        f"Video: {os.path.basename(self.video_path) if self.video_path else 'None'}\n"
-                    )
-                    f.write("=" * 40 + "\n\n")
+                f.write("=" * 40 + "\n\n")
 
         # Start networking
         self.sync_broadcaster.start_broadcasting(self.system_state.start_time)

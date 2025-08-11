@@ -169,9 +169,6 @@ class VLCVideoPlayer:
             # Start playback
             self.vlc_player.play()
 
-            # Force VLC window positioning after it starts
-            self._force_vlc_position()
-
             log_info("VLC playback started successfully")
             return True
 
@@ -325,14 +322,7 @@ class VLCVideoPlayer:
         """Get VLC command line arguments"""
         paths = log_file_paths()
         return [
-            # Window positioning - place VLC on left side, leave space for debug overlay
-            "--no-fullscreen",
-            "--width=1280",
-            "--height=720",
-            "--video-x=0",  # Left side of screen
-            "--video-y=0",  # Top of screen
-            "--no-video-deco",  # No window decorations
-            # Minimal config - let VLC use defaults
+            # Simple, working VLC configuration
             "--file-logging",
             f"--logfile={paths['vlc_main']}",
             "--verbose=2",
