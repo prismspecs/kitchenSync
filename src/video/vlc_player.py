@@ -56,7 +56,14 @@ class VLCVideoPlayer:
         if not self.video_path:
             raise VLCPlayerError("No video loaded")
 
-        if VLC_PYTHON_AVAILABLE:
+        # Force command-line VLC for fullscreen in production mode
+        if not self.debug_mode:
+            log_info(
+                "Production mode: using command-line VLC for fullscreen",
+                component="vlc",
+            )
+            return self._start_with_command_vlc()
+        elif VLC_PYTHON_AVAILABLE:
             return self._start_with_python_vlc()
         else:
             return self._start_with_command_vlc()
