@@ -531,87 +531,56 @@ class HTMLDebugOverlay:
             except Exception:
                 pass
 
-            # Check VLC process with multiple methods
+                # Check VLC process - VLC runs via Python bindings, not separate process
             try:
-                # Try pgrep first
-                result = subprocess.run(
-                    ["pgrep", "-f", "vlc"], capture_output=True, text=True, timeout=5
+                # VLC runs embedded in Python, so look for the main Python process
+                vlc_found = False
+                vlc_pid = None
+
+                # Check if our main process (which contains VLC) is running
+                main_result = subprocess.run(
+                    ["pgrep", "-f", "leader.py"],
+                    capture_output=True,
+                    text=True,
+                    timeout=5,
                 )
 
-                # Debug logging
                 log_info(
-                    f"pgrep result: returncode={result.returncode}, stdout='{result.stdout.strip()}'",
+                    f"pgrep leader.py result: returncode={main_result.returncode}, stdout='{main_result.stdout.strip()}'",
                     component="overlay",
                 )
 
-                # Also try pgrep for any video-related processes
-                video_result = subprocess.run(
-                    ["pgrep", "-f", "video"], capture_output=True, text=True, timeout=5
-                )
-                log_info(
-                    f"pgrep video result: returncode={video_result.returncode}, stdout='{video_result.stdout.strip()}'",
-                    component="overlay",
-                )
+                if main_result.returncode == 0:
+                    # Main process is running, check if VLC is active within it
+                    # We can assume VLC is running if the main process is running and we have VLC logs
+                    try:
+                        from src.core.logger import log_file_paths
 
-                if result.returncode == 0:
-                    vlc_pids = result.stdout.strip().split("\n")
-                    vlc_pids = [
-                        pid for pid in vlc_pids if pid.strip()
-                    ]  # Remove empty strings
-                    info["vlc_status"] = f'Running (PID: {", ".join(vlc_pids)})'
-                    info["vlc_status_class"] = "good"
-                    info["vlc_process"] = f'PIDs: {", ".join(vlc_pids)}'
-                else:
-                    # Try alternative: ps aux | grep vlc
-                    ps_result = subprocess.run(
-                        ["ps", "aux"], capture_output=True, text=True, timeout=5
-                    )
-                    if ps_result.returncode == 0:
-                        vlc_processes = []
-                        vlc_lines = []
-                        for line in ps_result.stdout.split("\n"):
-                            line_lower = line.lower()
+                        paths = log_file_paths()
+
+                        # Check if VLC log file exists and has recent content
+                        import os
+
+                        if os.path.exists(paths["vlc_main"]):
+                            stat = os.stat(paths["vlc_main"])
+                            import time
+
                             if (
-                                (
-                                    "vlc" in line_lower
-                                    or "media" in line_lower
-                                    or "video" in line_lower
-                                )
-                                and "grep" not in line_lower
-                                and line.strip()
-                            ):
-                                vlc_lines.append(line.strip())
-                                # Extract PID (second column)
-                                parts = line.split()
-                                if len(parts) > 1:
-                                    vlc_processes.append(parts[1])
+                                time.time() - stat.st_mtime < 60
+                            ):  # Modified within last minute
+                                vlc_found = True
+                                vlc_pid = main_result.stdout.strip().split("\n")[0]
+                    except:
+                        pass
 
-                        # Debug logging - look for user processes specifically
-                        user_processes = []
-                        for line in ps_result.stdout.split("\n"):
-                            if "kitchensync" in line and line.strip():
-                                user_processes.append(line.strip())
+                if vlc_found and vlc_pid:
+                    info["vlc_status"] = f"Running (embedded in PID: {vlc_pid})"
+                    info["vlc_status_class"] = "good"
+                    info["vlc_process"] = f"Python VLC bindings in PID: {vlc_pid}"
+                else:
+                    info["vlc_status"] = "Not running (Python VLC not detected)"
+                    info["vlc_status_class"] = "error"
 
-                        log_info(
-                            f"ps aux found VLC lines: {vlc_lines}", component="overlay"
-                        )
-                        log_info(
-                            f"KitchenSync user processes: {user_processes[:5]}",
-                            component="overlay",
-                        )
-
-                        if vlc_processes:
-                            info["vlc_status"] = (
-                                f'Running (PID: {", ".join(vlc_processes)})'
-                            )
-                            info["vlc_status_class"] = "good"
-                            info["vlc_process"] = f'PIDs: {", ".join(vlc_processes)}'
-                        else:
-                            info["vlc_status"] = "Not running (no processes found)"
-                            info["vlc_status_class"] = "error"
-                    else:
-                        info["vlc_status"] = "Not running (ps command failed)"
-                        info["vlc_status_class"] = "error"
             except Exception as e:
                 info["vlc_status"] = f"Check failed: {e}"
                 info["vlc_status_class"] = "warning"
