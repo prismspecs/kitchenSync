@@ -295,14 +295,22 @@ class HTMLDebugOverlay:
 
             # Use wmctrl to position and resize the window
             try:
-                subprocess.run(
+                # Try different window title patterns
+                result1 = subprocess.run(
                     ["wmctrl", "-r", "KitchenSync Debug", "-e", "0,1280,0,640,1080"],
                     check=False,
                     timeout=5,
                 )
+                if result1.returncode != 0:
+                    # Try with chromium window
+                    subprocess.run(
+                        ["wmctrl", "-r", "chromium", "-e", "0,1280,0,640,1080"],
+                        check=False,
+                        timeout=5,
+                    )
                 log_info("Positioned Chrome window with wmctrl")
-            except:
-                log_warning("Could not position Chrome window with wmctrl")
+            except Exception as e:
+                log_warning(f"Could not position Chrome window with wmctrl: {e}")
 
             log_info(f"HTML debug overlay opened in browser: {self.html_file}")
         except Exception as e:

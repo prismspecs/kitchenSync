@@ -376,9 +376,11 @@ def main():
             print("🎯 Leader Pi starting in automatic mode...")
             print("System will auto-start playback and run continuously.")
             print("Press Ctrl+C to stop.\n")
+            log_info("About to call start_system() in auto mode", component="autostart")
 
             # Auto-start the system
             leader.start_system()
+            log_info("start_system() call completed", component="autostart")
 
             # Keep running until interrupted
             try:
