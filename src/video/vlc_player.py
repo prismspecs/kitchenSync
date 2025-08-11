@@ -306,9 +306,9 @@ class VLCVideoPlayer:
             "--no-snapshot-preview",
             "--network-caching=0",
             "--file-caching=300",
-            # Force Wayland for both window and video output
-            "--vout=wl_xdg_shell",
-            "--vout-display=wl_xdg_shell",  # Force video output backend
+            # Use OpenGL for Embedded Systems 2 (recommended for Pi4)
+            "--vout=gl",  # OpenGL video output
+            "--gl-api=egl",  # EGL API for embedded systems
             "--aout=alsa",
             "--file-logging",
             f"--logfile={paths['vlc_main']}",
@@ -325,9 +325,9 @@ class VLCVideoPlayer:
             "--no-snapshot-preview",
             "--network-caching=0",
             "--file-caching=300",
-            # Force Wayland for both window and video output
-            "--vout=wl_xdg_shell",
-            "--vout-display=wl_xdg_shell",  # Force video output backend
+            # Use OpenGL for Embedded Systems 2 (recommended for Pi4)
+            "--vout=gl",  # OpenGL video output
+            "--gl-api=egl",  # EGL API for embedded systems
             "--aout=dummy",  # Use dummy audio to prevent ALSA crashes
             "--no-audio",  # Disable audio output completely
             "--file-logging",
