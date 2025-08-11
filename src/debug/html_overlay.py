@@ -298,10 +298,11 @@ class HTMLDebugOverlay:
                 try:
                     # Try multiple window title patterns for Firefox
                     patterns = [
+                        "KitchenSync Debug",
+                        "KitchenSync debug",
                         "Mozilla Firefox",
                         "Firefox",
                         "firefox",
-                        "KitchenSync Debug",
                         "New Tab",
                     ]
                     for pattern in patterns:
