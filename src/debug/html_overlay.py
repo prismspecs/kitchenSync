@@ -387,6 +387,7 @@ class HTMLDebugOverlay:
         try:
             import subprocess
             import psutil
+            import os
             from datetime import datetime
 
             info = {
@@ -554,7 +555,10 @@ class HTMLDebugOverlay:
                             self.video_player, "get_video_info"
                         ):
                             video_info = self.video_player.get_video_info()
-                            log_info(f"Raw video info from player: {video_info}", component="overlay")
+                            log_info(
+                                f"Raw video info from player: {video_info}",
+                                component="overlay",
+                            )
                             info["video_current_time"] = video_info["current_time"]
                             info["video_total_time"] = video_info["total_time"]
                             info["video_position"] = video_info["position"]
@@ -574,14 +578,12 @@ class HTMLDebugOverlay:
                                 and state_video_file != "No video"
                                 and state_video_file != "None"
                             ):
-                                import os
                                 info["video_file"] = os.path.basename(state_video_file)
                             # Otherwise try to get from video player
                             elif (
                                 hasattr(self.video_player, "video_file")
                                 and self.video_player.video_file
                             ):
-                                import os
                                 info["video_file"] = os.path.basename(
                                     self.video_player.video_file
                                 )
@@ -589,7 +591,6 @@ class HTMLDebugOverlay:
                                 hasattr(self.video_player, "current_video")
                                 and self.video_player.current_video
                             ):
-                                import os
                                 info["video_file"] = os.path.basename(
                                     self.video_player.current_video
                                 )
