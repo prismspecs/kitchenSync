@@ -219,8 +219,32 @@ class VLCVideoPlayer:
             log_info(f"VLC play() returned: {result}", component="vlc")
 
             if result == 0:
-                log_info("VLC playback started successfully", component="vlc")
+                log_info("VLC playbook started successfully", component="vlc")
                 self.is_playing = True
+
+                # Set fullscreen for production mode (with delay to avoid crashes)
+                if not self.debug_mode:
+
+                    def set_fullscreen_delayed():
+                        try:
+                            # Wait for VLC to fully initialize
+                            import time
+
+                            time.sleep(2)
+                            if self.vlc_player and self.is_playing:
+                                self.vlc_player.set_fullscreen(True)
+                                log_info("Enabled fullscreen mode", component="vlc")
+                        except Exception as e:
+                            log_warning(
+                                f"Could not enable fullscreen: {e}", component="vlc"
+                            )
+
+                    import threading
+
+                    threading.Thread(target=set_fullscreen_delayed, daemon=True).start()
+                else:
+                    log_info("Debug mode: keeping windowed", component="vlc")
+
                 return True
             else:
                 log_error(f"VLC play() failed with code: {result}", component="vlc")
