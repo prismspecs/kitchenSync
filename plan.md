@@ -214,6 +214,7 @@ To troubleshoot boot-time display issues (VLC vs. overlay), the system writes di
   - Stdout: `/tmp/kitchensync_vlc_stdout.log`
   - Stderr: `/tmp/kitchensync_vlc_stderr.log`
 - Overlay (file-based fallback): `/tmp/kitchensync_debug_leader-pi.txt`
+- Emergency startup log: `/tmp/kitchensync_startup.log` (captures import failures)
 
 What to check after reboot:
 
@@ -229,6 +230,47 @@ What to check after reboot:
    - `tail -n 200 /tmp/kitchensync_debug_leader-pi.txt`
    - Confirms overlay updates, current time, MIDI info; indicates pygame/display fallbacks
 
+4) If no logs appear at all
+   - Check emergency startup log: `cat /tmp/kitchensync_startup.log`
+   - This captures import failures and path issues before main logging starts
+
 Notes
 - Logs are appended with timestamps; they survive until next reboot or manual cleanup.
 - Environment snapshot includes `DISPLAY`, `XDG_SESSION_TYPE`, `XDG_RUNTIME_DIR`, `SDL_VIDEODRIVER`, `WAYLAND_DISPLAY`, `XAUTHORITY`.
+- Emergency logging ensures startup issues are captured even if main logging fails.
+
+## Testing and Deployment (2025-08)
+
+### Quick Test Procedure
+
+1. **Test logging first** (ensures system works):
+   ```bash
+   python3 test_logging.py
+   ```
+
+2. **Deploy and test service**:
+   ```bash
+   ./deploy_and_test.sh
+   ```
+
+3. **Monitor logs in real-time**:
+   ```bash
+   tail -f /tmp/kitchensync_system.log
+   tail -f /tmp/kitchensync_vlc_stderr.log
+   tail -f /tmp/kitchensync_debug_leader-pi.txt
+   ```
+
+### Service Configuration
+
+The systemd service now includes proper environment variables:
+- `DISPLAY=:0` - X11 display
+- `XAUTHORITY=/home/kitchensync/.Xauthority` - X11 authentication
+- `XDG_RUNTIME_DIR=/run/user/1000` - Wayland runtime
+- `HOME=/home/kitchensync` - User home directory
+
+### Troubleshooting Steps
+
+1. **If no logs appear**: Check `/tmp/kitchensync_startup.log`
+2. **If VLC fails**: Check `/tmp/kitchensync_vlc_stderr.log` for vout/display errors
+3. **If overlay is blank**: Check `/tmp/kitchensync_debug_leader-pi.txt` for pygame fallback
+4. **If service won't start**: Check `systemctl status kitchensync.service` and journal logs

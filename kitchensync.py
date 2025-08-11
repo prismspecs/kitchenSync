@@ -7,15 +7,53 @@ Clean, modular implementation using the new architecture
 import os
 import sys
 import subprocess
+import time
 from pathlib import Path
 
-# Add src to path
-sys.path.insert(0, str(Path(__file__).parent / "src"))
+# Emergency logging - capture startup issues
+try:
+    with open("/tmp/kitchensync_startup.log", "w") as f:
+        f.write(f"KitchenSync startup at {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
+        f.write(f"PID: {os.getpid()}\n")
+        f.write(f"User: {os.getenv('USER', 'unknown')}\n")
+        f.write(f"Working dir: {os.getcwd()}\n")
+        f.write(f"Python: {sys.executable}\n")
+        f.write(f"Args: {sys.argv}\n")
+        f.write("=" * 50 + "\n")
+except Exception as e:
+    # Last resort - write to stderr
+    print(f"Emergency logging failed: {e}", file=sys.stderr)
 
-from config import ConfigManager, USBConfigLoader
-from video import VideoFileManager
-from ui import ErrorDisplay
-from core.logger import log_info, log_warning, log_error, snapshot_env, log_file_paths
+# Add src to path
+try:
+    sys.path.insert(0, str(Path(__file__).parent / "src"))
+    with open("/tmp/kitchensync_startup.log", "a") as f:
+        f.write("✓ Added src to path\n")
+except Exception as e:
+    with open("/tmp/kitchensync_startup.log", "a") as f:
+        f.write(f"✗ Failed to add src to path: {e}\n")
+    print(f"Failed to add src to path: {e}", file=sys.stderr)
+
+try:
+    from config import ConfigManager, USBConfigLoader
+    from video import VideoFileManager
+    from ui import ErrorDisplay
+    from core.logger import (
+        log_info,
+        log_warning,
+        log_error,
+        snapshot_env,
+        log_file_paths,
+    )
+
+    with open("/tmp/kitchensync_startup.log", "a") as f:
+        f.write("✓ All imports successful\n")
+
+except Exception as e:
+    with open("/tmp/kitchensync_startup.log", "a") as f:
+        f.write(f"✗ Import failed: {e}\n")
+    print(f"Import failed: {e}", file=sys.stderr)
+    sys.exit(1)
 
 
 class KitchenSyncAutoStart:
