@@ -172,13 +172,7 @@ class DebugTemplateManager:
             "looping_status": (
                 "Enabled" if system_info.get("looping_enabled", False) else "Disabled"
             ),
-            # MIDI information
-            "midi_current": self._format_midi_event(system_info.get("midi_current")),
-            "midi_current_class": (
-                "highlight" if system_info.get("midi_current") else "warning"
-            ),
-            "midi_next": self._format_midi_event(system_info.get("midi_next")),
-            "midi_next_class": "info" if system_info.get("midi_next") else "warning",
+            # MIDI information (removed redundant current/next, keeping comprehensive lists)
             "midi_recent_html": self._format_midi_list(
                 system_info.get("midi_recent", []), "midi-recent"
             ),

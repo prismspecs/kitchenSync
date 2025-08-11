@@ -35,8 +35,7 @@ class HTMLDebugOverlay:
             "total_time": 0.0,
             "session_time": 0.0,
             "video_position": None,
-            "midi_current": None,
-            "midi_next": None,
+
             "midi_recent": [],
             "midi_upcoming": [],
             "is_leader": False,
@@ -194,18 +193,7 @@ class HTMLDebugOverlay:
                 f'id="leader-mode" class="{"success" if state["is_leader"] else "info"}">{"Yes" if state["is_leader"] else "No"}</span>',
             )
 
-            # Update MIDI events
-            current_midi = self._format_midi_event(state["midi_current"])
-            next_midi = self._format_midi_event(state["midi_next"])
-
-            html_content = html_content.replace(
-                f'id="midi-current">\n            <strong>Current:</strong> \n            <span class="{"midi-event" if state["midi_current"] else "warning"}">\n                {self._format_midi_event(state["midi_current"]) if state["midi_current"] else "None"}\n            </span>',
-                f'id="midi-current">\n            <strong>Current:</strong> \n            <span class="{"midi-event" if state["midi_current"] else "warning"}">\n                {current_midi}\n            </span>',
-            )
-            html_content = html_content.replace(
-                f'id="midi-next">\n            <strong>Next:</strong> \n            <span class="{"midi-event" if state["midi_next"] else "info"}">\n                {self._format_midi_event(state["midi_next"]) if state["midi_next"] else "None"}\n            </span>',
-                f'id="midi-next">\n            <strong>Next:</strong> \n            <span class="{"midi-event" if state["midi_next"] else "info"}">\n                {next_midi}\n            </span>',
-            )
+            # MIDI current/next removed - now only using comprehensive Recent/Upcoming lists
 
             # Update timestamp
             html_content = html_content.replace(
@@ -790,28 +778,13 @@ class HTMLDebugManager:
     ):
         """Update debug information - compatibility method for the debug system"""
         try:
-            # Process MIDI info
-            midi_current = current_cues[0] if current_cues else None
-            midi_next = None
-
-            if upcoming_cues:
-                next_cue = upcoming_cues[0]
-                time_until = next_cue.get("time", 0) - current_time
-                midi_next = {
-                    "type": next_cue.get("type", "unknown"),
-                    "channel": next_cue.get("channel", 1),
-                    "time_until": time_until,
-                }
-
-            # Update overlay state
+            # Update overlay state (removed redundant midi_current/midi_next processing)
             self.overlay.update_state(
                 video_file=video_file,
                 current_time=current_time,
                 total_time=total_time,
                 session_time=session_time,
                 video_position=video_position,
-                midi_current=midi_current,
-                midi_next=midi_next,
                 midi_recent=current_cues[-5:] if current_cues else [],
                 midi_upcoming=upcoming_cues[:5] if upcoming_cues else [],
                 video_loop_count=video_loop_count,
