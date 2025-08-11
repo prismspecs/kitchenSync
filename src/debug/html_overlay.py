@@ -544,6 +544,15 @@ class HTMLDebugOverlay:
                     component="overlay",
                 )
 
+                # Also try pgrep for any video-related processes
+                video_result = subprocess.run(
+                    ["pgrep", "-f", "video"], capture_output=True, text=True, timeout=5
+                )
+                log_info(
+                    f"pgrep video result: returncode={video_result.returncode}, stdout='{video_result.stdout.strip()}'",
+                    component="overlay",
+                )
+
                 if result.returncode == 0:
                     vlc_pids = result.stdout.strip().split("\n")
                     vlc_pids = [
@@ -577,17 +586,17 @@ class HTMLDebugOverlay:
                                 if len(parts) > 1:
                                     vlc_processes.append(parts[1])
 
-                        # Debug logging - also log ALL processes to see what's running
-                        all_processes = []
-                        for line in ps_result.stdout.split("\n")[:20]:  # First 20 lines
-                            if line.strip():
-                                all_processes.append(line.strip())
+                        # Debug logging - look for user processes specifically
+                        user_processes = []
+                        for line in ps_result.stdout.split("\n"):
+                            if "kitchensync" in line and line.strip():
+                                user_processes.append(line.strip())
 
                         log_info(
                             f"ps aux found VLC lines: {vlc_lines}", component="overlay"
                         )
                         log_info(
-                            f"Sample processes running: {all_processes[:10]}",
+                            f"KitchenSync user processes: {user_processes[:5]}",
                             component="overlay",
                         )
 
