@@ -174,35 +174,34 @@ I am developing this on a separate computer than the one on which it will run. C
 
 The project has successfully achieved its core objectives and is ready for production deployment with professional-grade reliability and ease of use.
 
-## Debug Overlay Refactor (2024-06)
+## Debug and Monitoring System (2025-08)
 
-- The debug overlay (pygame window) now manages its own update loop and event handling in a dedicated thread.
-- The main app (leader/collaborator) no longer runs a debug update thread or loop.
-- The main app only calls `set_state` on the overlay to update info (video file, playback time, id, leader status, MIDI info) when state changes (e.g., after each sync tick or playback event).
-- Only one overlay and one update loop exist per process, enforced by the overlay class.
-- The overlay is non-blocking, thread-safe, and robust against lag or duplicate windows.
-- This fixes previous issues with lag, duplicate windows, and missing info in debug mode.
+### HTML-Based Debug Overlay
 
-### Debug Overlay API (2024-06)
+The system features a modern HTML-based debug overlay that provides real-time monitoring:
 
-- `DebugOverlay(pi_id, video_file, use_pygame=True)`
-  - Creates and shows the overlay window, starts its own update thread.
-- `overlay.set_state(video_file=..., current_time=..., total_time=..., midi_data=..., is_leader=..., pi_id=...)`
-  - Updates the overlay's displayed state. Thread-safe.
-- `overlay.cleanup()`
-  - Closes the overlay and cleans up threads/resources.
+- **Firefox-based interface**: Opens automatically on system startup
+- **Auto-refreshing display**: Updates every 5 seconds with live data
+- **Window positioning**: Automatic side-by-side layout (VLC left, Firefox right)
+- **Live video timing**: Current playback time / total duration with progress percentage
+- **System status monitoring**: Service status, VLC state, process information
+- **Responsive design**: Clean, professional interface with status color coding
 
-### Usage Pattern
+### Implementation
 
-- Create the overlay after video file is found/loaded.
-- On each sync tick or playback event, call `set_state` with the latest info.
-- Do not run a separate debug update loop in the main app.
+- `HTMLDebugManager(pi_id, video_player)` - Main manager class
+- `HTMLDebugOverlay` - Handles HTML generation and browser integration
+- Direct VLC Python bindings integration for real-time video information
+- Background positioning using wmctrl for proper window layout
+- Comprehensive logging with component-specific tags
 
-### Benefits
+### Key Features
 
-- No lag or bloat from duplicate overlays or threads.
-- Overlay always shows the latest info (video file, time, id, leader status, MIDI info).
-- Overlay appears promptly and closes cleanly.
+- **Real-time video timing**: Shows current playback position and total duration
+- **VLC status detection**: Direct integration with VLC Python bindings
+- **Process monitoring**: Tracks system processes and service health
+- **Window management**: Automatic positioning for optimal viewing
+- **Error resilience**: Graceful fallbacks and comprehensive error handling
 
 ## Diagnostics and Logs (2025-08)
 
@@ -260,17 +259,28 @@ Notes
    tail -f /tmp/kitchensync_debug_leader-pi.txt
    ```
 
+### Current System Status
+
+The KitchenSync leader system is fully operational with:
+
+- **VLC video playback**: Stable playback with window positioning on left side
+- **HTML debug overlay**: Live-updating interface positioned on right side  
+- **Real-time monitoring**: Video timing, VLC status, and system health
+- **Systemd auto-start**: Reliable boot-time initialization
+- **Window management**: Proper side-by-side layout using wmctrl
+- **Error handling**: Comprehensive logging and graceful fallbacks
+
 ### Service Configuration
 
-The systemd service now includes proper environment variables:
-- `DISPLAY=:0` - X11 display
+The systemd service includes proper environment variables:
+- `DISPLAY=:0` - X11 display access
 - `XAUTHORITY=/home/kitchensync/.Xauthority` - X11 authentication
-- `XDG_RUNTIME_DIR=/run/user/1000` - Wayland runtime
-- `HOME=/home/kitchensync` - User home directory
+- `XDG_RUNTIME_DIR=/run/user/1000` - Runtime directory
+- User `kitchensync` with proper permissions
 
-### Troubleshooting Steps
+### Troubleshooting
 
-1. **If no logs appear**: Check `/tmp/kitchensync_startup.log`
-2. **If VLC fails**: Check `/tmp/kitchensync_vlc_stderr.log` for vout/display errors
-3. **If overlay is blank**: Check `/tmp/kitchensync_debug_leader-pi.txt` for pygame fallback
-4. **If service won't start**: Check `systemctl status kitchensync.service` and journal logs
+1. **Monitor system logs**: `tail -f /tmp/kitchensync_system.log`
+2. **Check VLC errors**: `tail -f /tmp/kitchensync_vlc_stderr.log`  
+3. **Service status**: `systemctl status kitchensync.service`
+4. **Window positioning**: Logs show wmctrl positioning results

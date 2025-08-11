@@ -564,19 +564,31 @@ class HTMLDebugOverlay:
 
                     # If we have a video player reference and can get video info, VLC is running
                     try:
-                        if self.video_player and hasattr(self.video_player, 'get_video_info'):
+                        if self.video_player and hasattr(
+                            self.video_player, "get_video_info"
+                        ):
                             # Try to get video info - if this works, VLC is definitely running
                             video_info = self.video_player.get_video_info()
-                            if video_info["total_time"] > 0 or video_info["current_time"] >= 0:
+                            if (
+                                video_info["total_time"] > 0
+                                or video_info["current_time"] >= 0
+                            ):
                                 vlc_found = True
-                                log_info("VLC detected as active (video player responsive)", component="overlay")
+                                log_info(
+                                    "VLC detected as active (video player responsive)",
+                                    component="overlay",
+                                )
                             else:
-                                log_info("VLC player exists but no video info available", component="overlay")
+                                log_info(
+                                    "VLC player exists but no video info available",
+                                    component="overlay",
+                                )
                         else:
                             # Fallback to log file check (old method)
                             from src.core.logger import log_file_paths
+
                             paths = log_file_paths()
-                            
+
                             import os
                             import time
 
@@ -588,16 +600,28 @@ class HTMLDebugOverlay:
                                     component="overlay",
                                 )
 
-                                if age_seconds < 300:  # Extended to 5 minutes instead of 1 minute
+                                if (
+                                    age_seconds < 300
+                                ):  # Extended to 5 minutes instead of 1 minute
                                     vlc_found = True
-                                    log_info("VLC detected as active (log file method)", component="overlay")
+                                    log_info(
+                                        "VLC detected as active (log file method)",
+                                        component="overlay",
+                                    )
                                 else:
-                                    log_info("VLC log file too old, considering inactive", component="overlay")
+                                    log_info(
+                                        "VLC log file too old, considering inactive",
+                                        component="overlay",
+                                    )
                             else:
-                                log_info("VLC log file does not exist", component="overlay")
-                                
+                                log_info(
+                                    "VLC log file does not exist", component="overlay"
+                                )
+
                     except Exception as e:
-                        log_error(f"Error checking VLC status: {e}", component="overlay")
+                        log_error(
+                            f"Error checking VLC status: {e}", component="overlay"
+                        )
                 else:
                     log_info("leader.py process not found", component="overlay")
 
