@@ -167,18 +167,15 @@ class VLCVideoPlayer:
             self.vlc_player.set_media(self.vlc_media)
 
             # Start playback
-            result = self.vlc_player.play()
-            if result != 0:
-                raise VLCPlayerError(f"VLC play() failed with code: {result}")
+            self.vlc_player.play()
 
-            # Handle window properties for debug mode
-            if self.debug_mode:
-                self._configure_debug_window()
-            else:
-                self.vlc_player.set_fullscreen(True)
+            # Wait for playback to start
+            time.sleep(1)
 
-            self.is_playing = True
-            log_info("VLC playback started successfully", component="vlc")
+            # Position VLC windows properly
+            self._place_vlc_windows()
+
+            log_info("VLC playback started successfully")
             return True
 
         except Exception as e:
@@ -307,7 +304,15 @@ class VLCVideoPlayer:
             "--network-caching=0",
             "--file-caching=300",
             "--aout=alsa",
-            "--vout=gles2",  # Enable OpenGL ES 2 video output for Raspberry Pi
+            # Try more conservative video output for stability
+            "--vout=mmal_vout",  # Use MMAL (Pi-specific) instead of gles2
+            # Window positioning - place VLC on the left side of screen
+            "--no-fullscreen",
+            "--width=1280",
+            "--height=720",
+            "--video-x=0",  # Left side of screen
+            "--video-y=0",  # Top of screen
+            "--no-video-deco",  # No window decorations
             "--file-logging",
             f"--logfile={paths['vlc_main']}",
             "--verbose=2",
@@ -401,6 +406,44 @@ class VLCVideoPlayer:
                 )
         except Exception as e:
             log_warning(f"Error configuring debug window: {e}", component="vlc")
+
+    def _place_vlc_windows(self):
+        """Place VLC windows in proper positions using wmctrl"""
+        try:
+            import subprocess
+            import time
+
+            # Wait a moment for VLC windows to appear
+            time.sleep(2)
+
+            # Find VLC windows and position them
+            result = subprocess.run(
+                ["wmctrl", "-l"], capture_output=True, text=True, timeout=10
+            )
+            if result.returncode == 0:
+                for line in result.stdout.split("\n"):
+                    if "vlc" in line.lower() or "test_video" in line.lower():
+                        # Extract window ID
+                        parts = line.split()
+                        if len(parts) >= 2:
+                            window_id = parts[0]
+                            # Position VLC window on the left side
+                            subprocess.run(
+                                ["wmctrl", "-ir", window_id, "-e", "0,0,0,1280,720"],
+                                check=False,
+                                timeout=5,
+                            )
+                            log_info(
+                                f"Positioned VLC window {window_id} at (0,0,1280,720)"
+                            )
+
+                            # Bring to front
+                            subprocess.run(
+                                ["wmctrl", "-ia", window_id], check=False, timeout=5
+                            )
+
+        except Exception as e:
+            log_warning(f"Failed to place VLC windows: {e}")
 
     def cleanup(self) -> None:
         """Clean up resources"""

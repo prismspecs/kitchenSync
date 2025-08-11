@@ -29,6 +29,11 @@ sudo apt install -y udisks2 usbutils
 echo "Installing dbus development libraries..."
 sudo apt install -y libdbus-1-dev libglib2.0-dev
 
+# Install required packages
+sudo apt-get update
+sudo apt-get install -y python3-pip python3-vlc vlc
+sudo apt-get install -y wmctrl  # For window management
+
 # Create media directories for USB mounting
 echo "Setting up USB mount points..."
 sudo mkdir -p /media/usb /media/usb0 /media/usb1
