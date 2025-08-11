@@ -47,6 +47,33 @@ sudo usermod -a -G plugdev,disk $USER
 echo "Installing Python packages system-wide..."
 sudo pip install python-rtmidi dbus-python python-vlc --break-system-packages
 
+# --- OS Optimizations ---
+echo "Applying OS optimizations..."
+
+# Disable unnecessary services
+echo "Disabling unused services (Bluetooth, CUPS, etc.)..."
+sudo systemctl disable bluetooth.service hciuart.service > /dev/null 2>&1 || true
+sudo systemctl disable cups.service > /dev/null 2>&1 || true
+sudo systemctl disable triggerhappy.service > /dev/null 2>&1 || true
+sudo systemctl disable avahi-daemon.service > /dev/null 2>&1 || true
+
+# Remove unused software packages
+echo "Removing unnecessary software (Wolfram, LibreOffice, etc.)..."
+sudo apt-get purge -y wolfram-engine sonic-pi scratch nuscratch smartsim libreoffice* > /dev/null 2>&1
+sudo apt-get autoremove -y > /dev/null 2>&1
+sudo apt-get clean > /dev/null 2>&1
+
+# Optimize boot configuration
+echo "Optimizing boot configuration..."
+if ! grep -q "disable_splash=1" /boot/config.txt; then
+    echo "disable_splash=1" | sudo tee -a /boot/config.txt
+fi
+if ! grep -q "boot_delay=0" /boot/config.txt; then
+    echo "boot_delay=0" | sudo tee -a /boot/config.txt
+fi
+# --- End OS Optimizations ---
+
+
 # Setup auto-start service
 echo "Setting up auto-start service..."
 mkdir -p ~/.config/systemd/user

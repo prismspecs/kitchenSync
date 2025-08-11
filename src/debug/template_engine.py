@@ -120,12 +120,8 @@ class DebugTemplateManager:
     def render_debug_overlay(self, pi_id: str, system_info: Dict[str, Any]) -> str:
         """Render the debug overlay and return the output file path"""
         try:
-            # Create output directory for this overlay
+            # The overlay directory is now created by HTMLDebugOverlay
             overlay_dir = self.output_dir / f"kitchensync_debug_{pi_id}"
-            overlay_dir.mkdir(exist_ok=True)
-
-            # Copy static files
-            self.copy_static_files(overlay_dir)
 
             # Prepare template context
             context = self._prepare_context(pi_id, system_info)

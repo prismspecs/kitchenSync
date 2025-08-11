@@ -46,6 +46,9 @@ class HTMLDebugOverlay:
         # Track Firefox state
         self.firefox_opened = False
 
+        # Create the debug directory and copy static files once
+        self._setup_debug_environment()
+
         # Create initial HTML file using templates
         self._create_html_file()
 
@@ -115,6 +118,16 @@ class HTMLDebugOverlay:
 
         except Exception as e:
             log_error(f"Failed to create fallback HTML: {e}", component="overlay")
+
+    def _setup_debug_environment(self):
+        """Creates the debug directory and copies static files once."""
+        try:
+            overlay_dir = Path(self.html_file).parent
+            overlay_dir.mkdir(exist_ok=True)
+            self.template_manager.copy_static_files(overlay_dir)
+            log_info("Debug environment setup complete.", component="overlay")
+        except Exception as e:
+            log_error(f"Failed to set up debug environment: {e}", component="overlay")
 
     def _format_midi_event(self, event):
         """Format MIDI event for display"""

@@ -263,6 +263,32 @@ Notes
 
 ## Testing and Deployment (2025-08)
 
+### OS Optimization (Recommended)
+
+To improve boot time and free up system resources, it is recommended to perform the following optimizations on the Raspberry Pi:
+
+**1. Disable Unnecessary Services**
+```bash
+# Disable Bluetooth, printing, and other unused services
+sudo systemctl disable bluetooth.service hciuart.service
+sudo systemctl disable cups.service triggerhappy.service
+sudo systemctl disable avahi-daemon.service
+```
+
+**2. Remove Unused Software**
+```bash
+# Remove large, non-essential packages
+sudo apt purge -y wolfram-engine sonic-pi scratch nuscratch smartsim libreoffice*
+sudo apt autoremove -y && sudo apt clean
+```
+
+**3. Optimize Boot Configuration**
+Add the following to `/boot/config.txt` to speed up the boot sequence:
+```ini
+disable_splash=1
+boot_delay=0
+```
+
 ### Quick Test Procedure
 
 1. **Test logging first** (ensures system works):
