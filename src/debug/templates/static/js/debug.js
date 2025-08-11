@@ -1,7 +1,7 @@
 /* KitchenSync Debug Overlay JavaScript */
 
-// Auto-refresh configuration
-const REFRESH_INTERVAL = 5000; // 5 seconds
+// Auto-refresh configuration  
+const REFRESH_INTERVAL = 10000; // 10 seconds (longer to complement Python backend)
 
 // Auto-refresh function with improved reliability and error handling
 function startAutoRefresh() {
@@ -75,9 +75,10 @@ document.addEventListener('DOMContentLoaded', function () {
     // Update timestamp
     updateTimestamp();
 
-    // Disable auto-refresh to prevent conflicts with Python backend updates
-    // The Python HTMLDebugManager handles updates every 5 seconds
-    console.log('Auto-refresh disabled - using Python backend updates');
+    // Start auto-refresh with longer interval to complement Python backend updates
+    // Python updates files every 5 seconds, we refresh browser every 10 seconds
+    console.log('Starting JavaScript auto-refresh as backup (every 10 seconds)');
+    startAutoRefresh();
 
     // Add manual refresh button handler
     const refreshButton = document.querySelector('.refresh-button');

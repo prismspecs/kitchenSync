@@ -768,11 +768,25 @@ class HTMLDebugManager:
 
     def _update_loop(self):
         """Update loop for the HTML overlay"""
+        update_count = 0
+        log_info("HTML update loop started", component="overlay")
+
         while self.running:
             try:
+                update_count += 1
+                log_info(f"HTML update #{update_count} starting", component="overlay")
+
                 # Update the HTML content with current system info
                 self.overlay.update_content()
+
+                log_info(f"HTML update #{update_count} completed", component="overlay")
                 time.sleep(5)  # Update every 5 seconds
+
             except Exception as e:
-                log_error(f"Error in HTML update loop: {e}", component="overlay")
+                log_error(
+                    f"Error in HTML update loop #{update_count}: {e}",
+                    component="overlay",
+                )
                 time.sleep(5)  # Continue trying
+
+        log_info("HTML update loop stopped", component="overlay")
