@@ -75,8 +75,9 @@ document.addEventListener('DOMContentLoaded', function () {
     // Update timestamp
     updateTimestamp();
 
-    // Start auto-refresh
-    startAutoRefresh();
+    // Disable auto-refresh to prevent conflicts with Python backend updates
+    // The Python HTMLDebugManager handles updates every 5 seconds
+    console.log('Auto-refresh disabled - using Python backend updates');
 
     // Add manual refresh button handler
     const refreshButton = document.querySelector('.refresh-button');

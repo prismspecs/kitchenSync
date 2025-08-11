@@ -49,9 +49,8 @@ class HTMLDebugOverlay:
         # Create initial HTML file using templates
         self._create_html_file()
 
-        # Start update thread
-        self.update_thread = threading.Thread(target=self._update_loop, daemon=True)
-        self.update_thread.start()
+        # Note: Update thread is managed by HTMLDebugManager, not here
+        # This prevents duplicate update loops that could conflict
 
     def _create_html_file(self):
         """Create the initial HTML file using templates"""
@@ -146,66 +145,11 @@ class HTMLDebugOverlay:
         with self.state_lock:
             self.state.update(kwargs)
 
-    def _update_loop(self):
-        """Update the HTML file with current state"""
-        while self.running:
-            try:
-                self._update_html_file()
-                time.sleep(2)  # Update every 2 seconds
-            except Exception as e:
-                log_error(f"HTML update error: {e}", component="overlay")
-                time.sleep(5)
+    # Old update loop removed - now using template system via HTMLDebugManager
+    # This prevents conflicts between string replacement and template rendering
 
-    def _update_html_file(self):
-        """Update the HTML file with current state"""
-        try:
-            with self.state_lock:
-                state = self.state.copy()
-
-            # Read the current HTML
-            with open(self.html_file, "r") as f:
-                html_content = f.read()
-
-            # Update the values
-            html_content = html_content.replace(
-                f'id="video-file">{state["video_file"]}</span>',
-                f'id="video-file">{state["video_file"]}</span>',
-            )
-            html_content = html_content.replace(
-                f'id="current-time" class="highlight">{state["current_time"]:.1f}s</span>',
-                f'id="current-time" class="highlight">{state["current_time"]:.1f}s</span>',
-            )
-            html_content = html_content.replace(
-                f'id="total-time">{state["total_time"]:.1f}s</span>',
-                f'id="total-time">{state["total_time"]:.1f}s</span>',
-            )
-            html_content = html_content.replace(
-                f'id="video-position">{state["video_position"] or "N/A"}</span>',
-                f'id="video-position">{state["video_position"] or "N/A"}</span>',
-            )
-            html_content = html_content.replace(
-                f'id="session-time">{state["session_time"]:.1f}s</span>',
-                f'id="session-time">{state["session_time"]:.1f}s</span>',
-            )
-            html_content = html_content.replace(
-                f'id="leader-mode" class="{"success" if state["is_leader"] else "info"}">{"Yes" if state["is_leader"] else "No"}</span>',
-                f'id="leader-mode" class="{"success" if state["is_leader"] else "info"}">{"Yes" if state["is_leader"] else "No"}</span>',
-            )
-
-            # MIDI current/next removed - now only using comprehensive Recent/Upcoming lists
-
-            # Update timestamp
-            html_content = html_content.replace(
-                f'id="timestamp">{time.strftime("%H:%M:%S")}</span>',
-                f'id="timestamp">{time.strftime("%H:%M:%S")}</span>',
-            )
-
-            # Write updated HTML
-            with open(self.html_file, "w") as f:
-                f.write(html_content)
-
-        except Exception as e:
-            log_error(f"Error updating HTML: {e}", component="overlay")
+    # Old HTML file update method removed - now using template system
+    # This method was causing conflicts with the template-based updates
 
     def cleanup(self):
         """Clean up resources"""
@@ -356,7 +300,7 @@ class HTMLDebugOverlay:
             if new_html_file and os.path.exists(new_html_file):
                 # Verify the file has content before updating
                 try:
-                    with open(new_html_file, 'r') as f:
+                    with open(new_html_file, "r") as f:
                         content = f.read()
                         if len(content.strip()) > 100:  # Ensure it's not empty/minimal
                             self.html_file = new_html_file
@@ -366,16 +310,18 @@ class HTMLDebugOverlay:
                             )
                         else:
                             log_warning(
-                                f"Generated HTML file too small ({len(content)} chars), keeping previous version", 
-                                component="overlay"
+                                f"Generated HTML file too small ({len(content)} chars), keeping previous version",
+                                component="overlay",
                             )
                 except Exception as read_error:
                     log_warning(
-                        f"Could not verify new HTML file: {read_error}", component="overlay"
+                        f"Could not verify new HTML file: {read_error}",
+                        component="overlay",
                     )
             else:
                 log_warning(
-                    "Template rendering returned empty or missing file path", component="overlay"
+                    "Template rendering returned empty or missing file path",
+                    component="overlay",
                 )
 
         except Exception as e:
