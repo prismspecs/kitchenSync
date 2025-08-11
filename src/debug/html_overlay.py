@@ -563,8 +563,15 @@ class HTMLDebugOverlay:
                                 "looping_enabled", False
                             )
 
-                            # Get video file from player if available
-                            if (
+                            # Get video file - prioritize state from update_debug_info
+                            with self.state_lock:
+                                state_video_file = self.state.get("video_file", "None")
+                            
+                            # If we have a valid video file from update_debug_info, use it
+                            if state_video_file and state_video_file != "No video" and state_video_file != "None":
+                                info["video_file"] = os.path.basename(state_video_file)
+                            # Otherwise try to get from video player
+                            elif (
                                 hasattr(self.video_player, "video_file")
                                 and self.video_player.video_file
                             ):
@@ -579,11 +586,7 @@ class HTMLDebugOverlay:
                                     self.video_player.current_video
                                 )
                             else:
-                                # Try to get from state if updated by update_debug_info
-                                with self.state_lock:
-                                    info["video_file"] = self.state.get(
-                                        "video_file", "None"
-                                    )
+                                info["video_file"] = "None"
 
                             log_info(
                                 f"Video info: {video_info['current_time']:.1f}s / {video_info['total_time']:.1f}s ({video_info['state']}) - {info.get('video_file', 'No file')}",
@@ -661,6 +664,7 @@ class HTMLDebugOverlay:
                 from src.core.logger import log_file_paths
 
                 paths = log_file_paths()
+                log_info(f"Log paths: {paths}", component="overlay")
 
                 # Recent system logs
                 if os.path.exists(paths["system"]):
@@ -668,6 +672,10 @@ class HTMLDebugOverlay:
                         lines = f.readlines()
                         recent = lines[-20:] if len(lines) > 20 else lines
                         info["recent_logs"] = "".join(recent)
+                        log_info(f"Read {len(recent)} lines from system log", component="overlay")
+                else:
+                    log_warning(f"System log file not found: {paths['system']}", component="overlay")
+                    info["recent_logs"] = "System log file not found"
 
                 # Recent VLC logs
                 if os.path.exists(paths["vlc_main"]):
@@ -675,8 +683,15 @@ class HTMLDebugOverlay:
                         lines = f.readlines()
                         recent = lines[-20:] if len(lines) > 20 else lines
                         info["vlc_logs"] = "".join(recent)
-            except Exception:
-                pass
+                        log_info(f"Read {len(recent)} lines from VLC log", component="overlay")
+                else:
+                    log_warning(f"VLC log file not found: {paths['vlc_main']}", component="overlay")
+                    info["vlc_logs"] = "VLC log file not found"
+                    
+            except Exception as e:
+                log_error(f"Error reading log files: {e}", component="overlay")
+                info["recent_logs"] = f"Error reading logs: {e}"
+                info["vlc_logs"] = f"Error reading logs: {e}"
 
             return info
 
