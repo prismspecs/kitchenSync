@@ -49,8 +49,9 @@ class HTMLDebugOverlay:
         # Create initial HTML file using templates
         self._create_html_file()
 
-        # Note: Update thread is managed by HTMLDebugManager, not here
-        # This prevents duplicate update loops that could conflict
+        # Start update thread
+        self.update_thread = threading.Thread(target=self._update_loop, daemon=True)
+        self.update_thread.start()
 
     def _create_html_file(self):
         """Create the initial HTML file using templates"""
@@ -145,11 +146,15 @@ class HTMLDebugOverlay:
         with self.state_lock:
             self.state.update(kwargs)
 
-    # Old update loop removed - now using template system via HTMLDebugManager
-    # This prevents conflicts between string replacement and template rendering
-
-    # Old HTML file update method removed - now using template system
-    # This method was causing conflicts with the template-based updates
+    def _update_loop(self):
+        """Update the HTML file with current state"""
+        while self.running:
+            try:
+                self.update_content()
+                time.sleep(5)  # Update every 5 seconds
+            except Exception as e:
+                log_error(f"HTML update error: {e}", component="overlay")
+                time.sleep(5)
 
     def cleanup(self):
         """Clean up resources"""
