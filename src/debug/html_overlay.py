@@ -531,8 +531,9 @@ class HTMLDebugOverlay:
             except Exception:
                 pass
 
-            # Check VLC process
+            # Check VLC process with multiple methods
             try:
+                # Try pgrep first
                 result = subprocess.run(
                     ["pgrep", "-f", "vlc"], capture_output=True, text=True, timeout=5
                 )
@@ -542,10 +543,31 @@ class HTMLDebugOverlay:
                     info["vlc_status_class"] = "good"
                     info["vlc_process"] = f'PIDs: {", ".join(vlc_pids)}'
                 else:
-                    info["vlc_status"] = "Not running"
-                    info["vlc_status_class"] = "error"
-            except Exception:
-                info["vlc_status"] = "Check failed"
+                    # Try alternative: ps aux | grep vlc
+                    ps_result = subprocess.run(
+                        ["ps", "aux"], capture_output=True, text=True, timeout=5
+                    )
+                    if ps_result.returncode == 0:
+                        vlc_processes = []
+                        for line in ps_result.stdout.split('\n'):
+                            if 'vlc' in line.lower() and 'grep' not in line:
+                                # Extract PID (second column)
+                                parts = line.split()
+                                if len(parts) > 1:
+                                    vlc_processes.append(parts[1])
+                        
+                        if vlc_processes:
+                            info["vlc_status"] = f'Running (PID: {", ".join(vlc_processes)})'
+                            info["vlc_status_class"] = "good"
+                            info["vlc_process"] = f'PIDs: {", ".join(vlc_processes)}'
+                        else:
+                            info["vlc_status"] = "Not running"
+                            info["vlc_status_class"] = "error"
+                    else:
+                        info["vlc_status"] = "Not running"
+                        info["vlc_status_class"] = "error"
+            except Exception as e:
+                info["vlc_status"] = f"Check failed: {e}"
                 info["vlc_status_class"] = "warning"
 
             # Get recent logs
