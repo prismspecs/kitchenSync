@@ -306,8 +306,8 @@ class VLCVideoPlayer:
             "--no-snapshot-preview",
             "--network-caching=0",
             "--file-caching=300",
-            # Minimal config - let VLC auto-detect everything for Pi compatibility
             "--aout=alsa",
+            "--vout=gles2",  # Enable OpenGL ES 2 video output for Raspberry Pi
             "--file-logging",
             f"--logfile={paths['vlc_main']}",
             "--verbose=2",
@@ -323,7 +323,7 @@ class VLCVideoPlayer:
             "--no-snapshot-preview",
             "--network-caching=0",
             "--file-caching=300",
-            # Minimal config - let VLC auto-detect everything for Pi compatibility
+            "--vout=gles2",  # Enable OpenGL ES 2 video output for Raspberry Pi
             "--aout=dummy",  # Use dummy audio to prevent ALSA crashes
             "--no-audio",  # Disable audio output completely
             "--file-logging",
