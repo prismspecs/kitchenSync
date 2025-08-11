@@ -228,38 +228,6 @@ class HTMLDebugOverlay:
         self.firefox_opened = False
         log_info("HTML overlay cleaned up", component="overlay")
 
-    def _wait_for_display(self):
-        """Wait for X11 display to be ready - critical for boot-time startup"""
-        import subprocess
-        import time
-
-        max_attempts = 30  # 30 seconds max wait
-        for attempt in range(max_attempts):
-            try:
-                # Test if X11 display is responding
-                result = subprocess.run(
-                    ["xset", "q"], capture_output=True, timeout=5, env={"DISPLAY": ":0"}
-                )
-                if result.returncode == 0:
-                    log_info(
-                        f"X11 display ready after {attempt} seconds",
-                        component="overlay",
-                    )
-                    return True
-
-            except Exception as e:
-                log_info(
-                    f"Display check attempt {attempt + 1}: {e}", component="overlay"
-                )
-
-            time.sleep(1)
-
-        log_warning(
-            "Display may not be ready after 30 seconds, proceeding anyway",
-            component="overlay",
-        )
-        return False
-
     def open_in_browser(self):
         """Open the HTML file in the default browser"""
         try:
@@ -276,13 +244,10 @@ class HTMLDebugOverlay:
             import threading
             import time
 
-            # Wait for display to be ready (especially important on boot)
-            self._wait_for_display()
-
             # Kill any existing Firefox processes first to avoid tab accumulation
             try:
                 subprocess.run(["pkill", "-f", "firefox"], check=False, timeout=5)
-                time.sleep(2)  # Give it more time to close on boot
+                time.sleep(1)  # Give it time to close
                 self.firefox_opened = False  # Reset flag after killing
             except:
                 pass
@@ -293,56 +258,23 @@ class HTMLDebugOverlay:
 
             os.makedirs(profile_dir, exist_ok=True)
 
-            # Try to open Firefox with retry logic for boot scenarios
-            firefox_launched = False
-            for attempt in range(3):  # Try up to 3 times
-                try:
-                    # Open Firefox with the profile (non-blocking)
-                    firefox_process = subprocess.Popen(
-                        [
-                            "firefox",
-                            "--new-instance",
-                            "--new-window",
-                            "--profile",
-                            profile_dir,
-                            f"file://{self.html_file}",
-                        ],
-                        stdout=subprocess.DEVNULL,
-                        stderr=subprocess.DEVNULL,
-                        env={"DISPLAY": ":0", "HOME": "/home/kitchensync"},
-                    )
+            # Open Firefox with the profile (non-blocking)
+            subprocess.Popen(
+                [
+                    "firefox",
+                    "--new-instance",
+                    "--new-window",
+                    "--profile",
+                    profile_dir,
+                    f"file://{self.html_file}",
+                ],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
 
-                    # Give Firefox a moment to start
-                    time.sleep(2)
-
-                    # Check if process is still running (didn't immediately crash)
-                    if firefox_process.poll() is None:
-                        firefox_launched = True
-                        self.firefox_opened = True
-                        log_info(
-                            f"Firefox launched successfully on attempt {attempt + 1}",
-                            component="overlay",
-                        )
-                        break
-                    else:
-                        log_warning(
-                            f"Firefox process exited immediately on attempt {attempt + 1}",
-                            component="overlay",
-                        )
-
-                except Exception as e:
-                    log_warning(
-                        f"Firefox launch attempt {attempt + 1} failed: {e}",
-                        component="overlay",
-                    )
-
-                time.sleep(3)  # Wait before retry
-
-            if not firefox_launched:
-                log_error(
-                    "Failed to launch Firefox after 3 attempts", component="overlay"
-                )
-                return
+            # Mark Firefox as opened
+            self.firefox_opened = True
+            log_info("Firefox launched successfully", component="overlay")
 
             # Position window after a longer delay (in background thread)
             def position_window():
