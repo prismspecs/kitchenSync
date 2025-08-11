@@ -387,7 +387,6 @@ class HTMLDebugOverlay:
         try:
             import subprocess
             import psutil
-            import os
             from datetime import datetime
 
             info = {
@@ -672,7 +671,6 @@ class HTMLDebugOverlay:
 
             # Get recent logs
             try:
-                import os
                 from src.core.logger import log_file_paths
 
                 paths = log_file_paths()
