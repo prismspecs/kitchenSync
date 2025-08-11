@@ -288,14 +288,19 @@ class HTMLDebugOverlay:
             except:
                 pass
 
-            # Open Firefox with a new profile (non-blocking)
+            # Create a temporary Firefox profile directory
+            profile_dir = "/tmp/firefox-debug-profile"
+            import os
+            os.makedirs(profile_dir, exist_ok=True)
+            
+            # Open Firefox with the profile (non-blocking)
             subprocess.Popen(
                 [
                     "firefox",
                     "--new-instance",
                     "--new-window",
                     "--profile",
-                    "/tmp/firefox-debug-profile",
+                    profile_dir,
                     f"file://{self.html_file}",
                 ],
                 stdout=subprocess.DEVNULL,
