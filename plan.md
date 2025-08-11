@@ -194,6 +194,13 @@ The system features a clean, consolidated debug architecture:
   - Dedicated MIDI Information section showing recent and upcoming MIDI events
   - Scrollable MIDI event lists with color-coded indicators
   - Reduced log section heights to prevent scroll overflow
+- **Template System (Jan 2025)**: Modular architecture with:
+  - Separate HTML templates in `src/debug/templates/`
+  - External CSS stylesheets for easier customization
+  - External JavaScript files for better maintainability
+  - Simple template engine with variable substitution
+  - Automatic static file copying and management
+  - Fallback system for template errors
 
 **Collaborator Pi (Simple Debug Overlay)**
 - `SimpleDebugManager` - Lightweight debug overlay system
