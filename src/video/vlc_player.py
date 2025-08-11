@@ -306,9 +306,7 @@ class VLCVideoPlayer:
             "--no-snapshot-preview",
             "--network-caching=0",
             "--file-caching=300",
-            # Use OpenGL for Embedded Systems 2 (recommended for Pi4)
-            "--vout=gl",  # OpenGL video output
-            "--gl-api=egl",  # EGL API for embedded systems
+            # Minimal config - let VLC auto-detect everything for Pi compatibility
             "--aout=alsa",
             "--file-logging",
             f"--logfile={paths['vlc_main']}",
@@ -325,9 +323,7 @@ class VLCVideoPlayer:
             "--no-snapshot-preview",
             "--network-caching=0",
             "--file-caching=300",
-            # Use OpenGL for Embedded Systems 2 (recommended for Pi4)
-            "--vout=gl",  # OpenGL video output
-            "--gl-api=egl",  # EGL API for embedded systems
+            # Minimal config - let VLC auto-detect everything for Pi compatibility
             "--aout=dummy",  # Use dummy audio to prevent ALSA crashes
             "--no-audio",  # Disable audio output completely
             "--file-logging",

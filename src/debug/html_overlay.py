@@ -5,8 +5,8 @@ Opens a browser window with live-updating debug information
 """
 
 import os
-import threading
 import time
+import threading
 import webbrowser
 from pathlib import Path
 from typing import Optional, Dict, Any
@@ -288,62 +288,241 @@ class HTMLDebugOverlay:
 
         log_info("HTML overlay cleaned up", component="overlay")
 
+    def open_in_browser(self):
+        """Open the HTML file in the default browser"""
+        try:
+            # Open new browser instance (no need to kill old ones with auto-refresh)
+            webbrowser.open(f"file://{self.html_file}")
+            log_info(f"HTML debug overlay opened in browser: {self.html_file}")
+        except Exception as e:
+            log_error(f"Failed to open HTML overlay in browser: {e}")
+
+    def update_content(self, system_info: dict = None):
+        """Update the HTML content with current system information"""
+        if system_info is None:
+            system_info = self._get_system_info()
+        
+        html_content = f"""<!DOCTYPE html>
+<html>
+<head>
+    <title>KitchenSync Debug - {system_info.get('pi_id', 'Unknown')}</title>
+    <meta charset="utf-8">
+    <style>
+        body {{ font-family: Arial, sans-serif; margin: 20px; background: #1a1a1a; color: #ffffff; }}
+        .header {{ background: #333; padding: 15px; border-radius: 8px; margin-bottom: 20px; }}
+        .status {{ background: #2d2d2d; padding: 15px; border-radius: 8px; margin-bottom: 15px; }}
+        .status.good {{ border-left: 4px solid #4CAF50; }}
+        .status.warning {{ border-left: 4px solid #FF9800; }}
+        .status.error {{ border-left: 4px solid #f44336; }}
+        .log-section {{ background: #2d2d2d; padding: 15px; border-radius: 8px; margin-bottom: 15px; }}
+        .log-content {{ background: #1a1a1a; padding: 10px; border-radius: 4px; font-family: monospace; font-size: 12px; max-height: 300px; overflow-y: auto; }}
+        .refresh-info {{ text-align: center; color: #888; font-size: 12px; margin-top: 20px; }}
+        .auto-refresh {{ background: #333; padding: 10px; border-radius: 4px; margin-bottom: 15px; text-align: center; }}
+        .refresh-button {{ background: #4CAF50; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; }}
+        .refresh-button:hover {{ background: #45a049; }}
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🍳 KitchenSync Debug Overlay</h1>
+        <p>Pi ID: {system_info.get('pi_id', 'Unknown')} | Last Updated: {system_info.get('timestamp', 'Unknown')}</p>
+    </div>
+
+    <div class="auto-refresh">
+        <button class="refresh-button" onclick="location.reload()">🔄 Manual Refresh</button>
+        <p>Auto-refreshing every 5 seconds</p>
+    </div>
+
+    <div class="status {system_info.get('service_status_class', 'warning')}">
+        <h2>📊 Service Status</h2>
+        <p><strong>Service:</strong> {system_info.get('service_status', 'Unknown')}</p>
+        <p><strong>PID:</strong> {system_info.get('service_pid', 'Unknown')}</p>
+        <p><strong>Uptime:</strong> {system_info.get('service_uptime', 'Unknown')}</p>
+    </div>
+
+    <div class="status {system_info.get('vlc_status_class', 'warning')}">
+        <h2>🎬 VLC Status</h2>
+        <p><strong>Status:</strong> {system_info.get('vlc_status', 'Unknown')}</p>
+        <p><strong>Video File:</strong> {system_info.get('video_file', 'None')}</p>
+        <p><strong>VLC Process:</strong> {system_info.get('vlc_process', 'None')}</p>
+    </div>
+
+    <div class="log-section">
+        <h2>📝 Recent System Log</h2>
+        <div class="log-content">{system_info.get('recent_logs', 'No logs available')}</div>
+    </div>
+
+    <div class="log-section">
+        <h2>🎯 Recent VLC Log</h2>
+        <div class="log-content">{system_info.get('vlc_logs', 'No VLC logs available')}</div>
+    </div>
+
+    <div class="refresh-info">
+        <p>This overlay automatically refreshes every 5 seconds to show real-time status</p>
+        <p>Last refresh: <span id="last-refresh">{system_info.get('timestamp', 'Unknown')}</span></p>
+    </div>
+
+    <script>
+        // Auto-refresh every 5 seconds
+        setInterval(function() {{
+            location.reload();
+        }}, 5000);
+        
+        // Update timestamp on page load
+        document.addEventListener('DOMContentLoaded', function() {{
+            document.getElementById('last-refresh').textContent = new Date().toLocaleString();
+        }});
+    </script>
+</body>
+</html>"""
+        
+        try:
+            with open(self.html_file, 'w', encoding='utf-8') as f:
+                f.write(html_content)
+            log_info(f"HTML debug overlay content updated: {self.html_file}")
+        except Exception as e:
+            log_error(f"Failed to update HTML overlay content: {e}")
+
+    def _get_system_info(self) -> dict:
+        """Get current system information for the overlay"""
+        try:
+            import subprocess
+            import psutil
+            from datetime import datetime
+            
+            info = {
+                'pi_id': self.pi_id,
+                'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                'service_status': 'Unknown',
+                'service_status_class': 'warning',
+                'service_pid': 'Unknown',
+                'service_uptime': 'Unknown',
+                'vlc_status': 'Unknown',
+                'vlc_status_class': 'warning',
+                'video_file': 'None',
+                'vlc_process': 'None',
+                'recent_logs': 'No logs available',
+                'vlc_logs': 'No VLC logs available'
+            }
+            
+            # Check service status
+            try:
+                result = subprocess.run(['systemctl', 'is-active', 'kitchensync.service'], 
+                                      capture_output=True, text=True, timeout=5)
+                if result.returncode == 0:
+                    info['service_status'] = 'Active (running)'
+                    info['service_status_class'] = 'good'
+                else:
+                    info['service_status'] = 'Inactive'
+                    info['service_status_class'] = 'error'
+            except Exception:
+                info['service_status'] = 'Check failed'
+                info['service_status_class'] = 'error'
+            
+            # Get service PID and uptime
+            try:
+                result = subprocess.run(['systemctl', 'show', 'kitchensync.service', '--property=MainPID,ActiveEnterTimestamp'], 
+                                      capture_output=True, text=True, timeout=5)
+                if result.returncode == 0:
+                    for line in result.stdout.split('\n'):
+                        if 'MainPID=' in line:
+                            pid = line.split('=')[1].strip()
+                            if pid != '0':
+                                info['service_pid'] = pid
+                                # Get process uptime
+                                try:
+                                    proc = psutil.Process(int(pid))
+                                    uptime = datetime.now() - datetime.fromtimestamp(proc.create_time())
+                                    info['service_uptime'] = str(uptime).split('.')[0]
+                                except:
+                                    info['service_uptime'] = 'Unknown'
+            except Exception:
+                pass
+            
+            # Check VLC process
+            try:
+                result = subprocess.run(['pgrep', '-f', 'vlc'], capture_output=True, text=True, timeout=5)
+                if result.returncode == 0:
+                    vlc_pids = result.stdout.strip().split('\n')
+                    info['vlc_status'] = f'Running (PID: {", ".join(vlc_pids)})'
+                    info['vlc_status_class'] = 'good'
+                    info['vlc_process'] = f'PIDs: {", ".join(vlc_pids)}'
+                else:
+                    info['vlc_status'] = 'Not running'
+                    info['vlc_status_class'] = 'error'
+            except Exception:
+                info['vlc_status'] = 'Check failed'
+                info['vlc_status_class'] = 'warning'
+            
+            # Get recent logs
+            try:
+                from src.core.logger import log_file_paths
+                paths = log_file_paths()
+                
+                # Recent system logs
+                if os.path.exists(paths['system']):
+                    with open(paths['system'], 'r') as f:
+                        lines = f.readlines()
+                        recent = lines[-20:] if len(lines) > 20 else lines
+                        info['recent_logs'] = ''.join(recent)
+                
+                # Recent VLC logs
+                if os.path.exists(paths['vlc_main']):
+                    with open(paths['vlc_main'], 'r') as f:
+                        lines = f.readlines()
+                        recent = lines[-20:] if len(lines) > 20 else lines
+                        info['vlc_logs'] = ''.join(recent)
+            except Exception:
+                pass
+            
+            return info
+            
+        except Exception as e:
+            log_error(f"Failed to get system info: {e}")
+            return {
+                'pi_id': self.pi_id,
+                'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                'error': f'Failed to get system info: {e}'
+            }
+
 
 class HTMLDebugManager:
     """Manages the HTML debug overlay"""
-
-    def __init__(self, pi_id: str, is_leader: bool = False):
-        self.pi_id = pi_id
-        self.is_leader = is_leader
-        self.overlay = None
-
+    
+    def __init__(self, pi_id: str):
+        self.overlay = HTMLDebugOverlay(pi_id)
+        self.update_thread = None
+        self.running = False
+    
+    def start(self):
+        """Start the HTML debug overlay"""
         try:
-            self.overlay = HTMLDebugOverlay(pi_id)
-            self.overlay.update_state(is_leader=is_leader)
-            log_info(f"HTML debug manager created for {pi_id}", component="overlay")
+            # Open in browser
+            self.overlay.open_in_browser()
+            
+            # Start update thread
+            self.running = True
+            self.update_thread = threading.Thread(target=self._update_loop, daemon=True)
+            self.update_thread.start()
+            
+            log_info("HTML debug manager created", component="overlay")
         except Exception as e:
-            log_error(f"Error creating HTML debug manager: {e}", component="overlay")
-            self.overlay = None
-
-    def update_debug_info(
-        self,
-        video_file: str,
-        current_time: float,
-        total_time: float,
-        session_time: float,
-        video_position: Optional[float],
-        current_cues: list,
-        upcoming_cues: list,
-    ):
-        """Update debug information"""
-        if not self.overlay:
-            return
-
-        # Process MIDI info
-        midi_current = current_cues[0] if current_cues else None
-        midi_next = None
-
-        if upcoming_cues:
-            next_cue = upcoming_cues[0]
-            time_until = next_cue.get("time", 0) - current_time
-            midi_next = {
-                "type": next_cue.get("type", "unknown"),
-                "channel": next_cue.get("channel", 1),
-                "time_until": time_until,
-            }
-
-        self.overlay.update_state(
-            video_file=video_file,
-            current_time=current_time,
-            total_time=total_time,
-            session_time=session_time,
-            video_position=video_position,
-            midi_current=midi_current,
-            midi_next=midi_next,
-        )
-
-    def cleanup(self):
-        """Clean up resources"""
-        if self.overlay:
-            self.overlay.cleanup()
-            self.overlay = None
+            log_error(f"Failed to start HTML debug manager: {e}", component="overlay")
+    
+    def stop(self):
+        """Stop the HTML debug overlay"""
+        self.running = False
+        if self.update_thread:
+            self.update_thread.join(timeout=1)
+        log_info("HTML debug manager stopped", component="overlay")
+    
+    def _update_loop(self):
+        """Update loop for the HTML overlay"""
+        while self.running:
+            try:
+                # Update the HTML content with current system info
+                self.overlay.update_content()
+                time.sleep(5)  # Update every 5 seconds
+            except Exception as e:
+                log_error(f"Error in HTML update loop: {e}", component="overlay")
+                time.sleep(5)  # Continue trying

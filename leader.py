@@ -58,9 +58,10 @@ class LeaderPi:
         else:
             log_warning("No video file found at startup.", component="leader")
 
-        # HTML debug overlay (displays in browser)
-        self.html_debug = None
-        # Delay overlay creation until after VLC window exists (start_system)
+        # Create HTML debug overlay
+        self.html_debug = HTMLDebugManager(pi_id)
+        self.html_debug.start()
+        log_info("HTML overlay created")
 
         # Setup command handlers
         self._setup_command_handlers()
