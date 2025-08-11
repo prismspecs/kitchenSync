@@ -291,6 +291,13 @@ class VLCVideoPlayer:
         """Get VLC command line arguments"""
         paths = log_file_paths()
         return [
+            # Window positioning - place VLC on left side, leave space for debug overlay
+            "--no-fullscreen",
+            "--width=1280",
+            "--height=720",
+            "--video-x=0",  # Left side of screen
+            "--video-y=0",  # Top of screen
+            "--no-video-deco",  # No window decorations
             # Minimal config - let VLC use defaults
             "--file-logging",
             f"--logfile={paths['vlc_main']}",
