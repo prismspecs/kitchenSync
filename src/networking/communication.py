@@ -57,7 +57,7 @@ class SyncBroadcaster:
                     try:
                         self.sync_sock.sendto(payload.encode(), (self.broadcast_ip, self.sync_port))
                     except Exception as e:
-                        # print(f"Error broadcasting sync: {e}")
+                        pass  # Ignore broadcast errors
                 
                 time.sleep(self.tick_interval)
         
@@ -118,7 +118,7 @@ class SyncReceiver:
                     continue
                 except Exception as e:
                     if self.is_running:
-                        # print(f"Error in sync listener: {e}")
+                        pass  # Ignore sync listener errors
         
         thread = threading.Thread(target=listen_loop, daemon=True)
         thread.start()
@@ -184,7 +184,7 @@ class CommandManager:
                     continue
                 except Exception as e:
                     if self.is_running:
-                        # print(f"Error in command listener: {e}")
+                        pass  # Ignore command listener errors
         
         thread = threading.Thread(target=listen_loop, daemon=True)
         thread.start()
@@ -289,7 +289,7 @@ class CommandListener:
                     continue
                 except Exception as e:
                     if self.is_running:
-                        # print(f"Error in command listener: {e}")
+                        pass  # Ignore command listener errors
         
         thread = threading.Thread(target=listen_loop, daemon=True)
         thread.start()
