@@ -281,10 +281,10 @@ class HTMLDebugOverlay:
             import threading
             import time
 
-            # Open chromium (non-blocking)
+            # Open Firefox (non-blocking)
             subprocess.Popen(
                 [
-                    "chromium",
+                    "firefox",
                     "--new-window",
                     f"file://{self.html_file}",
                 ],
@@ -296,8 +296,14 @@ class HTMLDebugOverlay:
             def position_window():
                 time.sleep(3)  # Wait for window to appear
                 try:
-                    # Try multiple window title patterns for Chrome
-                    patterns = ["KitchenSync Debug", "Chromium", "chromium", "Google Chrome"]
+                    # Try multiple window title patterns for Firefox
+                    patterns = [
+                        "Mozilla Firefox",
+                        "Firefox",
+                        "firefox",
+                        "KitchenSync Debug",
+                        "New Tab",
+                    ]
                     for pattern in patterns:
                         result = subprocess.run(
                             ["wmctrl", "-r", pattern, "-e", "0,1280,0,640,1080"],
@@ -307,12 +313,16 @@ class HTMLDebugOverlay:
                             stderr=subprocess.DEVNULL,
                         )
                         if result.returncode == 0:
-                            log_info(f"Positioned Chrome window on right side using pattern: {pattern}")
+                            log_info(
+                                f"Positioned Firefox window on right side using pattern: {pattern}"
+                            )
                             break
                     else:
-                        log_warning("Could not position Chrome window - no matching pattern found")
+                        log_warning(
+                            "Could not position Firefox window - no matching pattern found"
+                        )
                 except Exception as e:
-                    log_warning(f"Failed to position Chrome window: {e}")
+                    log_warning(f"Failed to position Firefox window: {e}")
 
             threading.Thread(target=position_window, daemon=True).start()
 
