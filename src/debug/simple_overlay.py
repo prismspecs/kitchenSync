@@ -8,6 +8,7 @@ import threading
 import time
 import os
 from typing import Optional, Dict, Any
+from core.logger import log_info, log_warning, log_error, snapshot_env, log_file_paths
 
 
 class SimpleDebugOverlay:
@@ -34,6 +35,7 @@ class SimpleDebugOverlay:
 
         # Try pygame first, fall back to file if it fails
         try:
+            snapshot_env()
             # Check if we have a display
             if not os.environ.get("DISPLAY") and not os.environ.get("SDL_VIDEODRIVER"):
                 raise Exception("No display available")
@@ -85,8 +87,9 @@ class SimpleDebugOverlay:
             self.leader_color = (255, 200, 100)  # Yellow/orange
 
             self.use_pygame = True
-            print(
-                f"[DEBUG] Pygame overlay initialized for {pi_id} at {pos_x},{pos_y} ({self.width}x{self.height})"
+            log_info(
+                f"Pygame overlay initialized at {pos_x},{pos_y} ({self.width}x{self.height})",
+                component="overlay",
             )
 
             # Start the display loop
@@ -96,7 +99,7 @@ class SimpleDebugOverlay:
             self.display_thread.start()
 
         except Exception as e:
-            print(f"[DEBUG] Pygame failed ({e}), using file debug for {pi_id}")
+            log_warning(f"Pygame failed ({e}), using file debug", component="overlay")
             self.use_pygame = False
             self.screen = None
 
@@ -109,12 +112,11 @@ class SimpleDebugOverlay:
                     f.write(f"Started: {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
                     f.write("(Pygame not available - using file debug)\n")
                     f.write("=" * 40 + "\n\n")
-                print(f"[DEBUG] File debug initialized: {self.debug_file}")
-                print(
-                    f"[DEBUG] Monitor with: ssh kitchensync@192.168.178.59 'tail -f {self.debug_file}'"
+                log_info(
+                    f"File debug initialized: {self.debug_file}", component="overlay"
                 )
             except Exception as file_error:
-                print(f"[DEBUG] File debug also failed: {file_error}")
+                log_error(f"File debug also failed: {file_error}", component="overlay")
 
     def update_state(self, **kwargs):
         """Update the debug state"""
@@ -150,10 +152,13 @@ class SimpleDebugOverlay:
                 clock.tick(30)  # 30 FPS
 
             except Exception as e:
-                print(f"[DEBUG] Display loop error: {e}")
+                log_warning(f"Display loop error: {e}", component="overlay")
                 # If we get persistent display errors, fall back to file debug
                 if "GL context" in str(e) or "BadAccess" in str(e):
-                    print(f"[DEBUG] Switching to file debug due to display errors")
+                    log_warning(
+                        "Switching to file debug due to display errors",
+                        component="overlay",
+                    )
                     self.use_pygame = False
                     self._init_file_fallback()
                     break
@@ -169,9 +174,12 @@ class SimpleDebugOverlay:
                 f.write(f"Started: {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
                 f.write("(Switched to file debug due to display issues)\n")
                 f.write("=" * 40 + "\n\n")
-            print(f"[DEBUG] File debug fallback initialized: {self.debug_file}")
+            log_info(
+                f"File debug fallback initialized: {self.debug_file}",
+                component="overlay",
+            )
         except Exception as e:
-            print(f"[DEBUG] File fallback failed: {e}")
+            log_error(f"File fallback failed: {e}", component="overlay")
 
     def _write_file_debug(self):
         """Write current state to file"""
@@ -225,7 +233,7 @@ class SimpleDebugOverlay:
                 f.flush()
 
         except Exception as e:
-            print(f"[DEBUG] File write error: {e}")
+            log_error(f"File write error: {e}", component="overlay")
 
     def _draw_debug_info(self):
         """Draw the debug information (pygame only)"""
@@ -334,7 +342,7 @@ class SimpleDebugOverlay:
             except:
                 pass
 
-        print(f"[DEBUG] Simple overlay cleaned up for {self.pi_id}")
+        log_info("Simple overlay cleaned up", component="overlay")
 
 
 class SimpleDebugManager:

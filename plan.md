@@ -203,3 +203,32 @@ The project has successfully achieved its core objectives and is ready for produ
 - No lag or bloat from duplicate overlays or threads.
 - Overlay always shows the latest info (video file, time, id, leader status, MIDI info).
 - Overlay appears promptly and closes cleanly.
+
+## Diagnostics and Logs (2025-08)
+
+To troubleshoot boot-time display issues (VLC vs. overlay), the system writes diagnostic logs to `/tmp` so they are available both under systemd and desktop sessions:
+
+- System log: `/tmp/kitchensync_system.log`
+- VLC (Python/CLI) details:
+  - Main: `/tmp/kitchensync_vlc.log` (reserved)
+  - Stdout: `/tmp/kitchensync_vlc_stdout.log`
+  - Stderr: `/tmp/kitchensync_vlc_stderr.log`
+- Overlay (file-based fallback): `/tmp/kitchensync_debug_leader-pi.txt`
+
+What to check after reboot:
+
+1) Tail system log for environment and startup sequence
+   - `tail -n 200 -f /tmp/kitchensync_system.log`
+   - Confirms DISPLAY/Wayland/XDG variables and whether VLC/overlay initialized
+
+2) If VLC window is missing
+   - `tail -n 200 /tmp/kitchensync_vlc_stderr.log`
+   - Look for `vout` errors, display backend problems, or codec init failures
+
+3) If overlay is blank
+   - `tail -n 200 /tmp/kitchensync_debug_leader-pi.txt`
+   - Confirms overlay updates, current time, MIDI info; indicates pygame/display fallbacks
+
+Notes
+- Logs are appended with timestamps; they survive until next reboot or manual cleanup.
+- Environment snapshot includes `DISPLAY`, `XDG_SESSION_TYPE`, `XDG_RUNTIME_DIR`, `SDL_VIDEODRIVER`, `WAYLAND_DISPLAY`, `XAUTHORITY`.

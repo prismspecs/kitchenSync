@@ -8,6 +8,7 @@ import os
 import subprocess
 import time
 from typing import Optional
+from core.logger import log_info, log_error, log_warning, snapshot_env, log_file_paths
 
 # Try to import VLC Python bindings
 try:
@@ -35,6 +36,8 @@ class VLCVideoPlayer:
         self.video_path = None
         self.is_playing = False
         self.command_process = None  # For command-line VLC
+        # Log environment snapshot once when player is constructed
+        snapshot_env()
 
     def load_video(self, video_path: str) -> bool:
         """Load a video file"""
@@ -42,7 +45,7 @@ class VLCVideoPlayer:
             raise VLCPlayerError(f"Video file not found: {video_path}")
 
         self.video_path = video_path
-        print(f"Loaded video: {video_path}")
+        log_info(f"Loaded video: {video_path}", component="vlc")
         return True
 
     def start_playback(self) -> bool:
@@ -60,19 +63,19 @@ class VLCVideoPlayer:
         try:
             if self.vlc_player:
                 self.vlc_player.stop()
-                print("🛑 Stopped VLC Python player")
+                log_info("Stopped VLC Python player", component="vlc")
 
             if self.command_process:
                 self.command_process.terminate()
                 self.command_process = None
-                print("🛑 Stopped VLC command process")
+                log_info("Stopped VLC command process", component="vlc")
 
             # Kill any remaining VLC processes
             subprocess.run(["pkill", "vlc"], capture_output=True)
 
             self.is_playing = False
         except Exception as e:
-            print(f"Error stopping video: {e}")
+            log_error(f"Error stopping video: {e}", component="vlc")
 
     def get_position(self) -> Optional[float]:
         """Get current playback position in seconds"""
@@ -88,7 +91,7 @@ class VLCVideoPlayer:
                     return (position_ratio * length_ms) / 1000.0
             return None
         except Exception as e:
-            print(f"Error getting position: {e}")
+            log_error(f"Error getting position: {e}", component="vlc")
             return None
 
     def set_position(self, seconds: float) -> bool:
@@ -103,7 +106,7 @@ class VLCVideoPlayer:
                     return True
             return False
         except Exception as e:
-            print(f"Error setting position: {e}")
+            log_error(f"Error setting position: {e}", component="vlc")
             return False
 
     def get_duration(self) -> Optional[float]:
@@ -115,7 +118,7 @@ class VLCVideoPlayer:
                     return length_ms / 1000.0
             return None
         except Exception as e:
-            print(f"Error getting duration: {e}")
+            log_error(f"Error getting duration: {e}", component="vlc")
             return None
 
     def pause(self) -> bool:
@@ -126,7 +129,7 @@ class VLCVideoPlayer:
                 return True
             return False
         except Exception as e:
-            print(f"Error pausing: {e}")
+            log_error(f"Error pausing: {e}", component="vlc")
             return False
 
     def resume(self) -> bool:
@@ -137,16 +140,17 @@ class VLCVideoPlayer:
                 return True
             return False
         except Exception as e:
-            print(f"Error resuming: {e}")
+            log_error(f"Error resuming: {e}", component="vlc")
             return False
 
     def _start_with_python_vlc(self) -> bool:
         """Start video using VLC Python bindings"""
         try:
-            print("Starting VLC with Python bindings")
+            log_info("Starting VLC with Python bindings", component="vlc")
 
             # Create VLC instance with appropriate args
             vlc_args = self._get_vlc_args()
+            log_info(f"VLC python args: {' '.join(vlc_args)}", component="vlc")
             self.vlc_instance = vlc.Instance(vlc_args)
             if not self.vlc_instance:
                 raise VLCPlayerError("Failed to create VLC instance")
@@ -174,17 +178,17 @@ class VLCVideoPlayer:
                 self.vlc_player.set_fullscreen(True)
 
             self.is_playing = True
-            print("VLC playback started successfully")
+            log_info("VLC playback started successfully", component="vlc")
             return True
 
         except Exception as e:
-            print(f"Error with VLC Python: {e}")
+            log_error(f"Error with VLC Python: {e}", component="vlc")
             return False
 
     def _start_with_command_vlc(self) -> bool:
         """Start video using VLC command line"""
         try:
-            print("Starting VLC with command line")
+            log_info("Starting VLC with command line", component="vlc")
 
             cmd = ["vlc", "--intf", "dummy"]  # No interface
             cmd.extend(self._get_vlc_args())
@@ -206,30 +210,35 @@ class VLCVideoPlayer:
 
             cmd.append(self.video_path)
 
+            # Capture stdout/stderr to files for diagnostics
+            paths = log_file_paths()
+            stdout_path = paths["vlc_stdout"]
+            stderr_path = paths["vlc_stderr"]
             self.command_process = subprocess.Popen(
-                cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+                cmd,
+                stdout=open(stdout_path, "wb"),
+                stderr=open(stderr_path, "wb"),
             )
+            log_info(f"Launched VLC: {' '.join(cmd)}", component="vlc")
 
             # Give VLC time to start
             time.sleep(2)
 
             if self.command_process.poll() is None:
                 self.is_playing = True
-                print("✅ VLC command started successfully")
+                log_info("VLC command started successfully", component="vlc")
                 return True
             else:
-                stdout, stderr = self.command_process.communicate(timeout=1)
-                print(f"❌ VLC process exited: {stdout.decode()}")
-                if stderr:
-                    print(f"❌ VLC stderr: {stderr.decode()}")
+                log_error("VLC command process exited early", component="vlc")
                 return False
 
         except Exception as e:
-            print(f"❌ Error with VLC command: {e}")
+            log_error(f"Error with VLC command: {e}", component="vlc")
             return False
 
     def _get_vlc_args(self) -> list[str]:
         """Get VLC command line arguments"""
+        paths = log_file_paths()
         return [
             "--no-video-title-show",
             "--no-osd",
@@ -240,6 +249,9 @@ class VLCVideoPlayer:
             "--vout=x11",
             "--aout=alsa",
             "--x11-display=:0",
+            "--file-logging",
+            f"--logfile={paths['vlc_main']}",
+            "--verbose=2",
         ]
 
     def _configure_debug_window(self) -> None:
@@ -260,7 +272,10 @@ class VLCVideoPlayer:
                 time.sleep(0.1)
 
             if not xid:
-                print("⚠️ Could not get VLC window ID for debug configuration")
+                log_warning(
+                    "Could not get VLC window ID for debug configuration",
+                    component="vlc",
+                )
                 return
 
             # Compute a safe region for video (leave left/top margin for overlay)
@@ -281,7 +296,9 @@ class VLCVideoPlayer:
                     capture_output=True,
                     timeout=1,
                 )
-                print(f"✅ Configured debug window via xdotool: xid={xid}")
+                log_info(
+                    f"Configured debug window via xdotool: xid={xid}", component="vlc"
+                )
                 return
             except Exception:
                 pass
@@ -299,11 +316,14 @@ class VLCVideoPlayer:
                     capture_output=True,
                     timeout=1,
                 )
-                print("✅ Configured debug window via wmctrl")
+                log_info("Configured debug window via wmctrl", component="vlc")
             except Exception:
-                print("⚠️ Could not position VLC window - xdotool/wmctrl not available")
+                log_warning(
+                    "Could not position VLC window - xdotool/wmctrl not available",
+                    component="vlc",
+                )
         except Exception as e:
-            print(f"⚠️ Error configuring debug window: {e}")
+            log_warning(f"Error configuring debug window: {e}", component="vlc")
 
     def cleanup(self) -> None:
         """Clean up resources"""
@@ -317,7 +337,7 @@ class VLCVideoPlayer:
             if self.vlc_instance:
                 self.vlc_instance.release()
         except Exception as e:
-            print(f"Error during VLC cleanup: {e}")
+            log_error(f"Error during VLC cleanup: {e}", component="vlc")
 
         self.vlc_instance = None
         self.vlc_player = None

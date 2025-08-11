@@ -21,6 +21,7 @@ from midi import MidiScheduler, MidiManager
 from core import Schedule, ScheduleEditor, SystemState, CollaboratorRegistry
 from ui import CommandInterface, StatusDisplay
 from debug.simple_overlay import SimpleDebugManager
+from core.logger import log_info, log_warning, log_error, snapshot_env, log_file_paths
 
 
 class LeaderPi:
@@ -53,9 +54,9 @@ class LeaderPi:
         self.video_path = self.video_manager.find_video_file()
         if self.video_path:
             self.video_player.load_video(self.video_path)
-            print(f"[DEBUG] Video file loaded: {self.video_path}")
+            log_info(f"Video file loaded: {self.video_path}", component="leader")
         else:
-            print("[DEBUG] No video file found at startup.")
+            log_warning("No video file found at startup.", component="leader")
 
         # Simple debug overlay (displays on Pi screen)
         self.simple_debug = None
@@ -90,6 +91,7 @@ class LeaderPi:
             return
 
         print("🚀 Starting KitchenSync system...")
+        snapshot_env()
 
         # Start system state
         self.system_state.start_session()
@@ -106,9 +108,12 @@ class LeaderPi:
         if self.config.debug_mode and self.simple_debug is None:
             self.simple_debug = SimpleDebugManager("leader-pi", is_leader=True)
             if self.simple_debug.overlay:
-                print(f"[DEBUG] Simple overlay created and will display on Pi screen")
+                log_info("Simple overlay created", component="leader")
             else:
-                print(f"[DEBUG] Failed to create overlay - falling back to file debug")
+                log_warning(
+                    "Failed to create overlay - falling back to file debug",
+                    component="leader",
+                )
                 # Fallback to file debug if pygame fails
                 self.debug_file = "/tmp/kitchensync_leader_debug.txt"
                 with open(self.debug_file, "w") as f:
@@ -141,6 +146,11 @@ class LeaderPi:
             self._start_simple_debug()
 
         print("✅ System started successfully!")
+        paths = log_file_paths()
+        log_info(
+            "Log paths: " + ", ".join([f"{k}={v}" for k, v in paths.items()]),
+            component="leader",
+        )
 
     def stop_system(self) -> None:
         """Stop the synchronized playback system"""
