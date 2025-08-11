@@ -32,6 +32,8 @@ class HTMLDebugOverlay:
             "video_position": None,
             "midi_current": None,
             "midi_next": None,
+            "midi_recent": [],
+            "midi_upcoming": [],
             "is_leader": False,
             "video_loop_count": 0,
             "midi_loop_count": 0,
@@ -61,22 +63,31 @@ class HTMLDebugOverlay:
             font-family: 'Courier New', monospace;
             background-color: #1a1a2e;
             color: #ffffff;
-            margin: 20px;
-            font-size: 14px;
+            margin: 15px;
+            font-size: 12px;
         }}
         .header {{
             background-color: #16213e;
-            padding: 15px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            border-left: 4px solid #0f3460;
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 10px;
+            border-left: 3px solid #0f3460;
         }}
         .section {{
             background-color: #16213e;
-            padding: 15px;
-            border-radius: 8px;
-            margin-bottom: 15px;
-            border-left: 4px solid #0f3460;
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 8px;
+            border-left: 3px solid #0f3460;
+        }}
+        .section-row {{
+            display: flex;
+            gap: 10px;
+            margin-bottom: 8px;
+        }}
+        .section-row .section {{
+            flex: 1;
+            margin-bottom: 0;
         }}
         .highlight {{
             color: #4ecdc4;
@@ -103,11 +114,37 @@ class HTMLDebugOverlay:
         }}
         .refresh-info {{
             background-color: #2d3748;
-            padding: 10px;
+            padding: 8px;
             border-radius: 4px;
-            margin-top: 20px;
+            margin-top: 15px;
             text-align: center;
             color: #868e96;
+            font-size: 11px;
+        }}
+        .refresh-controls {{
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 15px;
+            flex-wrap: wrap;
+        }}
+        .midi-list {{
+            max-height: 120px;
+            overflow-y: auto;
+            margin-top: 8px;
+        }}
+        .midi-event {{
+            background-color: #2d3748;
+            padding: 5px 8px;
+            border-radius: 3px;
+            margin: 3px 0;
+            font-size: 11px;
+        }}
+        .midi-recent {{
+            border-left: 3px solid #51cf66;
+        }}
+        .midi-upcoming {{
+            border-left: 3px solid #74c0fc;
         }}
     </style>
     <script>
@@ -119,42 +156,45 @@ class HTMLDebugOverlay:
 </head>
 <body>
     <div class="header">
-        <h1>🎬 KitchenSync Debug - {self.pi_id}</h1>
+        <h1>KitchenSync Debug - {self.pi_id}</h1>
         <div class="timestamp">Last updated: <span id="timestamp">{time.strftime('%H:%M:%S')}</span></div>
     </div>
 
     <div class="section">
-        <h2>📹 Video Status</h2>
+        <h3>Video Status</h3>
         <div><strong>File:</strong> <span id="video-file">{self.state['video_file']}</span></div>
-        <div><strong>Current Time:</strong> <span id="current-time" class="highlight">{self.state['current_time']:.1f}s</span></div>
-        <div><strong>Total Time:</strong> <span id="total-time">{self.state['total_time']:.1f}s</span></div>
-        <div><strong>Video Position:</strong> <span id="video-position">{self.state['video_position'] or 'N/A'}</span></div>
+        <div><strong>Time:</strong> <span id="current-time" class="highlight">{self.state['current_time']:.1f}s</span> / <span id="total-time">{self.state['total_time']:.1f}s</span></div>
+        <div><strong>Session:</strong> <span id="session-time">{self.state['session_time']:.1f}s</span> | <strong>Leader:</strong> <span id="leader-mode" class="{'success' if self.state['is_leader'] else 'info'}">{'Yes' if self.state['is_leader'] else 'No'}</span></div>
+        <div><strong>Position:</strong> <span id="video-position">{self.state['video_position'] or 'N/A'}</span></div>
     </div>
 
     <div class="section">
-        <h2>⏱️ Session Info</h2>
-        <div><strong>Session Time:</strong> <span id="session-time">{self.state['session_time']:.1f}s</span></div>
-        <div><strong>Leader Mode:</strong> <span id="leader-mode" class="{'success' if self.state['is_leader'] else 'info'}">{'Yes' if self.state['is_leader'] else 'No'}</span></div>
-    </div>
-
-    <div class="section">
-        <h2>🎵 MIDI Events</h2>
-        <div id="midi-current">
-            <strong>Current:</strong> 
-            <span class="{'midi-event' if self.state['midi_current'] else 'warning'}">
-                {self._format_midi_event(self.state['midi_current']) if self.state['midi_current'] else 'None'}
-            </span>
-        </div>
-        <div id="midi-next">
-            <strong>Next:</strong> 
-            <span class="{'midi-event' if self.state['midi_next'] else 'info'}">
-                {self._format_midi_event(self.state['midi_next']) if self.state['midi_next'] else 'None'}
-            </span>
+        <h3>MIDI Information</h3>
+        <div><strong>Current:</strong> <span id="midi-current" class="{'highlight' if self.state['midi_current'] else 'warning'}">{self._format_midi_event(self.state['midi_current']) if self.state['midi_current'] else 'None'}</span></div>
+        <div><strong>Next:</strong> <span id="midi-next" class="{'info' if self.state['midi_next'] else 'warning'}">{self._format_midi_event(self.state['midi_next']) if self.state['midi_next'] else 'None'}</span></div>
+        
+        <div style="display: flex; gap: 10px; margin-top: 10px;">
+            <div style="flex: 1;">
+                <strong>Recent MIDI:</strong>
+                <div id="midi-recent-list" class="midi-list">
+                    {self._format_midi_list(self.state.get('midi_recent', []), 'midi-recent')}
+                </div>
+            </div>
+            <div style="flex: 1;">
+                <strong>Upcoming MIDI:</strong>
+                <div id="midi-upcoming-list" class="midi-list">
+                    {self._format_midi_list(self.state.get('midi_upcoming', []), 'midi-upcoming')}
+                </div>
+            </div>
         </div>
     </div>
 
     <div class="refresh-info">
-        🔄 Auto-refreshing every 2 seconds | Manual refresh: F5
+        <div class="refresh-controls">
+            <span>Auto-refreshing every 2 seconds</span>
+            <span>|</span>
+            <span>Manual refresh: F5</span>
+        </div>
     </div>
 </body>
 </html>
@@ -187,6 +227,18 @@ class HTMLDebugOverlay:
             return f"{time_val:.1f}s: CC Ch{channel} C{control} V{value}"
         else:
             return f"{time_val:.1f}s: {event_type}"
+
+    def _format_midi_list(self, midi_list, css_class):
+        """Format a list of MIDI events for HTML display"""
+        if not midi_list:
+            return f'<div class="midi-event {css_class}" style="opacity: 0.5;">No events</div>'
+
+        html_items = []
+        for event in midi_list[-5:]:  # Show last 5 events
+            formatted = self._format_midi_event(event)
+            html_items.append(f'<div class="midi-event {css_class}">{formatted}</div>')
+
+        return "\n".join(html_items)
 
     def update_state(self, **kwargs):
         """Update the debug state"""
@@ -407,63 +459,94 @@ class HTMLDebugOverlay:
     <title>KitchenSync Debug - {system_info.get('pi_id', 'Unknown')}</title>
     <meta charset="utf-8">
     <style>
-        body {{ font-family: Arial, sans-serif; margin: 20px; background: #1a1a1a; color: #ffffff; }}
-        .header {{ background: #333; padding: 15px; border-radius: 8px; margin-bottom: 20px; }}
-        .status {{ background: #2d2d2d; padding: 15px; border-radius: 8px; margin-bottom: 15px; }}
-        .status.good {{ border-left: 4px solid #4CAF50; }}
-        .status.warning {{ border-left: 4px solid #FF9800; }}
-        .status.error {{ border-left: 4px solid #f44336; }}
-        .log-section {{ background: #2d2d2d; padding: 15px; border-radius: 8px; margin-bottom: 15px; }}
-        .log-content {{ background: #1a1a1a; padding: 10px; border-radius: 4px; font-family: monospace; font-size: 12px; max-height: 300px; overflow-y: auto; }}
-        .refresh-info {{ text-align: center; color: #888; font-size: 12px; margin-top: 20px; }}
-        .auto-refresh {{ background: #333; padding: 10px; border-radius: 4px; margin-bottom: 15px; text-align: center; }}
-        .refresh-button {{ background: #4CAF50; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; }}
+        body {{ font-family: 'Courier New', monospace; margin: 15px; background: #1a1a2e; color: #ffffff; font-size: 12px; }}
+        .header {{ background: #16213e; padding: 10px; border-radius: 5px; margin-bottom: 10px; border-left: 3px solid #0f3460; }}
+        .status {{ background: #16213e; padding: 10px; border-radius: 5px; margin-bottom: 8px; border-left: 3px solid #0f3460; }}
+        .status.good {{ border-left: 3px solid #4CAF50; }}
+        .status.warning {{ border-left: 3px solid #FF9800; }}
+        .status.error {{ border-left: 3px solid #f44336; }}
+        .status-row {{ display: flex; gap: 10px; margin-bottom: 8px; }}
+        .status-row .status {{ flex: 1; margin-bottom: 0; }}
+        .log-section {{ background: #16213e; padding: 10px; border-radius: 5px; margin-bottom: 8px; border-left: 3px solid #0f3460; }}
+        .log-content {{ background: #1a1a2e; padding: 8px; border-radius: 3px; font-family: monospace; font-size: 11px; max-height: 200px; overflow-y: auto; }}
+        .refresh-info {{ text-align: center; color: #868e96; font-size: 11px; margin-top: 15px; background: #2d3748; padding: 8px; border-radius: 4px; }}
+        .refresh-controls {{ display: flex; justify-content: center; align-items: center; gap: 15px; flex-wrap: wrap; }}
+        .auto-refresh {{ background: #16213e; padding: 8px; border-radius: 5px; margin-bottom: 8px; text-align: center; border-left: 3px solid #0f3460; }}
+        .refresh-button {{ background: #4CAF50; color: white; border: none; padding: 8px 15px; border-radius: 3px; cursor: pointer; font-size: 11px; }}
         .refresh-button:hover {{ background: #45a049; }}
+        .midi-section {{ background: #16213e; padding: 10px; border-radius: 5px; margin-bottom: 8px; border-left: 3px solid #0f3460; }}
+        .midi-list {{ max-height: 120px; overflow-y: auto; margin-top: 8px; }}
+        .midi-event {{ background-color: #2d3748; padding: 5px 8px; border-radius: 3px; margin: 3px 0; font-size: 11px; }}
+        .midi-recent {{ border-left: 3px solid #51cf66; }}
+        .midi-upcoming {{ border-left: 3px solid #74c0fc; }}
     </style>
 </head>
 <body>
     <div class="header">
-        <h1>🍳 KitchenSync Debug Overlay</h1>
+        <h1>KitchenSync Debug Overlay</h1>
         <p>Pi ID: {system_info.get('pi_id', 'Unknown')} | Last Updated: {system_info.get('timestamp', 'Unknown')}</p>
     </div>
 
     <div class="auto-refresh">
-        <button class="refresh-button" onclick="location.reload()">🔄 Manual Refresh</button>
-        <p>Auto-refreshing every 5 seconds</p>
+        <div class="refresh-controls">
+            <button class="refresh-button" onclick="location.reload()">Manual Refresh</button>
+            <span>|</span>
+            <span>Auto-refreshing every 5 seconds</span>
+        </div>
     </div>
 
-    <div class="status {system_info.get('service_status_class', 'warning')}">
-        <h2>📊 Service Status</h2>
-        <p><strong>Service:</strong> {system_info.get('service_status', 'Unknown')}</p>
-        <p><strong>PID:</strong> {system_info.get('service_pid', 'Unknown')}</p>
-        <p><strong>Uptime:</strong> {system_info.get('service_uptime', 'Unknown')}</p>
+    <div class="status-row">
+        <div class="status {system_info.get('service_status_class', 'warning')}">
+            <h3>Service Status</h3>
+            <p><strong>Service:</strong> {system_info.get('service_status', 'Unknown')}</p>
+            <p><strong>PID:</strong> {system_info.get('service_pid', 'Unknown')}</p>
+            <p><strong>Uptime:</strong> {system_info.get('service_uptime', 'Unknown')}</p>
+        </div>
+
+        <div class="status {system_info.get('vlc_status_class', 'warning')}">
+            <h3>VLC Status</h3>
+            <p><strong>Status:</strong> {system_info.get('vlc_status', 'Unknown')}</p>
+            <p><strong>Video File:</strong> {system_info.get('video_file', 'None')}</p>
+            <p><strong>Time:</strong> {system_info.get('video_current_time', 0):.1f}s / {system_info.get('video_total_time', 0):.1f}s</p>
+            <p><strong>Position:</strong> {system_info.get('video_position', 0)*100:.1f}% | <strong>State:</strong> {system_info.get('video_state', 'unknown')}</p>
+            <p><strong>Loops:</strong> Video #{system_info.get('video_loop_count', 0)} | MIDI #{system_info.get('midi_loop_count', 0)} | {'Enabled' if system_info.get('looping_enabled', False) else 'Disabled'}</p>
+        </div>
     </div>
 
-    <div class="status {system_info.get('vlc_status_class', 'warning')}">
-        <h2>🎬 VLC Status</h2>
-        <p><strong>Status:</strong> {system_info.get('vlc_status', 'Unknown')}</p>
-        <p><strong>Video File:</strong> {system_info.get('video_file', 'None')}</p>
-        <p><strong>VLC Process:</strong> {system_info.get('vlc_process', 'None')}</p>
-        <p><strong>Current Time:</strong> {system_info.get('video_current_time', 0):.1f}s / {system_info.get('video_total_time', 0):.1f}s</p>
-        <p><strong>Position:</strong> {system_info.get('video_position', 0)*100:.1f}%</p>
-        <p><strong>State:</strong> {system_info.get('video_state', 'unknown')}</p>
-        <p><strong>Video Loops:</strong> #{system_info.get('video_loop_count', 0)} | <strong>MIDI Loops:</strong> #{system_info.get('midi_loop_count', 0)}</p>
-        <p><strong>Looping:</strong> {'✅ Enabled' if system_info.get('looping_enabled', False) else '❌ Disabled'}</p>
+    <div class="midi-section">
+        <h3>MIDI Information</h3>
+        <div style="display: flex; gap: 10px; margin-top: 10px;">
+            <div style="flex: 1;">
+                <strong>Recent MIDI:</strong>
+                <div class="midi-list">
+                    {self._format_midi_list(system_info.get('midi_recent', []), 'midi-recent')}
+                </div>
+            </div>
+            <div style="flex: 1;">
+                <strong>Upcoming MIDI:</strong>
+                <div class="midi-list">
+                    {self._format_midi_list(system_info.get('midi_upcoming', []), 'midi-upcoming')}
+                </div>
+            </div>
+        </div>
     </div>
 
     <div class="log-section">
-        <h2>📝 Recent System Log</h2>
+        <h3>Recent System Log</h3>
         <div class="log-content">{system_info.get('recent_logs', 'No logs available')}</div>
     </div>
 
     <div class="log-section">
-        <h2>🎯 Recent VLC Log</h2>
+        <h3>Recent VLC Log</h3>
         <div class="log-content">{system_info.get('vlc_logs', 'No VLC logs available')}</div>
     </div>
 
     <div class="refresh-info">
-        <p>This overlay automatically refreshes every 5 seconds to show real-time status</p>
-        <p>Last refresh: <span id="last-refresh">{system_info.get('timestamp', 'Unknown')}</span></p>
+        <div class="refresh-controls">
+            <span>This overlay automatically refreshes every 5 seconds</span>
+            <span>|</span>
+            <span>Last refresh: <span id="last-refresh">{system_info.get('timestamp', 'Unknown')}</span></span>
+        </div>
     </div>
 
     <script>
@@ -705,6 +788,25 @@ class HTMLDebugOverlay:
             except Exception as e:
                 info["vlc_status"] = f"Check failed: {e}"
                 info["vlc_status_class"] = "warning"
+
+            # Get MIDI information if available
+            try:
+                if hasattr(self, "midi_scheduler") and self.midi_scheduler:
+                    if hasattr(self.midi_scheduler, "get_recent_cues"):
+                        info["midi_recent"] = self.midi_scheduler.get_recent_cues(
+                            info.get("video_current_time", 0), lookback=10.0
+                        )
+                    if hasattr(self.midi_scheduler, "get_upcoming_cues"):
+                        info["midi_upcoming"] = self.midi_scheduler.get_upcoming_cues(
+                            info.get("video_current_time", 0), lookahead=15.0
+                        )
+                else:
+                    info["midi_recent"] = []
+                    info["midi_upcoming"] = []
+            except Exception as e:
+                log_warning(f"Error getting MIDI info: {e}", component="overlay")
+                info["midi_recent"] = []
+                info["midi_upcoming"] = []
 
             # Get recent logs
             try:

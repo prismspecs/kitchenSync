@@ -186,6 +186,14 @@ The system features a clean, consolidated debug architecture:
 - Real-time video timing and system status monitoring
 - Professional window management with side-by-side layout
 - Component-specific logging integrated throughout
+- **Enhanced Layout (Jan 2025)**: Condensed interface with:
+  - Smaller font (12px) and reduced padding for better information density
+  - Side-by-side Service Status and VLC Status sections
+  - Combined refresh controls on single line
+  - Clean title without emoji decorations
+  - Dedicated MIDI Information section showing recent and upcoming MIDI events
+  - Scrollable MIDI event lists with color-coded indicators
+  - Reduced log section heights to prevent scroll overflow
 
 **Collaborator Pi (Simple Debug Overlay)**
 - `SimpleDebugManager` - Lightweight debug overlay system
@@ -199,6 +207,7 @@ The system features a clean, consolidated debug architecture:
 - **Consolidated Logging**: All components use standardized `log_info/warning/error` patterns
 - **No Debug Print Pollution**: Eliminated print statements in favor of proper logging
 - **Production Ready**: Debug systems designed for reliable systemd operation
+- **Enhanced UX**: Improved debug window layout maximizes information visibility within viewport
 
 ## Diagnostics and Logs (2025-08)
 
