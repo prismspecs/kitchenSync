@@ -672,6 +672,7 @@ class HTMLDebugOverlay:
 
             # Get recent logs
             try:
+                import os
                 from src.core.logger import log_file_paths
 
                 paths = log_file_paths()
