@@ -35,7 +35,6 @@ class HTMLDebugOverlay:
             "total_time": 0.0,
             "session_time": 0.0,
             "video_position": None,
-
             "midi_recent": [],
             "midi_upcoming": [],
             "is_leader": False,
