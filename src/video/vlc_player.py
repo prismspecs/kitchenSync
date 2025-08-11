@@ -169,12 +169,6 @@ class VLCVideoPlayer:
             # Start playback
             self.vlc_player.play()
 
-            # Wait for playback to start
-            time.sleep(1)
-
-            # Position VLC windows properly
-            self._place_vlc_windows()
-
             log_info("VLC playback started successfully")
             return True
 
@@ -297,22 +291,7 @@ class VLCVideoPlayer:
         """Get VLC command line arguments"""
         paths = log_file_paths()
         return [
-            "--no-video-title-show",
-            "--no-osd",
-            "--mouse-hide-timeout=0",
-            "--no-snapshot-preview",
-            "--network-caching=0",
-            "--file-caching=300",
-            "--aout=alsa",
-            # Try more conservative video output for stability
-            "--vout=mmal_vout",  # Use MMAL (Pi-specific) instead of gles2
-            # Window positioning - place VLC on the left side of screen
-            "--no-fullscreen",
-            "--width=1280",
-            "--height=720",
-            "--video-x=0",  # Left side of screen
-            "--video-y=0",  # Top of screen
-            "--no-video-deco",  # No window decorations
+            # Minimal config - let VLC use defaults
             "--file-logging",
             f"--logfile={paths['vlc_main']}",
             "--verbose=2",
