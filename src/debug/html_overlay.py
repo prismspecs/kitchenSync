@@ -573,12 +573,14 @@ class HTMLDebugOverlay:
                                 and state_video_file != "No video"
                                 and state_video_file != "None"
                             ):
+                                import os
                                 info["video_file"] = os.path.basename(state_video_file)
                             # Otherwise try to get from video player
                             elif (
                                 hasattr(self.video_player, "video_file")
                                 and self.video_player.video_file
                             ):
+                                import os
                                 info["video_file"] = os.path.basename(
                                     self.video_player.video_file
                                 )
@@ -586,6 +588,7 @@ class HTMLDebugOverlay:
                                 hasattr(self.video_player, "current_video")
                                 and self.video_player.current_video
                             ):
+                                import os
                                 info["video_file"] = os.path.basename(
                                     self.video_player.current_video
                                 )
