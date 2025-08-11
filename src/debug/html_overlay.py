@@ -291,8 +291,9 @@ class HTMLDebugOverlay:
             # Create a temporary Firefox profile directory
             profile_dir = "/tmp/firefox-debug-profile"
             import os
+
             os.makedirs(profile_dir, exist_ok=True)
-            
+
             # Open Firefox with the profile (non-blocking)
             subprocess.Popen(
                 [
@@ -309,43 +310,61 @@ class HTMLDebugOverlay:
 
             # Position window after a longer delay (in background thread)
             def position_window():
-                time.sleep(8)  # Wait longer for Firefox to fully load
+                time.sleep(
+                    12
+                )  # Wait much longer to avoid conflict with VLC positioning
                 try:
                     # Get list of all windows and find Firefox
                     result = subprocess.run(
-                        ["wmctrl", "-l"], 
-                        capture_output=True, 
-                        text=True, 
-                        timeout=10
+                        ["wmctrl", "-l"], capture_output=True, text=True, timeout=10
                     )
-                    
+
                     if result.returncode == 0:
                         firefox_window_id = None
-                        for line in result.stdout.strip().split('\n'):
-                            if line and ('firefox' in line.lower() or 'kitchensync' in line.lower()):
-                                window_id = line.split()[0]
-                                firefox_window_id = window_id
-                                log_info(f"Found Firefox window: {line.strip()}")
-                                break
-                        
+                        for line in result.stdout.strip().split("\n"):
+                            if line and (
+                                "firefox" in line.lower()
+                                or "kitchensync" in line.lower()
+                            ):
+                                # Make sure it's not a VLC window
+                                if (
+                                    "vlc" not in line.lower()
+                                    and "media player" not in line.lower()
+                                ):
+                                    window_id = line.split()[0]
+                                    firefox_window_id = window_id
+                                    log_info(f"Found Firefox window: {line.strip()}")
+                                    break
+
                         if firefox_window_id:
                             # Position using window ID instead of title
                             pos_result = subprocess.run(
-                                ["wmctrl", "-i", "-r", firefox_window_id, "-e", "0,1280,0,640,1080"],
+                                [
+                                    "wmctrl",
+                                    "-i",
+                                    "-r",
+                                    firefox_window_id,
+                                    "-e",
+                                    "0,1280,0,640,1080",
+                                ],
                                 check=False,
                                 timeout=5,
                                 stdout=subprocess.DEVNULL,
                                 stderr=subprocess.DEVNULL,
                             )
                             if pos_result.returncode == 0:
-                                log_info(f"Positioned Firefox window on right side using window ID: {firefox_window_id}")
+                                log_info(
+                                    f"Positioned Firefox window on right side using window ID: {firefox_window_id}"
+                                )
                             else:
-                                log_warning(f"Failed to position Firefox window with ID: {firefox_window_id}")
+                                log_warning(
+                                    f"Failed to position Firefox window with ID: {firefox_window_id}"
+                                )
                         else:
                             log_warning("Could not find Firefox window in wmctrl list")
                     else:
                         log_warning("Failed to get window list from wmctrl")
-                        
+
                 except Exception as e:
                     log_warning(f"Failed to position Firefox window: {e}")
 
