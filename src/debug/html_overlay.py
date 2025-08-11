@@ -291,23 +291,51 @@ class HTMLDebugOverlay:
     def open_in_browser(self):
         """Open the HTML file in the default browser"""
         try:
-            # Open new browser instance with specific size and position
+            # Open new browser instance
             import subprocess
-
             subprocess.run(
                 [
                     "chromium",
                     "--new-window",
-                    "--window-size=640,720",  # Smaller width to fit alongside VLC
-                    "--window-position=1280,0",  # Position on right side of VLC
                     f"file://{self.html_file}",
                 ],
                 check=False,
             )
-
+            
+            # Force Chrome window positioning using wmctrl
+            self._force_chrome_position()
+            
             log_info(f"HTML debug overlay opened in browser: {self.html_file}")
         except Exception as e:
             log_error(f"Failed to open HTML overlay in browser: {e}")
+
+    def _force_chrome_position(self):
+        """Force Chrome window to the right side using wmctrl"""
+        try:
+            import subprocess
+            import time
+            
+            # Wait for Chrome window to appear
+            time.sleep(2)
+            
+            # Find Chrome windows and force position
+            result = subprocess.run(['wmctrl', '-l'], capture_output=True, text=True, timeout=10)
+            if result.returncode == 0:
+                for line in result.stdout.split('\n'):
+                    if 'chromium' in line.lower() or 'kitchensync_debug' in line.lower():
+                        parts = line.split()
+                        if len(parts) >= 2:
+                            window_id = parts[0]
+                            # Force Chrome to right side: x=1280, y=0, width=640, height=720
+                            subprocess.run(['wmctrl', '-ir', window_id, '-e', '0,1280,0,640,720'], 
+                                         check=False, timeout=5)
+                            log_info(f"Forced Chrome window {window_id} to right side (1280,0,640,720)")
+                            
+                            # Bring to front
+                            subprocess.run(['wmctrl', '-ia', window_id], check=False, timeout=5)
+                            
+        except Exception as e:
+            log_warning(f"Failed to force Chrome window position: {e}")
 
     def update_content(self, system_info: dict = None):
         """Update the HTML content with current system information"""
