@@ -282,17 +282,27 @@ class VLCVideoPlayer:
                 cmd.append("--repeat")  # Loop indefinitely
                 log_info("Command-line VLC looping enabled", component="vlc")
 
-            # Use consistent positioning - left side for VLC
-            cmd.extend(
-                [
-                    "--no-fullscreen",
-                    "--width=1280",
-                    "--height=1080",
-                    "--video-x=0",  # Left side of screen
-                    "--video-y=0",  # Top of screen
-                    "--no-video-deco",
-                ]
-            )
+            # Window configuration based on debug mode
+            if self.debug_mode:
+                # Debug mode: windowed on left side for overlay
+                cmd.extend(
+                    [
+                        "--no-fullscreen",
+                        "--width=1280",
+                        "--height=1080",
+                        "--video-x=0",  # Left side of screen
+                        "--video-y=0",  # Top of screen
+                        "--no-video-deco",
+                    ]
+                )
+            else:
+                # Production mode: fullscreen
+                cmd.extend(
+                    [
+                        "--fullscreen",
+                        "--no-video-deco",
+                    ]
+                )
 
             cmd.append(self.video_path)
 
@@ -338,17 +348,27 @@ class VLCVideoPlayer:
                 cmd.append("--repeat")  # Loop indefinitely
                 log_info("Command-line VLC looping enabled (no audio)", component="vlc")
 
-            # Use consistent positioning - left side for VLC
-            cmd.extend(
-                [
-                    "--no-fullscreen",
-                    "--width=1280",
-                    "--height=1080",
-                    "--video-x=0",  # Left side of screen
-                    "--video-y=0",  # Top of screen
-                    "--no-video-deco",
-                ]
-            )
+            # Window configuration based on debug mode
+            if self.debug_mode:
+                # Debug mode: windowed on left side for overlay
+                cmd.extend(
+                    [
+                        "--no-fullscreen",
+                        "--width=1280",
+                        "--height=1080",
+                        "--video-x=0",  # Left side of screen
+                        "--video-y=0",  # Top of screen
+                        "--no-video-deco",
+                    ]
+                )
+            else:
+                # Production mode: fullscreen
+                cmd.extend(
+                    [
+                        "--fullscreen",
+                        "--no-video-deco",
+                    ]
+                )
 
             cmd.append(self.video_path)
 

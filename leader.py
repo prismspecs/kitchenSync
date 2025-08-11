@@ -58,15 +58,19 @@ class LeaderPi:
         else:
             log_warning("No video file found at startup.", component="leader")
 
-        # Create HTML debug overlay
-        log_info("About to create HTML debug overlay", component="leader")
-        pi_id = "leader-pi"  # Define the pi_id variable
-        self.html_debug = HTMLDebugManager(
-            pi_id, self.video_player, self.midi_scheduler
-        )
-        log_info("HTMLDebugManager created, about to start", component="leader")
-        self.html_debug.start()
-        log_info("HTML overlay started successfully", component="leader")
+        # Create HTML debug overlay only if debug mode is enabled
+        self.html_debug = None
+        if self.config.debug_mode:
+            log_info("About to create HTML debug overlay", component="leader")
+            pi_id = "leader-pi"  # Define the pi_id variable
+            self.html_debug = HTMLDebugManager(
+                pi_id, self.video_player, self.midi_scheduler
+            )
+            log_info("HTMLDebugManager created, about to start", component="leader")
+            self.html_debug.start()
+            log_info("HTML overlay started successfully", component="leader")
+        else:
+            log_info("Debug mode disabled - no overlay created", component="leader")
 
         # Setup command handlers
         self._setup_command_handlers()
