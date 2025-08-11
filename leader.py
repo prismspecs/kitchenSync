@@ -365,13 +365,17 @@ def main():
     args = parser.parse_args()
 
     try:
+        log_info("Starting main() function", component="autostart")
         leader = LeaderPi()
+        log_info("LeaderPi initialized successfully", component="autostart")
 
         # Override debug mode if specified via command line
         if args.debug:
             leader.config.config["KITCHENSYNC"]["debug"] = "true"
             print("✓ Debug mode: ENABLED (via command line)")
+            log_info("Debug mode enabled", component="autostart")
 
+        log_info(f"args.auto = {args.auto}", component="autostart")
         if args.auto:
             print("🎯 Leader Pi starting in automatic mode...")
             print("System will auto-start playback and run continuously.")
