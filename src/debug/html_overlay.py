@@ -291,21 +291,46 @@ class HTMLDebugOverlay:
     def open_in_browser(self):
         """Open the HTML file in the default browser"""
         try:
-            # Open new browser instance with positioning arguments
+            # Check if a debug browser window already exists
             import subprocess
 
-            subprocess.run(
-                [
-                    "chromium",
-                    "--new-window",
-                    "--window-size=640,720",
-                    "--window-position=1280,0",
-                    "--disable-web-security",  # Allow local file access
-                    "--user-data-dir=/tmp/chrome-debug",  # Separate profile
-                    f"file://{self.html_file}",
-                ],
-                check=False,
+            result = subprocess.run(
+                ["wmctrl", "-l"], capture_output=True, text=True, timeout=10
             )
+
+            existing_window = None
+            if result.returncode == 0:
+                for line in result.stdout.split("\n"):
+                    if (
+                        "kitchensync_debug" in line.lower()
+                        or "chromium" in line.lower()
+                    ):
+                        parts = line.split()
+                        if len(parts) >= 2:
+                            existing_window = parts[0]
+                            break
+
+            if existing_window:
+                # Reuse existing window - bring it to front and refresh
+                subprocess.run(
+                    ["wmctrl", "-ia", existing_window], check=False, timeout=5
+                )
+                log_info(f"Reusing existing debug browser window: {existing_window}")
+            else:
+                # Open new browser instance with positioning arguments
+                subprocess.run(
+                    [
+                        "chromium",
+                        "--new-window",
+                        "--window-size=640,720",
+                        "--window-position=1280,0",
+                        "--disable-web-security",  # Allow local file access
+                        "--user-data-dir=/tmp/chrome-debug",  # Separate profile
+                        f"file://{self.html_file}",
+                    ],
+                    check=False,
+                )
+                log_info("Opened new debug browser window")
 
             log_info(f"HTML debug overlay opened in browser: {self.html_file}")
         except Exception as e:

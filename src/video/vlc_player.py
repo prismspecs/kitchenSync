@@ -169,6 +169,9 @@ class VLCVideoPlayer:
             # Start playback
             self.vlc_player.play()
 
+            # Force VLC window positioning after it starts
+            self._force_vlc_position()
+
             log_info("VLC playback started successfully")
             return True
 
@@ -176,6 +179,43 @@ class VLCVideoPlayer:
             log_error(f"Error with VLC Python: {e}", component="vlc")
             log_info("Falling back to command-line VLC", component="vlc")
             return self._start_with_command_vlc()
+
+    def _force_vlc_position(self):
+        """Force VLC window to the left side using wmctrl"""
+        try:
+            import subprocess
+            import time
+
+            # Wait for VLC window to appear
+            time.sleep(3)
+
+            # Find VLC windows and force position
+            result = subprocess.run(
+                ["wmctrl", "-l"], capture_output=True, text=True, timeout=10
+            )
+            if result.returncode == 0:
+                for line in result.stdout.split("\n"):
+                    if "vlc" in line.lower() or "test_video" in line.lower():
+                        parts = line.split()
+                        if len(parts) >= 2:
+                            window_id = parts[0]
+                            # Force VLC to left side: x=0, y=0, width=1280, height=720
+                            subprocess.run(
+                                ["wmctrl", "-ir", window_id, "-e", "0,0,0,1280,720"],
+                                check=False,
+                                timeout=5,
+                            )
+                            log_info(
+                                f"Forced VLC window {window_id} to left side (0,0,1280,720)"
+                            )
+
+                            # Bring to front
+                            subprocess.run(
+                                ["wmctrl", "-ia", window_id], check=False, timeout=5
+                            )
+
+        except Exception as e:
+            log_warning(f"Failed to force VLC window position: {e}")
 
     def _start_with_command_vlc(self) -> bool:
         """Start video using VLC command line"""
@@ -291,6 +331,13 @@ class VLCVideoPlayer:
         """Get VLC command line arguments"""
         paths = log_file_paths()
         return [
+            # Window positioning - place VLC on left side, leave space for debug overlay
+            "--no-fullscreen",
+            "--width=1280",
+            "--height=720",
+            "--video-x=0",  # Left side of screen
+            "--video-y=0",  # Top of screen
+            "--no-video-deco",  # No window decorations
             # Minimal config - let VLC use defaults
             "--file-logging",
             f"--logfile={paths['vlc_main']}",
