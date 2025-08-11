@@ -671,6 +671,61 @@ class HTMLDebugManager:
             self.update_thread.join(timeout=1)
         log_info("HTML debug manager stopped", component="overlay")
 
+    def update_debug_info(
+        self,
+        video_file: str,
+        current_time: float,
+        total_time: float,
+        session_time: float,
+        video_position: Optional[float],
+        current_cues: list,
+        upcoming_cues: list,
+        video_loop_count: int = 0,
+        midi_loop_count: int = 0,
+        looping_enabled: bool = True,
+    ):
+        """Update debug information - compatibility method for the debug system"""
+        try:
+            # Process MIDI info
+            midi_current = current_cues[0] if current_cues else None
+            midi_next = None
+
+            if upcoming_cues:
+                next_cue = upcoming_cues[0]
+                time_until = next_cue.get("time", 0) - current_time
+                midi_next = {
+                    "type": next_cue.get("type", "unknown"),
+                    "channel": next_cue.get("channel", 1),
+                    "time_until": time_until,
+                }
+
+            # Update overlay state
+            self.overlay.update_state(
+                video_file=video_file,
+                current_time=current_time,
+                total_time=total_time,
+                session_time=session_time,
+                video_position=video_position,
+                midi_current=midi_current,
+                midi_next=midi_next,
+                midi_recent=current_cues[-5:] if current_cues else [],
+                midi_upcoming=upcoming_cues[:5] if upcoming_cues else [],
+                video_loop_count=video_loop_count,
+                midi_loop_count=midi_loop_count,
+                looping_enabled=looping_enabled,
+            )
+
+            log_info(f"Debug info updated: {video_file}, {current_time:.1f}s", component="overlay")
+            
+        except Exception as e:
+            log_error(f"Error updating debug info: {e}", component="overlay")
+
+    def cleanup(self):
+        """Clean up resources"""
+        self.stop()
+        if self.overlay:
+            self.overlay.cleanup()
+
     def _update_loop(self):
         """Update loop for the HTML overlay"""
         while self.running:
