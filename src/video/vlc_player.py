@@ -151,26 +151,44 @@ class VLCVideoPlayer:
             # Create VLC instance with appropriate args
             vlc_args = self._get_vlc_args()
             log_info(f"VLC python args: {' '.join(vlc_args)}", component="vlc")
+
+            # Check if VLC Python bindings are available
+            if not VLC_PYTHON_AVAILABLE:
+                log_warning(
+                    "VLC Python bindings not available, falling back to command line",
+                    component="vlc",
+                )
+                return self._start_with_command_vlc()
+
             self.vlc_instance = vlc.Instance(vlc_args)
             if not self.vlc_instance:
-                raise VLCPlayerError("Failed to create VLC instance")
+                log_error("Failed to create VLC instance", component="vlc")
+                return self._start_with_command_vlc()
 
             self.vlc_player = self.vlc_instance.media_player_new()
             if not self.vlc_player:
-                raise VLCPlayerError("Failed to create VLC player")
+                log_error("Failed to create VLC player", component="vlc")
+                return self._start_with_command_vlc()
 
             # Load media and start playback
             self.vlc_media = self.vlc_instance.media_new(self.video_path)
             if not self.vlc_media:
-                raise VLCPlayerError("Failed to create VLC media")
+                log_error("Failed to create VLC media", component="vlc")
+                return self._start_with_command_vlc()
 
             self.vlc_player.set_media(self.vlc_media)
 
             # Start playback
-            self.vlc_player.play()
+            log_info("Starting VLC playback...", component="vlc")
+            result = self.vlc_player.play()
+            log_info(f"VLC play() returned: {result}", component="vlc")
 
-            log_info("VLC playback started successfully")
-            return True
+            if result == 0:
+                log_info("VLC playback started successfully", component="vlc")
+                return True
+            else:
+                log_error(f"VLC play() failed with code: {result}", component="vlc")
+                return self._start_with_command_vlc()
 
         except Exception as e:
             log_error(f"Error with VLC Python: {e}", component="vlc")
