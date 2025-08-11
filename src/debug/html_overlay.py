@@ -11,6 +11,7 @@ import webbrowser
 from pathlib import Path
 from typing import Optional, Dict, Any
 from src.core.logger import log_info, log_error, log_warning
+from src.debug.template_engine import DebugTemplateManager
 
 
 class HTMLDebugOverlay:
@@ -21,7 +22,11 @@ class HTMLDebugOverlay:
         self.video_player = video_player
         self.running = True
         self.state_lock = threading.Lock()
-        self.html_file = f"/tmp/kitchensync_debug_{pi_id}.html"
+        
+        # Initialize template system
+        template_dir = Path(__file__).parent / "templates"
+        self.template_manager = DebugTemplateManager(str(template_dir))
+        self.html_file = f"/tmp/kitchensync_debug_{pi_id}/index.html"
 
         # Initialize state
         self.state = {
@@ -43,7 +48,7 @@ class HTMLDebugOverlay:
         # Track Firefox state
         self.firefox_opened = False
 
-        # Create initial HTML file
+        # Create initial HTML file using templates
         self._create_html_file()
 
         # Start update thread
@@ -51,157 +56,61 @@ class HTMLDebugOverlay:
         self.update_thread.start()
 
     def _create_html_file(self):
-        """Create the initial HTML file"""
-        html_content = f"""
-<!DOCTYPE html>
+        """Create the initial HTML file using templates"""
+        try:
+            # Get system info for initial render
+            system_info = self._get_system_info()
+            
+            # Render template
+            self.html_file = self.template_manager.render_debug_overlay(self.pi_id, system_info)
+            
+            if not self.html_file:
+                raise Exception("Template rendering failed")
+                
+            log_info(f"HTML debug file created: {self.html_file}", component="overlay")
+            
+        except Exception as e:
+            log_error(f"Failed to create HTML file using templates: {e}", component="overlay")
+            # Fallback to a simple error page
+            self._create_fallback_html()
+    
+    def _create_fallback_html(self):
+        """Create a simple fallback HTML file if template system fails"""
+        try:
+            # Ensure directory exists
+            html_dir = Path(self.html_file).parent
+            html_dir.mkdir(parents=True, exist_ok=True)
+            
+            fallback_html = f"""<!DOCTYPE html>
 <html>
 <head>
-    <title>KitchenSync Debug - {self.pi_id}</title>
+    <title>KitchenSync Debug - {self.pi_id} (Fallback)</title>
     <meta charset="utf-8">
     <style>
-        body {{
-            font-family: 'Courier New', monospace;
-            background-color: #1a1a2e;
-            color: #ffffff;
-            margin: 15px;
-            font-size: 12px;
-        }}
-        .header {{
-            background-color: #16213e;
-            padding: 10px;
-            border-radius: 5px;
-            margin-bottom: 10px;
-            border-left: 3px solid #0f3460;
-        }}
-        .section {{
-            background-color: #16213e;
-            padding: 10px;
-            border-radius: 5px;
-            margin-bottom: 8px;
-            border-left: 3px solid #0f3460;
-        }}
-        .section-row {{
-            display: flex;
-            gap: 10px;
-            margin-bottom: 8px;
-        }}
-        .section-row .section {{
-            flex: 1;
-            margin-bottom: 0;
-        }}
-        .highlight {{
-            color: #4ecdc4;
-            font-weight: bold;
-        }}
-        .warning {{
-            color: #ff6b6b;
-        }}
-        .success {{
-            color: #51cf66;
-        }}
-        .info {{
-            color: #74c0fc;
-        }}
-        .timestamp {{
-            color: #868e96;
-            font-size: 12px;
-        }}
-        .midi-event {{
-            background-color: #2d3748;
-            padding: 8px;
-            border-radius: 4px;
-            margin: 5px 0;
-        }}
-        .refresh-info {{
-            background-color: #2d3748;
-            padding: 8px;
-            border-radius: 4px;
-            margin-top: 15px;
-            text-align: center;
-            color: #868e96;
-            font-size: 11px;
-        }}
-        .refresh-controls {{
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            gap: 15px;
-            flex-wrap: wrap;
-        }}
-        .midi-list {{
-            max-height: 120px;
-            overflow-y: auto;
-            margin-top: 8px;
-        }}
-        .midi-event {{
-            background-color: #2d3748;
-            padding: 5px 8px;
-            border-radius: 3px;
-            margin: 3px 0;
-            font-size: 11px;
-        }}
-        .midi-recent {{
-            border-left: 3px solid #51cf66;
-        }}
-        .midi-upcoming {{
-            border-left: 3px solid #74c0fc;
-        }}
+        body {{ font-family: monospace; background: #1a1a2e; color: #fff; margin: 20px; }}
+        .error {{ color: #ff6b6b; background: #2d1b1b; padding: 15px; border-radius: 5px; }}
     </style>
-    <script>
-        // Auto-refresh every 2 seconds
-        setInterval(function() {{
-            location.reload();
-        }}, 2000);
-    </script>
 </head>
 <body>
-    <div class="header">
-        <h1>KitchenSync Debug - {self.pi_id}</h1>
-        <div class="timestamp">Last updated: <span id="timestamp">{time.strftime('%H:%M:%S')}</span></div>
+    <h1>KitchenSync Debug - {self.pi_id}</h1>
+    <div class="error">
+        <h2>Template System Error</h2>
+        <p>The template system failed to load. Using fallback display.</p>
+        <p>Please check the template files in src/debug/templates/</p>
     </div>
-
-    <div class="section">
-        <h3>Video Status</h3>
-        <div><strong>File:</strong> <span id="video-file">{self.state['video_file']}</span></div>
-        <div><strong>Time:</strong> <span id="current-time" class="highlight">{self.state['current_time']:.1f}s</span> / <span id="total-time">{self.state['total_time']:.1f}s</span></div>
-        <div><strong>Session:</strong> <span id="session-time">{self.state['session_time']:.1f}s</span> | <strong>Leader:</strong> <span id="leader-mode" class="{'success' if self.state['is_leader'] else 'info'}">{'Yes' if self.state['is_leader'] else 'No'}</span></div>
-        <div><strong>Position:</strong> <span id="video-position">{self.state['video_position'] or 'N/A'}</span></div>
-    </div>
-
-    <div class="section">
-        <h3>MIDI Information</h3>
-        <div><strong>Current:</strong> <span id="midi-current" class="{'highlight' if self.state['midi_current'] else 'warning'}">{self._format_midi_event(self.state['midi_current']) if self.state['midi_current'] else 'None'}</span></div>
-        <div><strong>Next:</strong> <span id="midi-next" class="{'info' if self.state['midi_next'] else 'warning'}">{self._format_midi_event(self.state['midi_next']) if self.state['midi_next'] else 'None'}</span></div>
-        
-        <div style="display: flex; gap: 10px; margin-top: 10px;">
-            <div style="flex: 1;">
-                <strong>Recent MIDI:</strong>
-                <div id="midi-recent-list" class="midi-list">
-                    {self._format_midi_list(self.state.get('midi_recent', []), 'midi-recent')}
-                </div>
-            </div>
-            <div style="flex: 1;">
-                <strong>Upcoming MIDI:</strong>
-                <div id="midi-upcoming-list" class="midi-list">
-                    {self._format_midi_list(self.state.get('midi_upcoming', []), 'midi-upcoming')}
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="refresh-info">
-        <div class="refresh-controls">
-            <span>Auto-refreshing every 2 seconds</span>
-            <span>|</span>
-            <span>Manual refresh: F5</span>
-        </div>
-    </div>
+    <script>
+        setTimeout(function() {{ location.reload(); }}, 5000);
+    </script>
 </body>
-</html>
-        """
-
-        with open(self.html_file, "w") as f:
-            f.write(html_content)
+</html>"""
+            
+            with open(self.html_file, "w") as f:
+                f.write(fallback_html)
+                
+            log_warning(f"Created fallback HTML file: {self.html_file}", component="overlay")
+            
+        except Exception as e:
+            log_error(f"Failed to create fallback HTML: {e}", component="overlay")
 
     def _format_midi_event(self, event):
         """Format MIDI event for display"""
@@ -228,17 +137,7 @@ class HTMLDebugOverlay:
         else:
             return f"{time_val:.1f}s: {event_type}"
 
-    def _format_midi_list(self, midi_list, css_class):
-        """Format a list of MIDI events for HTML display"""
-        if not midi_list:
-            return f'<div class="midi-event {css_class}" style="opacity: 0.5;">No events</div>'
 
-        html_items = []
-        for event in midi_list[-5:]:  # Show last 5 events
-            formatted = self._format_midi_event(event)
-            html_items.append(f'<div class="midi-event {css_class}">{formatted}</div>')
-
-        return "\n".join(html_items)
 
     def update_state(self, **kwargs):
         """Update the debug state"""
@@ -323,12 +222,15 @@ class HTMLDebugOverlay:
         if hasattr(self, "update_thread"):
             self.update_thread.join(timeout=1)
 
-        # Clean up HTML file
+        # Clean up HTML directory
         try:
-            if os.path.exists(self.html_file):
-                os.remove(self.html_file)
+            html_dir = Path(self.html_file).parent
+            if html_dir.exists():
+                import shutil
+                shutil.rmtree(html_dir)
+                log_info(f"Cleaned up HTML directory: {html_dir}", component="overlay")
         except Exception as e:
-            log_warning(f"Could not remove HTML file: {e}", component="overlay")
+            log_warning(f"Could not remove HTML directory: {e}", component="overlay")
 
         # Reset Firefox flag
         self.firefox_opened = False
@@ -449,126 +351,22 @@ class HTMLDebugOverlay:
             log_error(f"Failed to open HTML overlay in browser: {e}")
 
     def update_content(self, system_info: dict = None):
-        """Update the HTML content with current system information"""
-        if system_info is None:
-            system_info = self._get_system_info()
-
-        html_content = f"""<!DOCTYPE html>
-<html>
-<head>
-    <title>KitchenSync Debug - {system_info.get('pi_id', 'Unknown')}</title>
-    <meta charset="utf-8">
-    <style>
-        body {{ font-family: 'Courier New', monospace; margin: 15px; background: #1a1a2e; color: #ffffff; font-size: 12px; }}
-        .header {{ background: #16213e; padding: 10px; border-radius: 5px; margin-bottom: 10px; border-left: 3px solid #0f3460; }}
-        .status {{ background: #16213e; padding: 10px; border-radius: 5px; margin-bottom: 8px; border-left: 3px solid #0f3460; }}
-        .status.good {{ border-left: 3px solid #4CAF50; }}
-        .status.warning {{ border-left: 3px solid #FF9800; }}
-        .status.error {{ border-left: 3px solid #f44336; }}
-        .status-row {{ display: flex; gap: 10px; margin-bottom: 8px; }}
-        .status-row .status {{ flex: 1; margin-bottom: 0; }}
-        .log-section {{ background: #16213e; padding: 10px; border-radius: 5px; margin-bottom: 8px; border-left: 3px solid #0f3460; }}
-        .log-content {{ background: #1a1a2e; padding: 8px; border-radius: 3px; font-family: monospace; font-size: 11px; max-height: 200px; overflow-y: auto; }}
-        .refresh-info {{ text-align: center; color: #868e96; font-size: 11px; margin-top: 15px; background: #2d3748; padding: 8px; border-radius: 4px; }}
-        .refresh-controls {{ display: flex; justify-content: center; align-items: center; gap: 15px; flex-wrap: wrap; }}
-        .auto-refresh {{ background: #16213e; padding: 8px; border-radius: 5px; margin-bottom: 8px; text-align: center; border-left: 3px solid #0f3460; }}
-        .refresh-button {{ background: #4CAF50; color: white; border: none; padding: 8px 15px; border-radius: 3px; cursor: pointer; font-size: 11px; }}
-        .refresh-button:hover {{ background: #45a049; }}
-        .midi-section {{ background: #16213e; padding: 10px; border-radius: 5px; margin-bottom: 8px; border-left: 3px solid #0f3460; }}
-        .midi-list {{ max-height: 120px; overflow-y: auto; margin-top: 8px; }}
-        .midi-event {{ background-color: #2d3748; padding: 5px 8px; border-radius: 3px; margin: 3px 0; font-size: 11px; }}
-        .midi-recent {{ border-left: 3px solid #51cf66; }}
-        .midi-upcoming {{ border-left: 3px solid #74c0fc; }}
-    </style>
-</head>
-<body>
-    <div class="header">
-        <h1>KitchenSync Debug Overlay</h1>
-        <p>Pi ID: {system_info.get('pi_id', 'Unknown')} | Last Updated: {system_info.get('timestamp', 'Unknown')}</p>
-    </div>
-
-    <div class="auto-refresh">
-        <div class="refresh-controls">
-            <button class="refresh-button" onclick="location.reload()">Manual Refresh</button>
-            <span>|</span>
-            <span>Auto-refreshing every 5 seconds</span>
-        </div>
-    </div>
-
-    <div class="status-row">
-        <div class="status {system_info.get('service_status_class', 'warning')}">
-            <h3>Service Status</h3>
-            <p><strong>Service:</strong> {system_info.get('service_status', 'Unknown')}</p>
-            <p><strong>PID:</strong> {system_info.get('service_pid', 'Unknown')}</p>
-            <p><strong>Uptime:</strong> {system_info.get('service_uptime', 'Unknown')}</p>
-        </div>
-
-        <div class="status {system_info.get('vlc_status_class', 'warning')}">
-            <h3>VLC Status</h3>
-            <p><strong>Status:</strong> {system_info.get('vlc_status', 'Unknown')}</p>
-            <p><strong>Video File:</strong> {system_info.get('video_file', 'None')}</p>
-            <p><strong>Time:</strong> {system_info.get('video_current_time', 0):.1f}s / {system_info.get('video_total_time', 0):.1f}s</p>
-            <p><strong>Position:</strong> {system_info.get('video_position', 0)*100:.1f}% | <strong>State:</strong> {system_info.get('video_state', 'unknown')}</p>
-            <p><strong>Loops:</strong> Video #{system_info.get('video_loop_count', 0)} | MIDI #{system_info.get('midi_loop_count', 0)} | {'Enabled' if system_info.get('looping_enabled', False) else 'Disabled'}</p>
-        </div>
-    </div>
-
-    <div class="midi-section">
-        <h3>MIDI Information</h3>
-        <div style="display: flex; gap: 10px; margin-top: 10px;">
-            <div style="flex: 1;">
-                <strong>Recent MIDI:</strong>
-                <div class="midi-list">
-                    {self._format_midi_list(system_info.get('midi_recent', []), 'midi-recent')}
-                </div>
-            </div>
-            <div style="flex: 1;">
-                <strong>Upcoming MIDI:</strong>
-                <div class="midi-list">
-                    {self._format_midi_list(system_info.get('midi_upcoming', []), 'midi-upcoming')}
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="log-section">
-        <h3>Recent System Log</h3>
-        <div class="log-content">{system_info.get('recent_logs', 'No logs available')}</div>
-    </div>
-
-    <div class="log-section">
-        <h3>Recent VLC Log</h3>
-        <div class="log-content">{system_info.get('vlc_logs', 'No VLC logs available')}</div>
-    </div>
-
-    <div class="refresh-info">
-        <div class="refresh-controls">
-            <span>This overlay automatically refreshes every 5 seconds</span>
-            <span>|</span>
-            <span>Last refresh: <span id="last-refresh">{system_info.get('timestamp', 'Unknown')}</span></span>
-        </div>
-    </div>
-
-    <script>
-        // Auto-refresh every 5 seconds
-        setInterval(function() {{
-            location.reload();
-        }}, 5000);
-        
-        // Update timestamp on page load
-        document.addEventListener('DOMContentLoaded', function() {{
-            document.getElementById('last-refresh').textContent = new Date().toLocaleString();
-        }});
-    </script>
-</body>
-</html>"""
-
+        """Update the HTML content with current system information using templates"""
         try:
-            with open(self.html_file, "w", encoding="utf-8") as f:
-                f.write(html_content)
-            log_info(f"HTML debug overlay content updated: {self.html_file}")
+            if system_info is None:
+                system_info = self._get_system_info()
+
+            # Render using template system
+            new_html_file = self.template_manager.render_debug_overlay(self.pi_id, system_info)
+            
+            if new_html_file:
+                self.html_file = new_html_file
+                log_info(f"HTML debug overlay content updated: {self.html_file}", component="overlay")
+            else:
+                log_warning("Template rendering returned empty file path", component="overlay")
+                
         except Exception as e:
-            log_error(f"Failed to update HTML overlay content: {e}")
+            log_error(f"Failed to update HTML overlay content: {e}", component="overlay")
 
     def _get_system_info(self) -> dict:
         """Get current system information for the overlay"""

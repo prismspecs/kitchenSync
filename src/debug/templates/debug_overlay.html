@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>KitchenSync Debug - {{pi_id}}</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="static/css/debug.css">
+</head>
+<body>
+    <div class="header">
+        <h1>KitchenSync Debug - {{pi_id}}</h1>
+        <div class="timestamp">Last updated: <span id="timestamp">{{timestamp}}</span></div>
+    </div>
+
+    <div class="auto-refresh">
+        <div class="refresh-controls">
+            <button class="refresh-button" onclick="location.reload()">Manual Refresh</button>
+            <span>|</span>
+            <span>Auto-refreshing every 5 seconds</span>
+        </div>
+    </div>
+
+    <div class="status-row">
+        <div class="status {{service_status_class}}">
+            <h3>Service Status</h3>
+            <p><strong>Service:</strong> {{service_status}}</p>
+            <p><strong>PID:</strong> {{service_pid}}</p>
+            <p><strong>Uptime:</strong> {{service_uptime}}</p>
+        </div>
+
+        <div class="status {{vlc_status_class}}">
+            <h3>VLC Status</h3>
+            <p><strong>Status:</strong> {{vlc_status}}</p>
+            <p><strong>Video File:</strong> {{video_file}}</p>
+            <p><strong>Time:</strong> {{video_current_time}}s / {{video_total_time}}s</p>
+            <p><strong>Position:</strong> {{video_position_percent}}% | <strong>State:</strong> {{video_state}}</p>
+            <p><strong>Loops:</strong> Video #{{video_loop_count}} | MIDI #{{midi_loop_count}} | {{looping_status}}</p>
+        </div>
+    </div>
+
+    <div class="midi-section">
+        <h3>MIDI Information</h3>
+        <div><strong>Current:</strong> <span id="midi-current" class="{{midi_current_class}}">{{midi_current}}</span></div>
+        <div><strong>Next:</strong> <span id="midi-next" class="{{midi_next_class}}">{{midi_next}}</span></div>
+        
+        <div class="midi-columns">
+            <div class="midi-column">
+                <strong>Recent MIDI:</strong>
+                <div id="midi-recent-list" class="midi-list">
+                    {{midi_recent_html}}
+                </div>
+            </div>
+            <div class="midi-column">
+                <strong>Upcoming MIDI:</strong>
+                <div id="midi-upcoming-list" class="midi-list">
+                    {{midi_upcoming_html}}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="log-section">
+        <h3>Recent System Log</h3>
+        <div class="log-content">{{recent_logs}}</div>
+    </div>
+
+    <div class="log-section">
+        <h3>Recent VLC Log</h3>
+        <div class="log-content">{{vlc_logs}}</div>
+    </div>
+
+    <div class="refresh-info">
+        <div class="refresh-controls">
+            <span>This overlay automatically refreshes every 5 seconds</span>
+            <span>|</span>
+            <span>Last refresh: <span id="last-refresh">{{timestamp}}</span></span>
+        </div>
+    </div>
+
+    <script src="static/js/debug.js"></script>
+</body>
+</html>
