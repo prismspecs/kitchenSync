@@ -306,32 +306,41 @@ class HTMLDebugOverlay:
             def position_window():
                 time.sleep(8)  # Wait longer for Firefox to fully load
                 try:
-                    # Try multiple window title patterns for Firefox
-                    patterns = [
-                        "KitchenSync Debug",
-                        "KitchenSync debug",
-                        "Mozilla Firefox",
-                        "Firefox",
-                        "firefox",
-                        "New Tab",
-                    ]
-                    for pattern in patterns:
-                        result = subprocess.run(
-                            ["wmctrl", "-r", pattern, "-e", "0,1280,0,640,1080"],
-                            check=False,
-                            timeout=5,
-                            stdout=subprocess.DEVNULL,
-                            stderr=subprocess.DEVNULL,
-                        )
-                        if result.returncode == 0:
-                            log_info(
-                                f"Positioned Firefox window on right side using pattern: {pattern}"
+                    # Get list of all windows and find Firefox
+                    result = subprocess.run(
+                        ["wmctrl", "-l"], 
+                        capture_output=True, 
+                        text=True, 
+                        timeout=10
+                    )
+                    
+                    if result.returncode == 0:
+                        firefox_window_id = None
+                        for line in result.stdout.strip().split('\n'):
+                            if line and ('firefox' in line.lower() or 'kitchensync' in line.lower()):
+                                window_id = line.split()[0]
+                                firefox_window_id = window_id
+                                log_info(f"Found Firefox window: {line.strip()}")
+                                break
+                        
+                        if firefox_window_id:
+                            # Position using window ID instead of title
+                            pos_result = subprocess.run(
+                                ["wmctrl", "-i", "-r", firefox_window_id, "-e", "0,1280,0,640,1080"],
+                                check=False,
+                                timeout=5,
+                                stdout=subprocess.DEVNULL,
+                                stderr=subprocess.DEVNULL,
                             )
-                            break
+                            if pos_result.returncode == 0:
+                                log_info(f"Positioned Firefox window on right side using window ID: {firefox_window_id}")
+                            else:
+                                log_warning(f"Failed to position Firefox window with ID: {firefox_window_id}")
+                        else:
+                            log_warning("Could not find Firefox window in wmctrl list")
                     else:
-                        log_warning(
-                            "Could not position Firefox window - no matching pattern found"
-                        )
+                        log_warning("Failed to get window list from wmctrl")
+                        
                 except Exception as e:
                     log_warning(f"Failed to position Firefox window: {e}")
 
