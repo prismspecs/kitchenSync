@@ -283,7 +283,7 @@ class HTMLDebugOverlay:
                 [
                     "chromium",
                     "--new-window",
-                    "--window-size=640,720",
+                    "--window-size=640,1080",
                     "--window-position=1280,0",
                     f"file://{self.html_file}",
                 ],
