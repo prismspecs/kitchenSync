@@ -139,10 +139,11 @@ I am developing this on a separate computer than the one on which it will run. C
 ### Installation Process
 
 1. Install VLC and Python dependencies system-wide
-2. Copy systemd service file and enable auto-start
-3. Prepare USB drives with configuration and video files
-4. Deploy to Raspberry Pis and power on
-5. System auto-starts and begins synchronized playback
+2. **(Recommended)** Optimize the OS by removing unused packages and services
+3. Copy systemd service file and enable auto-start
+4. Prepare USB drives with configuration and video files
+5. Deploy to Raspberry Pis and power on
+6. System auto-starts and begins synchronized playback
 
 ### Operational Features
 
