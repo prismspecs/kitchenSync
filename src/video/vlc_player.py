@@ -306,8 +306,9 @@ class VLCVideoPlayer:
             "--no-snapshot-preview",
             "--network-caching=0",
             "--file-caching=300",
-            # Force Wayland for video output (your Pi's native display)
+            # Force Wayland for both window and video output
             "--vout=wl_xdg_shell",
+            "--vout-display=wl_xdg_shell",  # Force video output backend
             "--aout=alsa",
             "--file-logging",
             f"--logfile={paths['vlc_main']}",
@@ -324,8 +325,9 @@ class VLCVideoPlayer:
             "--no-snapshot-preview",
             "--network-caching=0",
             "--file-caching=300",
-            # Force Wayland for video output
+            # Force Wayland for both window and video output
             "--vout=wl_xdg_shell",
+            "--vout-display=wl_xdg_shell",  # Force video output backend
             "--aout=dummy",  # Use dummy audio to prevent ALSA crashes
             "--no-audio",  # Disable audio output completely
             "--file-logging",
