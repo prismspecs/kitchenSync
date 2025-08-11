@@ -578,7 +578,9 @@ class HTMLDebugOverlay:
                                     and state_video_file != "No video"
                                     and state_video_file != "None"
                                 ):
-                                    info["video_file"] = os.path.basename(state_video_file)
+                                    info["video_file"] = os.path.basename(
+                                        state_video_file
+                                    )
                                 # Otherwise try to get from video player
                                 elif (
                                     hasattr(self.video_player, "video_file")
@@ -597,7 +599,10 @@ class HTMLDebugOverlay:
                                 else:
                                     info["video_file"] = "None"
                             except Exception as e:
-                                log_error(f"Error getting video file name: {e}", component="overlay")
+                                log_error(
+                                    f"Error getting video file name: {e}",
+                                    component="overlay",
+                                )
                                 info["video_file"] = "Error getting filename"
 
                             log_info(
