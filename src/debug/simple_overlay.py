@@ -31,6 +31,9 @@ class SimpleDebugOverlay:
             "midi_current": None,
             "midi_next": None,
             "is_leader": False,
+            "video_loop_count": 0,
+            "midi_loop_count": 0,
+            "looping_enabled": True,
         }
 
         # Try pygame first, fall back to file if it fails
@@ -263,6 +266,9 @@ class SimpleDebugOverlay:
                 f.write(
                     f"  Session: {state['session_time']:.1f}s, Video pos: {state['video_position'] or 'N/A'}\n"
                 )
+                f.write(
+                    f"  Loops: Video #{state.get('video_loop_count', 0)}, MIDI #{state.get('midi_loop_count', 0)} {'✓ LOOPING' if state.get('looping_enabled', False) else '✗ NO LOOP'}\n"
+                )
 
                 if state["midi_current"]:
                     midi = state["midi_current"]
@@ -403,9 +409,9 @@ class SimpleDebugManager:
         try:
             self.overlay = SimpleDebugOverlay(pi_id)
             self.overlay.update_state(is_leader=is_leader)
-            print(f"[DEBUG] Simple debug manager created for {pi_id}")
+            log_info(f"Simple debug manager created for {pi_id}", component="debug")
         except Exception as e:
-            print(f"[DEBUG] Error creating debug manager: {e}")
+            log_error(f"Error creating debug manager: {e}", component="debug")
             self.overlay = None
 
     def update_debug_info(
@@ -417,6 +423,9 @@ class SimpleDebugManager:
         video_position: Optional[float],
         current_cues: list,
         upcoming_cues: list,
+        video_loop_count: int = 0,
+        midi_loop_count: int = 0,
+        looping_enabled: bool = True,
     ):
         """Update debug information"""
         if not self.overlay:
@@ -443,6 +452,9 @@ class SimpleDebugManager:
             video_position=video_position,
             midi_current=midi_current,
             midi_next=midi_next,
+            video_loop_count=video_loop_count,
+            midi_loop_count=midi_loop_count,
+            looping_enabled=looping_enabled,
         )
 
     def cleanup(self):

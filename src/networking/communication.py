@@ -57,13 +57,13 @@ class SyncBroadcaster:
                     try:
                         self.sync_sock.sendto(payload.encode(), (self.broadcast_ip, self.sync_port))
                     except Exception as e:
-                        print(f"Error broadcasting sync: {e}")
+                        # print(f"Error broadcasting sync: {e}")
                 
                 time.sleep(self.tick_interval)
         
         thread = threading.Thread(target=broadcast_loop, daemon=True)
         thread.start()
-        print("Started time sync broadcasting")
+        # print("Started time sync broadcasting")
     
     def stop_broadcasting(self) -> None:
         """Stop broadcasting time sync"""
@@ -73,7 +73,7 @@ class SyncBroadcaster:
                 self.sync_sock.close()
             except Exception:
                 pass
-        print("Stopped time sync broadcasting")
+        # print("Stopped time sync broadcasting")
 
 
 class SyncReceiver:
@@ -118,11 +118,11 @@ class SyncReceiver:
                     continue
                 except Exception as e:
                     if self.is_running:
-                        print(f"Error in sync listener: {e}")
+                        # print(f"Error in sync listener: {e}")
         
         thread = threading.Thread(target=listen_loop, daemon=True)
         thread.start()
-        print("Started listening for time sync")
+        # print("Started listening for time sync")
     
     def stop_listening(self) -> None:
         """Stop listening for time sync"""
@@ -132,7 +132,7 @@ class SyncReceiver:
                 self.sync_sock.close()
             except Exception:
                 pass
-        print("Stopped sync listening")
+        # print("Stopped sync listening")
     
     def is_sync_active(self, timeout: float = 5.0) -> bool:
         """Check if sync is still active"""
@@ -184,11 +184,11 @@ class CommandManager:
                     continue
                 except Exception as e:
                     if self.is_running:
-                        print(f"Error in command listener: {e}")
+                        # print(f"Error in command listener: {e}")
         
         thread = threading.Thread(target=listen_loop, daemon=True)
         thread.start()
-        print("Started listening for collaborator commands")
+        # print("Started listening for collaborator commands")
     
     def stop_listening(self) -> None:
         """Stop listening for commands"""
@@ -212,16 +212,16 @@ class CommandManager:
             ip = self.collaborators[target_pi]['ip']
             try:
                 self.control_sock.sendto(payload.encode(), (ip, self.control_port))
-                print(f"Sent command to {target_pi}: {command['type']}")
+                # print(f"Sent command to {target_pi}: {command['type']}")
             except Exception as e:
-                print(f"Error sending command to {target_pi}: {e}")
+                # print(f"Error sending command to {target_pi}: {e}")
         else:
             # Broadcast to all Pis
             try:
                 self.control_sock.sendto(payload.encode(), (self.broadcast_ip, self.control_port))
-                print(f"Broadcast command: {command['type']}")
+                # print(f"Broadcast command: {command['type']}")
             except Exception as e:
-                print(f"Error broadcasting command: {e}")
+                # print(f"Error broadcasting command: {e}")
     
     def _handle_default_message(self, msg: Dict[str, Any], addr: tuple) -> None:
         """Handle default message types"""
@@ -235,7 +235,7 @@ class CommandManager:
                     'last_seen': time.time(),
                     'status': msg.get('status', 'unknown')
                 }
-                print(f"Registered Pi: {pi_id} at {addr[0]}")
+                # print(f"Registered Pi: {pi_id} at {addr[0]}")
                 
         elif msg_type == 'heartbeat':
             pi_id = msg.get('pi_id')
@@ -289,11 +289,11 @@ class CommandListener:
                     continue
                 except Exception as e:
                     if self.is_running:
-                        print(f"Error in command listener: {e}")
+                        # print(f"Error in command listener: {e}")
         
         thread = threading.Thread(target=listen_loop, daemon=True)
         thread.start()
-        print("Started listening for leader commands")
+        # print("Started listening for leader commands")
     
     def stop_listening(self) -> None:
         """Stop listening for commands"""
@@ -322,9 +322,9 @@ class CommandListener:
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
             sock.sendto(json.dumps(registration).encode(), ('255.255.255.255', self.control_port))
             sock.close()
-            print(f"Registered with leader as '{pi_id}'")
+            # print(f"Registered with leader as '{pi_id}'")
         except Exception as e:
-            print(f"Error registering with leader: {e}")
+            # print(f"Error registering with leader: {e}")
     
     def send_heartbeat(self, pi_id: str, status: str = 'ready') -> None:
         """Send heartbeat to leader"""
@@ -340,4 +340,4 @@ class CommandListener:
             sock.sendto(json.dumps(heartbeat).encode(), ('255.255.255.255', self.control_port))
             sock.close()
         except Exception as e:
-            print(f"Error sending heartbeat: {e}")
+            # print(f"Error sending heartbeat: {e}")

@@ -1,5 +1,11 @@
 """Debug and overlay package for KitchenSync"""
 
-from .overlay import DebugOverlay, DebugManager, DebugError
+from .html_overlay import HTMLDebugManager, HTMLDebugOverlay
+from .simple_overlay import SimpleDebugManager, SimpleDebugOverlay
 
-__all__ = ['DebugOverlay', 'DebugManager', 'DebugError']
+__all__ = [
+    "HTMLDebugManager",
+    "HTMLDebugOverlay",
+    "SimpleDebugManager",
+    "SimpleDebugOverlay",
+]

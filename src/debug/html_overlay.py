@@ -33,6 +33,9 @@ class HTMLDebugOverlay:
             "midi_current": None,
             "midi_next": None,
             "is_leader": False,
+            "video_loop_count": 0,
+            "midi_loop_count": 0,
+            "looping_enabled": True,
         }
 
         # Create initial HTML file
@@ -426,6 +429,8 @@ class HTMLDebugOverlay:
         <p><strong>Current Time:</strong> {system_info.get('video_current_time', 0):.1f}s / {system_info.get('video_total_time', 0):.1f}s</p>
         <p><strong>Position:</strong> {system_info.get('video_position', 0)*100:.1f}%</p>
         <p><strong>State:</strong> {system_info.get('video_state', 'unknown')}</p>
+        <p><strong>Video Loops:</strong> #{system_info.get('video_loop_count', 0)} | <strong>MIDI Loops:</strong> #{system_info.get('midi_loop_count', 0)}</p>
+        <p><strong>Looping:</strong> {'✅ Enabled' if system_info.get('looping_enabled', False) else '❌ Disabled'}</p>
     </div>
 
     <div class="log-section">
@@ -640,6 +645,10 @@ class HTMLDebugOverlay:
                             info["video_total_time"] = video_info["total_time"]
                             info["video_position"] = video_info["position"]
                             info["video_state"] = video_info["state"]
+                            info["video_loop_count"] = video_info.get("loop_count", 0)
+                            info["looping_enabled"] = video_info.get(
+                                "looping_enabled", False
+                            )
                             log_info(
                                 f"Video info: {video_info['current_time']:.1f}s / {video_info['total_time']:.1f}s ({video_info['state']})",
                                 component="overlay",
@@ -647,6 +656,13 @@ class HTMLDebugOverlay:
                         else:
                             # No video player reference
                             info["video_current_time"] = 0.0
+
+                        # Get MIDI loop information if available
+                        if hasattr(self, "midi_scheduler") and self.midi_scheduler:
+                            midi_stats = self.midi_scheduler.get_stats()
+                            info["midi_loop_count"] = midi_stats.get("loop_count", 0)
+                        else:
+                            info["midi_loop_count"] = 0
                             info["video_total_time"] = 0.0
                             info["video_position"] = 0.0
                             info["video_state"] = "no_player"
@@ -708,8 +724,10 @@ class HTMLDebugOverlay:
 class HTMLDebugManager:
     """Manages the HTML debug overlay"""
 
-    def __init__(self, pi_id: str, video_player=None):
+    def __init__(self, pi_id: str, video_player=None, midi_scheduler=None):
         self.overlay = HTMLDebugOverlay(pi_id, video_player)
+        self.overlay.midi_scheduler = midi_scheduler  # Pass MIDI scheduler to overlay
+        self.midi_scheduler = midi_scheduler
         self.update_thread = None
         self.running = False
 

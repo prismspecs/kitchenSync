@@ -61,7 +61,9 @@ class LeaderPi:
         # Create HTML debug overlay
         log_info("About to create HTML debug overlay", component="leader")
         pi_id = "leader-pi"  # Define the pi_id variable
-        self.html_debug = HTMLDebugManager(pi_id, self.video_player)
+        self.html_debug = HTMLDebugManager(
+            pi_id, self.video_player, self.midi_scheduler
+        )
         log_info("HTMLDebugManager created, about to start", component="leader")
         self.html_debug.start()
         log_info("HTML overlay started successfully", component="leader")
@@ -91,10 +93,10 @@ class LeaderPi:
     def start_system(self) -> None:
         """Start the synchronized playback system"""
         if self.system_state.is_running:
-            print("System is already running")
+            log_warning("System is already running", component="leader")
             return
 
-        print("🚀 Starting KitchenSync system...")
+        log_info("Starting KitchenSync system...", component="leader")
         snapshot_env()
 
         # Start system state
@@ -105,7 +107,7 @@ class LeaderPi:
 
         # Start video playback first so VLC creates its window
         if self.video_player.video_path:
-            print("🎬 Starting video playback...")
+            log_info("Starting video playback...", component="video")
             log_info("About to start video playback", component="leader")
             try:
                 result = self.video_player.start_playback()
@@ -178,8 +180,9 @@ class LeaderPi:
         self.sync_broadcaster.start_broadcasting(self.system_state.start_time)
         self.command_manager.start_listening()
 
-        # Start MIDI playback
-        self.midi_scheduler.start_playback(self.system_state.start_time)
+        # Start MIDI playback with video duration for looping
+        video_duration = self.video_player.get_duration()
+        self.midi_scheduler.start_playback(self.system_state.start_time, video_duration)
 
         # Send start command to collaborators
         start_command = {
@@ -194,7 +197,7 @@ class LeaderPi:
         if self.config.debug_mode:
             self._start_simple_debug()
 
-        print("✅ System started successfully!")
+        log_info("System started successfully!", component="leader")
         paths = log_file_paths()
         log_info(
             "Log paths: " + ", ".join([f"{k}={v}" for k, v in paths.items()]),
@@ -204,10 +207,10 @@ class LeaderPi:
     def stop_system(self) -> None:
         """Stop the synchronized playback system"""
         if not self.system_state.is_running:
-            print("System is not running")
+            log_warning("System is not running", component="leader")
             return
 
-        print("🛑 Stopping KitchenSync system...")
+        log_info("Stopping KitchenSync system...", component="leader")
 
         # Stop video playback
         self.video_player.stop_playback()
@@ -225,7 +228,7 @@ class LeaderPi:
         # Send stop command to collaborators
         self.command_manager.send_command({"type": "stop"})
 
-        print("✅ System stopped")
+        log_info("System stopped", component="leader")
 
     def show_status(self) -> None:
         """Display system status"""
@@ -236,7 +239,7 @@ class LeaderPi:
         )
 
         # Show schedule summary
-        print("\nSchedule Summary:")
+        log_info("Schedule Summary:", component="schedule")
         StatusDisplay.show_schedule_summary(self.schedule.get_cues())
 
     def edit_schedule(self) -> None:
@@ -346,16 +349,12 @@ class LeaderPi:
                     time.sleep(0.5)  # Check twice per second for smoother updates
 
                 except Exception as e:
-                    print(f"[DEBUG] Simple debug error: {e}")
+                    log_error(f"Simple debug error: {e}", component="debug")
                     time.sleep(5)
 
-        print("[DEBUG] Starting simple debug loop")
+        log_info("Starting simple debug loop", component="debug")
         thread = threading.Thread(target=simple_debug_loop, daemon=True)
         thread.start()
-
-    def _start_debug_updates(self) -> None:
-        """No longer needed - using simple debug"""
-        pass
 
     def cleanup(self) -> None:
         """Clean up resources"""
@@ -373,7 +372,7 @@ class LeaderPi:
                     f.write("=" * 40 + "\n")
             except:
                 pass
-        print("🧹 Cleanup completed")
+        log_info("Cleanup completed", component="leader")
 
 
 def create_command_interface(leader: LeaderPi) -> CommandInterface:

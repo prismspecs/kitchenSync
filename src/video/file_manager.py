@@ -27,43 +27,41 @@ class VideoFileManager:
         if self.usb_mount_point:
             usb_path = os.path.join(self.usb_mount_point, self.configured_file)
             if os.path.exists(usb_path):
-                print(f"✓ Found configured video on USB: {usb_path}")
                 return usb_path
         
         # Step 2: Look for configured file on all USB drives
         for mount_point in self._get_usb_mount_points():
             usb_path = os.path.join(mount_point, self.configured_file)
             if os.path.exists(usb_path):
-                print(f"✓ Found configured video on USB: {usb_path}")
                 return usb_path
         
         # Step 3: Look for configured file locally
         if os.path.exists(self.configured_file):
-            print(f"✓ Found configured video locally: {self.configured_file}")
+
             return self.configured_file
         
         # Step 4: Check local fallback directories
         for source in self.fallback_sources:
             local_path = os.path.join(source, self.configured_file)
             if os.path.exists(local_path):
-                print(f"✓ Found configured video in {source}: {local_path}")
+
                 return local_path
         
         # Step 5: Find any video file on USB drives
         for mount_point in self._get_usb_mount_points():
             video_path = self._find_any_video_in_directory(mount_point)
             if video_path:
-                print(f"⚠️ Using fallback video from USB: {video_path}")
+
                 return video_path
         
         # Step 6: Find any video file locally
         for source in self.fallback_sources:
             video_path = self._find_any_video_in_directory(source)
             if video_path:
-                print(f"⚠️ Using fallback video from {source}: {video_path}")
+
                 return video_path
         
-        print(f"❌ No video files found. Looking for: {self.configured_file}")
+
         return None
     
     def find_all_video_files(self) -> List[str]:
@@ -95,7 +93,7 @@ class VideoFileManager:
                             if os.path.exists(mount_point) and os.path.isdir(mount_point):
                                 mount_points.append(mount_point)
         except Exception as e:
-            print(f"Error checking USB drives: {e}")
+
         return mount_points
     
     def _find_any_video_in_directory(self, directory: str) -> Optional[str]:

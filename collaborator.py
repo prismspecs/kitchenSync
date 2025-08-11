@@ -19,6 +19,7 @@ from video import VideoFileManager, VLCVideoPlayer
 from networking import SyncReceiver, CommandListener
 from midi import MidiScheduler, MidiManager
 from core import SystemState, SyncTracker
+from core.logger import log_info, log_warning, log_error
 from debug.simple_overlay import SimpleDebugManager
 
 
@@ -52,9 +53,9 @@ class CollaboratorPi:
         self.video_path = self.video_manager.find_video_file()
         if self.video_path:
             self.video_player.load_video(self.video_path)
-            print(f"[DEBUG] Video file loaded: {self.video_path}")
+            log_info(f"Video file loaded: {self.video_path}", component="collaborator")
         else:
-            print("[DEBUG] No video file found at startup.")
+            log_warning("No video file found at startup", component="collaborator")
 
         # Delay overlay creation until after VLC window exists (start_playback)
         self.simple_debug = None
@@ -72,7 +73,10 @@ class CollaboratorPi:
         # Setup command handlers
         self._setup_command_handlers()
 
-        print(f"KitchenSync Collaborator '{self.config.pi_id}' initialized")
+        log_info(
+            f"KitchenSync Collaborator '{self.config.pi_id}' initialized",
+            component="collaborator",
+        )
 
     def _setup_command_handlers(self) -> None:
         """Setup command handlers"""
@@ -100,7 +104,10 @@ class CollaboratorPi:
     def _handle_start_command(self, msg: dict, addr: tuple) -> None:
         """Handle start command from leader"""
         if self.system_state.is_running:
-            print("Already running, stopping current session first")
+            log_info(
+                "Already running, stopping current session first",
+                component="collaborator",
+            )
             self.stop_playback()
 
         # Load schedule
@@ -111,12 +118,15 @@ class CollaboratorPi:
         leader_debug_mode = msg.get("debug_mode", False)
         if leader_debug_mode and not self.config.debug_mode:
             self.config.config["KITCHENSYNC"]["debug"] = "true"
-            print("Debug mode enabled by leader")
+            log_info("Debug mode enabled by leader", component="collaborator")
 
-        print(f"Received start command with {len(schedule)} cues")
+        log_info(
+            f"Received start command with {len(schedule)} cues",
+            component="collaborator",
+        )
 
         # Wait for sync to be established
-        print("⏳ Waiting for time sync...")
+        log_info("Waiting for time sync...", component="sync")
         timeout = 10.0
         start_wait = time.time()
 
@@ -126,9 +136,9 @@ class CollaboratorPi:
             time.sleep(0.1)
 
         if not self.sync_tracker.is_synced():
-            print("Starting without sync (timeout)")
+            log_warning("Starting without sync (timeout)", component="sync")
         else:
-            print("Sync established")
+            log_info("Sync established", component="sync")
 
         # Start playback
         self.start_playback()
@@ -136,7 +146,7 @@ class CollaboratorPi:
     def _handle_stop_command(self, msg: dict, addr: tuple) -> None:
         """Handle stop command from leader"""
         self.stop_playback()
-        print("Stopped by leader command")
+        log_info("Stopped by leader command", component="collaborator")
 
     def _handle_schedule_update(self, msg: dict, addr: tuple) -> None:
         """Handle schedule update from leader"""
@@ -146,7 +156,7 @@ class CollaboratorPi:
 
     def start_playback(self) -> None:
         """Start video and MIDI playback"""
-        print("Starting playback...")
+        log_info("Starting playback...", component="collaborator")
 
         # Start system state
         self.system_state.start_session()
@@ -154,7 +164,7 @@ class CollaboratorPi:
 
         # Start video playback first so VLC creates its window
         if self.video_player.video_path:
-            print("Starting video...")
+            log_info("Starting video...", component="video")
             self.video_player.start_playback()
 
         # Create overlay after VLC window exists
@@ -163,18 +173,25 @@ class CollaboratorPi:
                 self.config.device_id, is_leader=False
             )
             if self.simple_debug.overlay:
-                print(f"[DEBUG] Simple overlay created for {self.config.device_id}")
+                log_info(
+                    f"Simple overlay created for {self.config.device_id}",
+                    component="debug",
+                )
             else:
-                print(f"[DEBUG] Failed to create overlay for {self.config.device_id}")
+                log_error(
+                    f"Failed to create overlay for {self.config.device_id}",
+                    component="debug",
+                )
 
-        # Start MIDI playback
-        self.midi_scheduler.start_playback(self.system_state.start_time)
+        # Start MIDI playback with video duration for looping
+        video_duration = self.video_player.get_duration()
+        self.midi_scheduler.start_playback(self.system_state.start_time, video_duration)
 
-        print("Playback started")
+        log_info("Playback started", component="collaborator")
 
     def stop_playback(self) -> None:
         """Stop video and MIDI playback"""
-        print("Stopping playback...")
+        log_info("Stopping playback...", component="collaborator")
 
         # Stop video
         self.video_player.stop_playback()
@@ -189,7 +206,7 @@ class CollaboratorPi:
         self.video_start_time = None
         self.deviation_samples.clear()
 
-        print("Playback stopped")
+        log_info("Playback stopped", component="collaborator")
 
     def _check_video_sync(self, leader_time: float) -> None:
         """Check and correct video sync using median filtering"""
@@ -317,6 +334,17 @@ class CollaboratorPi:
                         # Update visual overlay
                         if self.simple_debug and self.simple_debug.overlay:
                             video_file = self.video_player.video_path or "Unknown"
+
+                            # Get loop information
+                            video_info = self.video_player.get_video_info()
+                            video_loop_count = video_info.get("loop_count", 0)
+                            video_looping_enabled = video_info.get(
+                                "looping_enabled", True
+                            )
+
+                            midi_stats = self.midi_scheduler.get_stats()
+                            midi_loop_count = midi_stats.get("loop_count", 0)
+
                             self.simple_debug.update_debug_info(
                                 video_file=video_file,
                                 current_time=current_time,
@@ -325,21 +353,22 @@ class CollaboratorPi:
                                 video_position=video_position,
                                 current_cues=current_cues,
                                 upcoming_cues=upcoming_cues,
+                                video_loop_count=video_loop_count,
+                                midi_loop_count=midi_loop_count,
+                                looping_enabled=video_looping_enabled,
                             )
 
                     time.sleep(0.5)  # Check twice per second for smoother updates
 
                 except Exception as e:
-                    print(f"[DEBUG] Collaborator debug error: {e}")
+                    log_error(f"Collaborator debug error: {e}", component="debug")
                     time.sleep(5)
 
-        print(f"[DEBUG] Starting simple debug loop for {self.config.device_id}")
+        log_info(
+            f"Starting simple debug loop for {self.config.device_id}", component="debug"
+        )
         thread = threading.Thread(target=simple_debug_loop, daemon=True)
         thread.start()
-
-    def _start_debug_updates(self) -> None:
-        """No longer needed - using simple debug"""
-        pass
 
     def cleanup(self) -> None:
         """Clean up resources"""
@@ -350,7 +379,7 @@ class CollaboratorPi:
         self.midi_manager.cleanup()
         if self.simple_debug:
             self.simple_debug.cleanup()
-        print("🧹 Cleanup completed")
+        log_info("Cleanup completed", component="collaborator")
 
 
 def main():

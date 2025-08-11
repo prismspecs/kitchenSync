@@ -36,6 +36,9 @@ class VLCVideoPlayer:
         self.video_path = None
         self.is_playing = False
         self.command_process = None  # For command-line VLC
+        self.loop_count = 0  # Track number of loops completed
+        self.enable_looping = True  # Enable continuous looping
+        self.loop_callback = None  # Callback function when video loops
         # Log environment snapshot once when player is constructed
         snapshot_env()
 
@@ -143,6 +146,30 @@ class VLCVideoPlayer:
             log_error(f"Error resuming: {e}", component="vlc")
             return False
 
+    def _on_video_end(self, event):
+        """Handle video end event for looping"""
+        if self.enable_looping and self.vlc_player:
+            try:
+                self.loop_count += 1
+                log_info(
+                    f"Video ended, starting loop #{self.loop_count}", component="vlc"
+                )
+
+                # Notify callback before restarting (for MIDI sync)
+                if self.loop_callback:
+                    try:
+                        self.loop_callback(self.loop_count)
+                    except Exception as e:
+                        log_error(f"Error in video loop callback: {e}", component="vlc")
+
+                # Reset to beginning and restart
+                self.vlc_player.set_position(0.0)
+                self.vlc_player.play()
+
+                log_info(f"Video loop #{self.loop_count} started", component="vlc")
+            except Exception as e:
+                log_error(f"Error restarting video loop: {e}", component="vlc")
+
     def _start_with_python_vlc(self) -> bool:
         """Start video using VLC Python bindings"""
         try:
@@ -178,6 +205,14 @@ class VLCVideoPlayer:
 
             self.vlc_player.set_media(self.vlc_media)
 
+            # Set up looping event handler
+            if self.enable_looping:
+                events = self.vlc_player.event_manager()
+                events.event_attach(
+                    vlc.EventType.MediaPlayerEndReached, self._on_video_end
+                )
+                log_info("Video looping enabled", component="vlc")
+
             # Start playback
             log_info("Starting VLC playback...", component="vlc")
             result = self.vlc_player.play()
@@ -185,6 +220,7 @@ class VLCVideoPlayer:
 
             if result == 0:
                 log_info("VLC playback started successfully", component="vlc")
+                self.is_playing = True
                 return True
             else:
                 log_error(f"VLC play() failed with code: {result}", component="vlc")
@@ -241,6 +277,11 @@ class VLCVideoPlayer:
             cmd = ["vlc", "--intf", "dummy"]  # No interface
             cmd.extend(self._get_vlc_args())
 
+            # Add looping if enabled
+            if self.enable_looping:
+                cmd.append("--repeat")  # Loop indefinitely
+                log_info("Command-line VLC looping enabled", component="vlc")
+
             # Use consistent positioning - left side for VLC
             cmd.extend(
                 [
@@ -291,6 +332,11 @@ class VLCVideoPlayer:
 
             cmd = ["vlc", "--intf", "dummy"]  # No interface
             cmd.extend(self._get_vlc_args_no_audio())
+
+            # Add looping if enabled
+            if self.enable_looping:
+                cmd.append("--repeat")  # Loop indefinitely
+                log_info("Command-line VLC looping enabled (no audio)", component="vlc")
 
             # Use consistent positioning - left side for VLC
             cmd.extend(
@@ -384,6 +430,8 @@ class VLCVideoPlayer:
             "position": 0.0,
             "is_playing": False,
             "state": "stopped",
+            "loop_count": self.loop_count,
+            "looping_enabled": self.enable_looping,
         }
 
         try:

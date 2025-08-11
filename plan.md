@@ -176,32 +176,29 @@ The project has successfully achieved its core objectives and is ready for produ
 
 ## Debug and Monitoring System (2025-08)
 
-### HTML-Based Debug Overlay
+### Clean Architecture Debug System
 
-The system features a modern HTML-based debug overlay that provides real-time monitoring:
+The system features a clean, consolidated debug architecture:
 
-- **Firefox-based interface**: Opens automatically on system startup
-- **Auto-refreshing display**: Updates every 5 seconds with live data
-- **Window positioning**: Automatic side-by-side layout (VLC left, Firefox right)
-- **Live video timing**: Current playback time / total duration with progress percentage
-- **System status monitoring**: Service status, VLC state, process information
-- **Responsive design**: Clean, professional interface with status color coding
+**Leader Pi (HTML Debug Interface)**
+- `HTMLDebugManager` - Manages browser-based debug interface
+- `HTMLDebugOverlay` - Live-updating HTML interface with Firefox
+- Real-time video timing and system status monitoring
+- Professional window management with side-by-side layout
+- Component-specific logging integrated throughout
 
-### Implementation
+**Collaborator Pi (Simple Debug Overlay)**
+- `SimpleDebugManager` - Lightweight debug overlay system
+- File-based fallback for reliable systemd service operation
+- Real-time MIDI and video synchronization status
+- Minimal resource footprint for Pi deployment
 
-- `HTMLDebugManager(pi_id, video_player)` - Main manager class
-- `HTMLDebugOverlay` - Handles HTML generation and browser integration
-- Direct VLC Python bindings integration for real-time video information
-- Background positioning using wmctrl for proper window layout
-- Comprehensive logging with component-specific tags
+### Architecture Benefits
 
-### Key Features
-
-- **Real-time video timing**: Shows current playback position and total duration
-- **VLC status detection**: Direct integration with VLC Python bindings
-- **Process monitoring**: Tracks system processes and service health
-- **Window management**: Automatic positioning for optimal viewing
-- **Error resilience**: Graceful fallbacks and comprehensive error handling
+- **Clean Separation**: Leader uses rich HTML interface, collaborators use simple overlays
+- **Consolidated Logging**: All components use standardized `log_info/warning/error` patterns
+- **No Debug Print Pollution**: Eliminated print statements in favor of proper logging
+- **Production Ready**: Debug systems designed for reliable systemd operation
 
 ## Diagnostics and Logs (2025-08)
 
