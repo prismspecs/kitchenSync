@@ -225,11 +225,9 @@ class HTMLDebugOverlay:
             self.firefox_opened = True
             log_info("Firefox launched successfully", component="overlay")
 
-            # Position window after a longer delay (in background thread)
+            # Position window after a short delay (in background thread)
             def position_window():
-                time.sleep(
-                    20
-                )  # Wait longer for Firefox to fully load before positioning
+                time.sleep(3)  # Wait for Firefox to load before positioning
                 try:
                     # Get list of all windows and find Firefox
                     result = subprocess.run(

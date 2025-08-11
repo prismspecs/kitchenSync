@@ -133,10 +133,14 @@ class DebugTemplateManager:
             # Render HTML
             html_content = self.template_engine.render("debug_overlay.html", context)
 
-            # Write HTML file
+            # Write to a temporary file first
             html_file = overlay_dir / "index.html"
-            with open(html_file, "w", encoding="utf-8") as f:
+            tmp_file = overlay_dir / "index.html.tmp"
+            with open(tmp_file, "w", encoding="utf-8") as f:
                 f.write(html_content)
+
+            # Atomically rename the file to avoid race conditions with the browser
+            os.rename(tmp_file, html_file)
 
             log_info(f"Debug overlay rendered: {html_file}", component="template")
             return str(html_file)
