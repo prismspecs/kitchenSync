@@ -22,7 +22,7 @@ class HTMLDebugOverlay:
         self.video_player = video_player
         self.running = True
         self.state_lock = threading.Lock()
-        
+
         # Initialize template system
         template_dir = Path(__file__).parent / "templates"
         self.template_manager = DebugTemplateManager(str(template_dir))
@@ -60,27 +60,31 @@ class HTMLDebugOverlay:
         try:
             # Get system info for initial render
             system_info = self._get_system_info()
-            
+
             # Render template
-            self.html_file = self.template_manager.render_debug_overlay(self.pi_id, system_info)
-            
+            self.html_file = self.template_manager.render_debug_overlay(
+                self.pi_id, system_info
+            )
+
             if not self.html_file:
                 raise Exception("Template rendering failed")
-                
+
             log_info(f"HTML debug file created: {self.html_file}", component="overlay")
-            
+
         except Exception as e:
-            log_error(f"Failed to create HTML file using templates: {e}", component="overlay")
+            log_error(
+                f"Failed to create HTML file using templates: {e}", component="overlay"
+            )
             # Fallback to a simple error page
             self._create_fallback_html()
-    
+
     def _create_fallback_html(self):
         """Create a simple fallback HTML file if template system fails"""
         try:
             # Ensure directory exists
             html_dir = Path(self.html_file).parent
             html_dir.mkdir(parents=True, exist_ok=True)
-            
+
             fallback_html = f"""<!DOCTYPE html>
 <html>
 <head>
@@ -103,12 +107,14 @@ class HTMLDebugOverlay:
     </script>
 </body>
 </html>"""
-            
+
             with open(self.html_file, "w") as f:
                 f.write(fallback_html)
-                
-            log_warning(f"Created fallback HTML file: {self.html_file}", component="overlay")
-            
+
+            log_warning(
+                f"Created fallback HTML file: {self.html_file}", component="overlay"
+            )
+
         except Exception as e:
             log_error(f"Failed to create fallback HTML: {e}", component="overlay")
 
@@ -136,8 +142,6 @@ class HTMLDebugOverlay:
             return f"{time_val:.1f}s: CC Ch{channel} C{control} V{value}"
         else:
             return f"{time_val:.1f}s: {event_type}"
-
-
 
     def update_state(self, **kwargs):
         """Update the debug state"""
@@ -227,6 +231,7 @@ class HTMLDebugOverlay:
             html_dir = Path(self.html_file).parent
             if html_dir.exists():
                 import shutil
+
                 shutil.rmtree(html_dir)
                 log_info(f"Cleaned up HTML directory: {html_dir}", component="overlay")
         except Exception as e:
@@ -357,16 +362,25 @@ class HTMLDebugOverlay:
                 system_info = self._get_system_info()
 
             # Render using template system
-            new_html_file = self.template_manager.render_debug_overlay(self.pi_id, system_info)
-            
+            new_html_file = self.template_manager.render_debug_overlay(
+                self.pi_id, system_info
+            )
+
             if new_html_file:
                 self.html_file = new_html_file
-                log_info(f"HTML debug overlay content updated: {self.html_file}", component="overlay")
+                log_info(
+                    f"HTML debug overlay content updated: {self.html_file}",
+                    component="overlay",
+                )
             else:
-                log_warning("Template rendering returned empty file path", component="overlay")
-                
+                log_warning(
+                    "Template rendering returned empty file path", component="overlay"
+                )
+
         except Exception as e:
-            log_error(f"Failed to update HTML overlay content: {e}", component="overlay")
+            log_error(
+                f"Failed to update HTML overlay content: {e}", component="overlay"
+            )
 
     def _get_system_info(self) -> dict:
         """Get current system information for the overlay"""
@@ -548,13 +562,49 @@ class HTMLDebugOverlay:
                             info["looping_enabled"] = video_info.get(
                                 "looping_enabled", False
                             )
+
+                            # Get video file from player if available
+                            if (
+                                hasattr(self.video_player, "video_file")
+                                and self.video_player.video_file
+                            ):
+                                info["video_file"] = os.path.basename(
+                                    self.video_player.video_file
+                                )
+                            elif (
+                                hasattr(self.video_player, "current_video")
+                                and self.video_player.current_video
+                            ):
+                                info["video_file"] = os.path.basename(
+                                    self.video_player.current_video
+                                )
+                            else:
+                                # Try to get from state if updated by update_debug_info
+                                with self.state_lock:
+                                    info["video_file"] = self.state.get(
+                                        "video_file", "None"
+                                    )
+
                             log_info(
-                                f"Video info: {video_info['current_time']:.1f}s / {video_info['total_time']:.1f}s ({video_info['state']})",
+                                f"Video info: {video_info['current_time']:.1f}s / {video_info['total_time']:.1f}s ({video_info['state']}) - {info.get('video_file', 'No file')}",
                                 component="overlay",
                             )
                         else:
-                            # No video player reference
-                            info["video_current_time"] = 0.0
+                            # No video player reference - use state info
+                            with self.state_lock:
+                                info["video_current_time"] = self.state.get(
+                                    "current_time", 0.0
+                                )
+                                info["video_total_time"] = self.state.get(
+                                    "total_time", 0.0
+                                )
+                                info["video_position"] = self.state.get(
+                                    "video_position", 0.0
+                                )
+                                info["video_state"] = "unknown"
+                                info["video_file"] = self.state.get(
+                                    "video_file", "None"
+                                )
 
                         # Get MIDI loop information if available
                         if hasattr(self, "midi_scheduler") and self.midi_scheduler:
@@ -715,8 +765,11 @@ class HTMLDebugManager:
                 looping_enabled=looping_enabled,
             )
 
-            log_info(f"Debug info updated: {video_file}, {current_time:.1f}s", component="overlay")
-            
+            log_info(
+                f"Debug info updated: {video_file}, {current_time:.1f}s",
+                component="overlay",
+            )
+
         except Exception as e:
             log_error(f"Error updating debug info: {e}", component="overlay")
 
