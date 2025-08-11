@@ -189,12 +189,16 @@ The system features a clean, consolidated debug architecture:
 - **Enhanced Layout (Jan 2025)**: Condensed interface with:
   - Smaller font (12px) and reduced padding for better information density
   - Side-by-side Service Status and VLC Status sections
-  - Combined refresh controls on single line
+  - Single refresh control section (removed redundant bottom controls)
   - Clean title without emoji decorations
   - Streamlined MIDI Information with comprehensive Recent/Upcoming lists
   - Scrollable MIDI event lists with color-coded indicators
   - Reduced log section heights to prevent scroll overflow
   - Removed redundant Current/Next MIDI fields for cleaner display
+  - **Reliability Fix (Jan 2025)**: Enhanced error handling to prevent white pages
+    - Content verification before HTML updates
+    - Improved JavaScript error handling with retry limits
+    - Fallback retention of previous working content
 - **Template System (Jan 2025)**: Modular architecture with:
   - Separate HTML templates in `src/debug/templates/`
   - External CSS stylesheets for easier customization

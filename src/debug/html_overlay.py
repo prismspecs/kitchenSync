@@ -353,21 +353,36 @@ class HTMLDebugOverlay:
                 self.pi_id, system_info
             )
 
-            if new_html_file:
-                self.html_file = new_html_file
-                log_info(
-                    f"HTML debug overlay content updated: {self.html_file}",
-                    component="overlay",
-                )
+            if new_html_file and os.path.exists(new_html_file):
+                # Verify the file has content before updating
+                try:
+                    with open(new_html_file, 'r') as f:
+                        content = f.read()
+                        if len(content.strip()) > 100:  # Ensure it's not empty/minimal
+                            self.html_file = new_html_file
+                            log_info(
+                                f"HTML debug overlay content updated: {self.html_file}",
+                                component="overlay",
+                            )
+                        else:
+                            log_warning(
+                                f"Generated HTML file too small ({len(content)} chars), keeping previous version", 
+                                component="overlay"
+                            )
+                except Exception as read_error:
+                    log_warning(
+                        f"Could not verify new HTML file: {read_error}", component="overlay"
+                    )
             else:
                 log_warning(
-                    "Template rendering returned empty file path", component="overlay"
+                    "Template rendering returned empty or missing file path", component="overlay"
                 )
 
         except Exception as e:
             log_error(
                 f"Failed to update HTML overlay content: {e}", component="overlay"
             )
+            # Don't update html_file on error - keep the previous working version
 
     def _get_system_info(self) -> dict:
         """Get current system information for the overlay"""

@@ -3,10 +3,12 @@
 // Auto-refresh configuration
 const REFRESH_INTERVAL = 5000; // 5 seconds
 
-// Auto-refresh function with improved reliability
+// Auto-refresh function with improved reliability and error handling
 function startAutoRefresh() {
     let refreshCount = 0;
+    let errorCount = 0;
     const maxRefreshes = 1000; // Prevent infinite refreshes
+    const maxErrors = 5; // Stop auto-refresh after too many errors
 
     function doRefresh() {
         try {
@@ -19,19 +21,35 @@ function startAutoRefresh() {
             }
 
             // Log refresh attempt
-            DebugOverlay.log(`Auto-refresh #${refreshCount}`, 'debug');
+            console.log(`Auto-refresh #${refreshCount}`);
 
             // Check if we've hit the max refresh limit
             if (refreshCount >= maxRefreshes) {
-                DebugOverlay.log('Max refreshes reached, stopping auto-refresh', 'warn');
+                console.warn('Max refreshes reached, stopping auto-refresh');
+                clearInterval(window.kitchenSyncRefreshInterval);
                 return;
             }
 
-            // Perform the refresh
-            window.location.reload(true); // Force reload from server
+            // Check for too many errors
+            if (errorCount >= maxErrors) {
+                console.error('Too many refresh errors, stopping auto-refresh');
+                clearInterval(window.kitchenSyncRefreshInterval);
+                return;
+            }
+
+            // Perform the refresh with timeout protection
+            setTimeout(() => {
+                try {
+                    window.location.reload(true); // Force reload from server
+                } catch (reloadError) {
+                    errorCount++;
+                    console.error(`Reload error #${errorCount}: ${reloadError.message}`);
+                }
+            }, 100);
 
         } catch (error) {
-            DebugOverlay.log(`Refresh error: ${error.message}`, 'error');
+            errorCount++;
+            console.error(`Refresh error #${errorCount}: ${error.message}`);
         }
     }
 
@@ -41,7 +59,7 @@ function startAutoRefresh() {
     // Store the interval ID for potential cleanup
     window.kitchenSyncRefreshInterval = refreshInterval;
 
-    DebugOverlay.log('Auto-refresh started', 'info');
+    console.log('Auto-refresh started');
 }
 
 // Update timestamp on page load
