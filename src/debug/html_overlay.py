@@ -504,11 +504,9 @@ class HTMLDebugOverlay:
                         else:
                             # Fallback to log file check (old method)
                             from src.core.logger import log_file_paths
+                            import time
 
                             paths = log_file_paths()
-
-                            import os
-                            import time
 
                             if os.path.exists(paths["vlc_main"]):
                                 stat = os.stat(paths["vlc_main"])
