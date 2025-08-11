@@ -554,6 +554,7 @@ class HTMLDebugOverlay:
                             self.video_player, "get_video_info"
                         ):
                             video_info = self.video_player.get_video_info()
+                            log_info(f"Raw video info from player: {video_info}", component="overlay")
                             info["video_current_time"] = video_info["current_time"]
                             info["video_total_time"] = video_info["total_time"]
                             info["video_position"] = video_info["position"]
@@ -615,6 +616,8 @@ class HTMLDebugOverlay:
                                 info["video_file"] = self.state.get(
                                     "video_file", "None"
                                 )
+                            info["video_loop_count"] = 0
+                            info["looping_enabled"] = False
 
                         # Get MIDI loop information if available
                         if hasattr(self, "midi_scheduler") and self.midi_scheduler:
