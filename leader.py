@@ -366,8 +366,17 @@ def main():
 
     try:
         log_info("Starting main() function", component="autostart")
-        leader = LeaderPi()
-        log_info("LeaderPi initialized successfully", component="autostart")
+        try:
+            leader = LeaderPi()
+            log_info("LeaderPi initialized successfully", component="autostart")
+        except Exception as e:
+            log_error(
+                f"FATAL: LeaderPi initialization failed: {e}", component="autostart"
+            )
+            import traceback
+
+            log_error(f"Traceback: {traceback.format_exc()}", component="autostart")
+            raise
 
         # Override debug mode if specified via command line
         if args.debug:
