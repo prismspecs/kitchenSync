@@ -278,7 +278,7 @@ class HTMLDebugOverlay:
         try:
             # Simple browser open without blocking
             import subprocess
-            
+
             # Open chromium with positioning arguments (non-blocking)
             subprocess.Popen(
                 [
@@ -291,7 +291,7 @@ class HTMLDebugOverlay:
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
             )
-            
+
             log_info(f"HTML debug overlay opened in browser: {self.html_file}")
         except Exception as e:
             log_error(f"Failed to open HTML overlay in browser: {e}")
