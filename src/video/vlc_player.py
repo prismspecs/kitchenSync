@@ -183,13 +183,15 @@ class VLCVideoPlayer:
 
         except Exception as e:
             log_error(f"Error with VLC Python: {e}", component="vlc")
-            return False
+            log_info("Falling back to command-line VLC", component="vlc")
+            return self._start_with_command_vlc()
 
     def _start_with_command_vlc(self) -> bool:
         """Start video using VLC command line"""
         try:
             log_info("Starting VLC with command line", component="vlc")
 
+            # Try with audio first
             cmd = ["vlc", "--intf", "dummy"]  # No interface
             cmd.extend(self._get_vlc_args())
 
@@ -219,21 +221,79 @@ class VLCVideoPlayer:
                 stdout=open(stdout_path, "wb"),
                 stderr=open(stderr_path, "wb"),
             )
-            log_info(f"Launched VLC: {' '.join(cmd)}", component="vlc")
+            log_info(f"Launched VLC with audio: {' '.join(cmd)}", component="vlc")
 
             # Give VLC time to start
-            time.sleep(2)
+            time.sleep(3)
 
             if self.command_process.poll() is None:
                 self.is_playing = True
-                log_info("VLC command started successfully", component="vlc")
+                log_info("VLC command started successfully with audio", component="vlc")
                 return True
             else:
-                log_error("VLC command process exited early", component="vlc")
-                return False
+                log_warning(
+                    "VLC with audio failed, trying without audio", component="vlc"
+                )
+                return self._start_with_command_vlc_no_audio()
 
         except Exception as e:
             log_error(f"Error with VLC command: {e}", component="vlc")
+            log_warning("Trying VLC without audio as last resort", component="vlc")
+            return self._start_with_command_vlc_no_audio()
+
+    def _start_with_command_vlc_no_audio(self) -> bool:
+        """Start video using VLC command line without audio (fallback)"""
+        try:
+            log_info("Starting VLC without audio (fallback)", component="vlc")
+
+            cmd = ["vlc", "--intf", "dummy"]  # No interface
+            cmd.extend(self._get_vlc_args_no_audio())
+
+            if self.debug_mode:
+                # Place video on the right leaving space at left/top for overlay
+                cmd.extend(
+                    [
+                        "--no-fullscreen",
+                        "--width=1440",
+                        "--height=900",
+                        "--video-x=460",
+                        "--video-y=60",
+                        "--no-video-deco",
+                    ]
+                )
+            else:
+                cmd.append("--fullscreen")
+
+            cmd.append(self.video_path)
+
+            # Capture stdout/stderr to files for diagnostics
+            paths = log_file_paths()
+            stdout_path = paths["vlc_stdout"]
+            stderr_path = paths["vlc_stderr"]
+            self.command_process = subprocess.Popen(
+                cmd,
+                stdout=open(stdout_path, "wb"),
+                stderr=open(stderr_path, "wb"),
+            )
+            log_info(f"Launched VLC without audio: {' '.join(cmd)}", component="vlc")
+
+            # Give VLC time to start
+            time.sleep(3)
+
+            if self.command_process.poll() is None:
+                self.is_playing = True
+                log_info(
+                    "VLC command started successfully without audio", component="vlc"
+                )
+                return True
+            else:
+                log_error(
+                    "VLC command process failed even without audio", component="vlc"
+                )
+                return False
+
+        except Exception as e:
+            log_error(f"Error with VLC command (no audio): {e}", component="vlc")
             return False
 
     def _get_vlc_args(self) -> list[str]:
@@ -247,7 +307,26 @@ class VLCVideoPlayer:
             "--network-caching=0",
             "--file-caching=300",
             "--vout=x11",
-            "--aout=alsa",
+            "--aout=alsa",  # Try ALSA first
+            "--x11-display=:0",
+            "--file-logging",
+            f"--logfile={paths['vlc_main']}",
+            "--verbose=2",
+        ]
+
+    def _get_vlc_args_no_audio(self) -> list[str]:
+        """Get VLC command line arguments with audio disabled (fallback)"""
+        paths = log_file_paths()
+        return [
+            "--no-video-title-show",
+            "--no-osd",
+            "--mouse-hide-timeout=0",
+            "--no-snapshot-preview",
+            "--network-caching=0",
+            "--file-caching=300",
+            "--vout=x11",
+            "--aout=dummy",  # Use dummy audio to prevent ALSA crashes
+            "--no-audio",  # Disable audio output completely
             "--x11-display=:0",
             "--file-logging",
             f"--logfile={paths['vlc_main']}",
