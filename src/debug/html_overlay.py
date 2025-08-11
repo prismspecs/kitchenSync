@@ -37,21 +37,6 @@ class HTMLDebugOverlay:
         # Create initial HTML file
         self._create_html_file()
 
-        # Open in browser
-        try:
-            webbrowser.open(f"file://{self.html_file}")
-            log_info(
-                f"HTML debug overlay opened in browser: {self.html_file}",
-                component="overlay",
-            )
-        except Exception as e:
-            log_warning(
-                f"Could not open browser automatically: {e}", component="overlay"
-            )
-            log_info(
-                f"Manual: open {self.html_file} in your browser", component="overlay"
-            )
-
         # Start update thread
         self.update_thread = threading.Thread(target=self._update_loop, daemon=True)
         self.update_thread.start()
@@ -291,47 +276,19 @@ class HTMLDebugOverlay:
     def open_in_browser(self):
         """Open the HTML file in the default browser"""
         try:
-            # Check if a debug browser window already exists
+            # Simple browser open with positioning
             import subprocess
 
-            result = subprocess.run(
-                ["wmctrl", "-l"], capture_output=True, text=True, timeout=10
+            subprocess.run(
+                [
+                    "chromium",
+                    "--new-window",
+                    "--window-size=640,720",
+                    "--window-position=1280,0",
+                    f"file://{self.html_file}",
+                ],
+                check=False,
             )
-
-            existing_window = None
-            if result.returncode == 0:
-                for line in result.stdout.split("\n"):
-                    if (
-                        "kitchensync_debug" in line.lower()
-                        or "chromium" in line.lower()
-                    ):
-                        parts = line.split()
-                        if len(parts) >= 2:
-                            existing_window = parts[0]
-                            break
-
-            if existing_window:
-                # Reuse existing window - bring it to front and refresh
-                subprocess.run(
-                    ["wmctrl", "-ia", existing_window], check=False, timeout=5
-                )
-                log_info(f"Reusing existing debug browser window: {existing_window}")
-            else:
-                # Open new browser instance with positioning arguments
-                subprocess.run(
-                    [
-                        "chromium",
-                        "--new-window",
-                        "--window-size=640,720",
-                        "--window-position=1280,0",
-                        "--disable-web-security",  # Allow local file access
-                        "--user-data-dir=/tmp/chrome-debug",  # Separate profile
-                        f"file://{self.html_file}",
-                    ],
-                    check=False,
-                )
-                log_info("Opened new debug browser window")
-
             log_info(f"HTML debug overlay opened in browser: {self.html_file}")
         except Exception as e:
             log_error(f"Failed to open HTML overlay in browser: {e}")
