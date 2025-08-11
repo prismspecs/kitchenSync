@@ -29,19 +29,23 @@ body {
 
 .section {
     background-color: #16213e;
-    padding: 10px;
+    padding: 8px 10px;
+    /* Reduced vertical padding */
     border-radius: 5px;
-    margin-bottom: 8px;
+    margin-bottom: 6px;
+    /* Reduced from 8px */
     border-left: 3px solid #0f3460;
 }
 
 .section h3 {
-    margin: 0 0 8px 0;
+    margin: 0 0 6px 0;
+    /* Reduced from 8px */
     font-size: 14px;
     color: #4ecdc4;
 }
 
-.section p, .section div {
+.section p,
+.section div {
     margin: 3px 0;
     line-height: 1.4;
 }
@@ -139,16 +143,19 @@ body {
 
 .midi-section {
     background-color: #16213e;
-    padding: 10px;
+    padding: 8px 10px;
+    /* Reduced vertical padding */
     border-radius: 5px;
-    margin-bottom: 8px;
+    margin-bottom: 6px;
+    /* Reduced from 8px */
     border-left: 3px solid #0f3460;
 }
 
 .midi-columns {
     display: flex;
     gap: 10px;
-    margin-top: 10px;
+    margin-top: 6px;
+    /* Reduced from 10px */
 }
 
 .midi-column {
@@ -186,15 +193,24 @@ body {
 
 .log-section {
     background-color: #16213e;
-    padding: 10px;
+    padding: 8px 10px 6px 10px;
+    /* Reduced bottom padding */
     border-radius: 5px;
-    margin-bottom: 8px;
+    margin-bottom: 6px;
+    /* Reduced from 8px */
     border-left: 3px solid #0f3460;
+}
+
+.log-section h3 {
+    margin: 0 0 4px 0;
+    /* Reduced bottom margin from default */
+    font-size: 13px;
 }
 
 .log-content {
     background-color: #1a1a2e;
-    padding: 8px;
+    padding: 6px;
+    /* Reduced from 8px */
     border-radius: 3px;
     font-family: monospace;
     font-size: 11px;
