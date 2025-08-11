@@ -552,7 +552,12 @@ class HTMLDebugOverlay:
 
                 if main_result.returncode == 0:
                     # Main process is running, check if VLC is active within it
-                    # We can assume VLC is running if the main process is running and we have VLC logs
+                    vlc_pid = main_result.stdout.strip().split("\n")[0]
+                    log_info(
+                        f"Found leader.py process with PID: {vlc_pid}",
+                        component="overlay",
+                    )
+
                     try:
                         from src.core.logger import log_file_paths
 
@@ -560,18 +565,40 @@ class HTMLDebugOverlay:
 
                         # Check if VLC log file exists and has recent content
                         import os
+                        import time
+
+                        log_info(
+                            f"Checking VLC log file: {paths['vlc_main']}",
+                            component="overlay",
+                        )
 
                         if os.path.exists(paths["vlc_main"]):
                             stat = os.stat(paths["vlc_main"])
-                            import time
+                            age_seconds = time.time() - stat.st_mtime
+                            log_info(
+                                f"VLC log file exists, age: {age_seconds:.1f} seconds",
+                                component="overlay",
+                            )
 
-                            if (
-                                time.time() - stat.st_mtime < 60
-                            ):  # Modified within last minute
+                            if age_seconds < 60:  # Modified within last minute
                                 vlc_found = True
-                                vlc_pid = main_result.stdout.strip().split("\n")[0]
-                    except:
-                        pass
+                                log_info(
+                                    "VLC detected as active (recent log activity)",
+                                    component="overlay",
+                                )
+                            else:
+                                log_info(
+                                    "VLC log file too old, considering inactive",
+                                    component="overlay",
+                                )
+                        else:
+                            log_info("VLC log file does not exist", component="overlay")
+                    except Exception as e:
+                        log_error(
+                            f"Error checking VLC log file: {e}", component="overlay"
+                        )
+                else:
+                    log_info("leader.py process not found", component="overlay")
 
                 if vlc_found and vlc_pid:
                     info["vlc_status"] = f"Running (embedded in PID: {vlc_pid})"
