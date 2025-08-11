@@ -35,7 +35,6 @@ class SimpleDebugOverlay:
 
         # Try pygame first, fall back to file if it fails
         try:
-            snapshot_env()
             # Check if we have a display
             if not os.environ.get("DISPLAY") and not os.environ.get("SDL_VIDEODRIVER"):
                 raise Exception("No display available")
@@ -43,6 +42,27 @@ class SimpleDebugOverlay:
             pygame.init()
             pygame.font.init()
             pygame.display.init()
+
+            # Try different display drivers if the first fails
+            display_drivers = ["x11", "drm", "kmsdrm", "wayland"]
+            display_initialized = False
+
+            for driver in display_drivers:
+                try:
+                    os.environ["SDL_VIDEODRIVER"] = driver
+                    pygame.display.init()
+                    display_initialized = True
+                    log_info(
+                        f"Display initialized with driver: {driver}",
+                        component="overlay",
+                    )
+                    break
+                except Exception as e:
+                    log_warning(f"Driver {driver} failed: {e}", component="overlay")
+                    continue
+
+            if not display_initialized:
+                raise Exception("No display driver could be initialized")
 
             # Determine desktop size for safe placement (before setting window)
             overlay_width = 400
@@ -71,7 +91,8 @@ class SimpleDebugOverlay:
             # Create a small overlay window
             self.width = overlay_width
             self.height = overlay_height
-            flags = pygame.HWSURFACE | pygame.DOUBLEBUF | pygame.RESIZABLE
+            # Use software rendering to avoid GL context issues
+            flags = pygame.SWSURFACE | pygame.DOUBLEBUF | pygame.RESIZABLE
             self.screen = pygame.display.set_mode((self.width, self.height), flags)
             pygame.display.set_caption(f"KitchenSync Debug - {pi_id}")
 
@@ -133,6 +154,8 @@ class SimpleDebugOverlay:
             return
 
         clock = pygame.time.Clock()
+        error_count = 0
+        max_errors = 3
 
         while self.running and self.screen:
             try:
@@ -151,17 +174,31 @@ class SimpleDebugOverlay:
                 pygame.display.flip()
                 clock.tick(30)  # 30 FPS
 
+                # Reset error count on successful frame
+                error_count = 0
+
             except Exception as e:
-                log_warning(f"Display loop error: {e}", component="overlay")
+                error_count += 1
+                log_warning(
+                    f"Display loop error ({error_count}/{max_errors}): {e}",
+                    component="overlay",
+                )
+
                 # If we get persistent display errors, fall back to file debug
-                if "GL context" in str(e) or "BadAccess" in str(e):
+                if (
+                    error_count >= max_errors
+                    or "GL context" in str(e)
+                    or "BadAccess" in str(e)
+                ):
                     log_warning(
-                        "Switching to file debug due to display errors",
+                        "Switching to file debug due to persistent display errors",
                         component="overlay",
                     )
                     self.use_pygame = False
                     self._init_file_fallback()
                     break
+
+                # Wait a bit before retrying
                 time.sleep(1)
 
     def _init_file_fallback(self):
