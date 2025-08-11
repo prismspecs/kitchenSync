@@ -219,32 +219,8 @@ class VLCVideoPlayer:
             log_info(f"VLC play() returned: {result}", component="vlc")
 
             if result == 0:
-                log_info("VLC playbook started successfully", component="vlc")
+                log_info("VLC playback started successfully", component="vlc")
                 self.is_playing = True
-
-                # Set fullscreen for production mode (with delay to avoid crashes)
-                if not self.debug_mode:
-
-                    def set_fullscreen_delayed():
-                        try:
-                            # Wait for VLC to fully initialize
-                            import time
-
-                            time.sleep(2)
-                            if self.vlc_player and self.is_playing:
-                                self.vlc_player.set_fullscreen(True)
-                                log_info("Enabled fullscreen mode", component="vlc")
-                        except Exception as e:
-                            log_warning(
-                                f"Could not enable fullscreen: {e}", component="vlc"
-                            )
-
-                    import threading
-
-                    threading.Thread(target=set_fullscreen_delayed, daemon=True).start()
-                else:
-                    log_info("Debug mode: keeping windowed", component="vlc")
-
                 return True
             else:
                 log_error(f"VLC play() failed with code: {result}", component="vlc")
@@ -429,17 +405,28 @@ class VLCVideoPlayer:
     def _get_vlc_args(self) -> list[str]:
         """Get VLC command line arguments"""
         paths = log_file_paths()
-        return [
+        args = [
             # Simple, working VLC configuration
             "--file-logging",
             f"--logfile={paths['vlc_main']}",
             "--verbose=2",
         ]
 
+        # Add fullscreen for production mode
+        if not self.debug_mode:
+            args.extend(
+                [
+                    "--fullscreen",
+                    "--no-video-deco",
+                ]
+            )
+
+        return args
+
     def _get_vlc_args_no_audio(self) -> list[str]:
         """Get VLC command line arguments with audio disabled (fallback)"""
         paths = log_file_paths()
-        return [
+        args = [
             # Minimal config - let VLC use defaults
             "--aout=dummy",  # Use dummy audio to prevent ALSA crashes
             "--no-audio",  # Disable audio output completely
@@ -447,6 +434,17 @@ class VLCVideoPlayer:
             f"--logfile={paths['vlc_main']}",
             "--verbose=2",
         ]
+
+        # Add fullscreen for production mode
+        if not self.debug_mode:
+            args.extend(
+                [
+                    "--fullscreen",
+                    "--no-video-deco",
+                ]
+            )
+
+        return args
 
     def cleanup(self) -> None:
         """Clean up resources"""
