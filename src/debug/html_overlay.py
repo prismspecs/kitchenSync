@@ -291,8 +291,20 @@ class HTMLDebugOverlay:
     def open_in_browser(self):
         """Open the HTML file in the default browser"""
         try:
-            # Open new browser instance (no need to kill old ones with auto-refresh)
-            webbrowser.open(f"file://{self.html_file}")
+            # Open new browser instance with specific size and position
+            import subprocess
+
+            subprocess.run(
+                [
+                    "chromium",
+                    "--new-window",
+                    "--window-size=640,720",  # Smaller width to fit alongside VLC
+                    "--window-position=1280,0",  # Position on right side of VLC
+                    f"file://{self.html_file}",
+                ],
+                check=False,
+            )
+
             log_info(f"HTML debug overlay opened in browser: {self.html_file}")
         except Exception as e:
             log_error(f"Failed to open HTML overlay in browser: {e}")
@@ -301,7 +313,7 @@ class HTMLDebugOverlay:
         """Update the HTML content with current system information"""
         if system_info is None:
             system_info = self._get_system_info()
-        
+
         html_content = f"""<!DOCTYPE html>
 <html>
 <head>
@@ -375,9 +387,9 @@ class HTMLDebugOverlay:
     </script>
 </body>
 </html>"""
-        
+
         try:
-            with open(self.html_file, 'w', encoding='utf-8') as f:
+            with open(self.html_file, "w", encoding="utf-8") as f:
                 f.write(html_content)
             log_info(f"HTML debug overlay content updated: {self.html_file}")
         except Exception as e:
@@ -389,133 +401,151 @@ class HTMLDebugOverlay:
             import subprocess
             import psutil
             from datetime import datetime
-            
+
             info = {
-                'pi_id': self.pi_id,
-                'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                'service_status': 'Unknown',
-                'service_status_class': 'warning',
-                'service_pid': 'Unknown',
-                'service_uptime': 'Unknown',
-                'vlc_status': 'Unknown',
-                'vlc_status_class': 'warning',
-                'video_file': 'None',
-                'vlc_process': 'None',
-                'recent_logs': 'No logs available',
-                'vlc_logs': 'No VLC logs available'
+                "pi_id": self.pi_id,
+                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "service_status": "Unknown",
+                "service_status_class": "warning",
+                "service_pid": "Unknown",
+                "service_uptime": "Unknown",
+                "vlc_status": "Unknown",
+                "vlc_status_class": "warning",
+                "video_file": "None",
+                "vlc_process": "None",
+                "recent_logs": "No logs available",
+                "vlc_logs": "No VLC logs available",
             }
-            
+
             # Check service status
             try:
-                result = subprocess.run(['systemctl', 'is-active', 'kitchensync.service'], 
-                                      capture_output=True, text=True, timeout=5)
+                result = subprocess.run(
+                    ["systemctl", "is-active", "kitchensync.service"],
+                    capture_output=True,
+                    text=True,
+                    timeout=5,
+                )
                 if result.returncode == 0:
-                    info['service_status'] = 'Active (running)'
-                    info['service_status_class'] = 'good'
+                    info["service_status"] = "Active (running)"
+                    info["service_status_class"] = "good"
                 else:
-                    info['service_status'] = 'Inactive'
-                    info['service_status_class'] = 'error'
+                    info["service_status"] = "Inactive"
+                    info["service_status_class"] = "error"
             except Exception:
-                info['service_status'] = 'Check failed'
-                info['service_status_class'] = 'error'
-            
+                info["service_status"] = "Check failed"
+                info["service_status_class"] = "error"
+
             # Get service PID and uptime
             try:
-                result = subprocess.run(['systemctl', 'show', 'kitchensync.service', '--property=MainPID,ActiveEnterTimestamp'], 
-                                      capture_output=True, text=True, timeout=5)
+                result = subprocess.run(
+                    [
+                        "systemctl",
+                        "show",
+                        "kitchensync.service",
+                        "--property=MainPID,ActiveEnterTimestamp",
+                    ],
+                    capture_output=True,
+                    text=True,
+                    timeout=5,
+                )
                 if result.returncode == 0:
-                    for line in result.stdout.split('\n'):
-                        if 'MainPID=' in line:
-                            pid = line.split('=')[1].strip()
-                            if pid != '0':
-                                info['service_pid'] = pid
+                    for line in result.stdout.split("\n"):
+                        if "MainPID=" in line:
+                            pid = line.split("=")[1].strip()
+                            if pid != "0":
+                                info["service_pid"] = pid
                                 # Get process uptime
                                 try:
                                     proc = psutil.Process(int(pid))
-                                    uptime = datetime.now() - datetime.fromtimestamp(proc.create_time())
-                                    info['service_uptime'] = str(uptime).split('.')[0]
+                                    uptime = datetime.now() - datetime.fromtimestamp(
+                                        proc.create_time()
+                                    )
+                                    info["service_uptime"] = str(uptime).split(".")[0]
                                 except:
-                                    info['service_uptime'] = 'Unknown'
+                                    info["service_uptime"] = "Unknown"
             except Exception:
                 pass
-            
+
             # Check VLC process
             try:
-                result = subprocess.run(['pgrep', '-f', 'vlc'], capture_output=True, text=True, timeout=5)
+                result = subprocess.run(
+                    ["pgrep", "-f", "vlc"], capture_output=True, text=True, timeout=5
+                )
                 if result.returncode == 0:
-                    vlc_pids = result.stdout.strip().split('\n')
-                    info['vlc_status'] = f'Running (PID: {", ".join(vlc_pids)})'
-                    info['vlc_status_class'] = 'good'
-                    info['vlc_process'] = f'PIDs: {", ".join(vlc_pids)}'
+                    vlc_pids = result.stdout.strip().split("\n")
+                    info["vlc_status"] = f'Running (PID: {", ".join(vlc_pids)})'
+                    info["vlc_status_class"] = "good"
+                    info["vlc_process"] = f'PIDs: {", ".join(vlc_pids)}'
                 else:
-                    info['vlc_status'] = 'Not running'
-                    info['vlc_status_class'] = 'error'
+                    info["vlc_status"] = "Not running"
+                    info["vlc_status_class"] = "error"
             except Exception:
-                info['vlc_status'] = 'Check failed'
-                info['vlc_status_class'] = 'warning'
-            
+                info["vlc_status"] = "Check failed"
+                info["vlc_status_class"] = "warning"
+
             # Get recent logs
             try:
                 from src.core.logger import log_file_paths
+
                 paths = log_file_paths()
-                
+
                 # Recent system logs
-                if os.path.exists(paths['system']):
-                    with open(paths['system'], 'r') as f:
+                if os.path.exists(paths["system"]):
+                    with open(paths["system"], "r") as f:
                         lines = f.readlines()
                         recent = lines[-20:] if len(lines) > 20 else lines
-                        info['recent_logs'] = ''.join(recent)
-                
+                        info["recent_logs"] = "".join(recent)
+
                 # Recent VLC logs
-                if os.path.exists(paths['vlc_main']):
-                    with open(paths['vlc_main'], 'r') as f:
+                if os.path.exists(paths["vlc_main"]):
+                    with open(paths["vlc_main"], "r") as f:
                         lines = f.readlines()
                         recent = lines[-20:] if len(lines) > 20 else lines
-                        info['vlc_logs'] = ''.join(recent)
+                        info["vlc_logs"] = "".join(recent)
             except Exception:
                 pass
-            
+
             return info
-            
+
         except Exception as e:
             log_error(f"Failed to get system info: {e}")
             return {
-                'pi_id': self.pi_id,
-                'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                'error': f'Failed to get system info: {e}'
+                "pi_id": self.pi_id,
+                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "error": f"Failed to get system info: {e}",
             }
 
 
 class HTMLDebugManager:
     """Manages the HTML debug overlay"""
-    
+
     def __init__(self, pi_id: str):
         self.overlay = HTMLDebugOverlay(pi_id)
         self.update_thread = None
         self.running = False
-    
+
     def start(self):
         """Start the HTML debug overlay"""
         try:
             # Open in browser
             self.overlay.open_in_browser()
-            
+
             # Start update thread
             self.running = True
             self.update_thread = threading.Thread(target=self._update_loop, daemon=True)
             self.update_thread.start()
-            
+
             log_info("HTML debug manager created", component="overlay")
         except Exception as e:
             log_error(f"Failed to start HTML debug manager: {e}", component="overlay")
-    
+
     def stop(self):
         """Stop the HTML debug overlay"""
         self.running = False
         if self.update_thread:
             self.update_thread.join(timeout=1)
         log_info("HTML debug manager stopped", component="overlay")
-    
+
     def _update_loop(self):
         """Update loop for the HTML overlay"""
         while self.running:
