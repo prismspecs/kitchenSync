@@ -20,7 +20,7 @@ from networking import SyncBroadcaster, CommandManager
 from midi import MidiScheduler, MidiManager
 from core import Schedule, ScheduleEditor, SystemState, CollaboratorRegistry
 from ui import CommandInterface, StatusDisplay
-from debug.simple_overlay import SimpleDebugManager
+from debug.html_overlay import HTMLDebugManager
 from core.logger import log_info, log_warning, log_error, snapshot_env, log_file_paths
 
 
@@ -58,8 +58,8 @@ class LeaderPi:
         else:
             log_warning("No video file found at startup.", component="leader")
 
-        # Simple debug overlay (displays on Pi screen)
-        self.simple_debug = None
+        # HTML debug overlay (displays in browser)
+        self.html_debug = None
         # Delay overlay creation until after VLC window exists (start_system)
 
         # Setup command handlers
@@ -105,10 +105,10 @@ class LeaderPi:
             self.video_player.start_playback()
 
         # Now create overlay (after VLC window exists) so both windows are visible
-        if self.config.debug_mode and self.simple_debug is None:
-            self.simple_debug = SimpleDebugManager("leader-pi", is_leader=True)
-            if self.simple_debug.overlay:
-                log_info("Simple overlay created", component="leader")
+        if self.config.debug_mode and self.html_debug is None:
+            self.html_debug = HTMLDebugManager("leader-pi", is_leader=True)
+            if self.html_debug.overlay:
+                log_info("HTML overlay created", component="leader")
             else:
                 log_warning(
                     "Failed to create overlay - falling back to file debug",
@@ -237,13 +237,13 @@ class LeaderPi:
                         )
 
                         # Update visual overlay
-                        if self.simple_debug and self.simple_debug.overlay:
+                        if self.html_debug and self.html_debug.overlay:
                             video_file = (
                                 self.video_player.video_path
                                 or self.video_path
                                 or "Unknown"
                             )
-                            self.simple_debug.update_debug_info(
+                            self.html_debug.update_debug_info(
                                 video_file=video_file,
                                 current_time=current_time,
                                 total_time=video_duration,
@@ -315,8 +315,8 @@ class LeaderPi:
 
         self.video_player.cleanup()
         self.midi_manager.cleanup()
-        if self.simple_debug:
-            self.simple_debug.cleanup()
+        if self.html_debug:
+            self.html_debug.cleanup()
         if hasattr(self, "debug_file") and self.debug_file:
             try:
                 with open(self.debug_file, "a") as f:
