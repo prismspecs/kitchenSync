@@ -537,13 +537,18 @@ class HTMLDebugOverlay:
                 result = subprocess.run(
                     ["pgrep", "-f", "vlc"], capture_output=True, text=True, timeout=5
                 )
-                
+
                 # Debug logging
-                log_info(f"pgrep result: returncode={result.returncode}, stdout='{result.stdout.strip()}'", component="overlay")
-                
+                log_info(
+                    f"pgrep result: returncode={result.returncode}, stdout='{result.stdout.strip()}'",
+                    component="overlay",
+                )
+
                 if result.returncode == 0:
                     vlc_pids = result.stdout.strip().split("\n")
-                    vlc_pids = [pid for pid in vlc_pids if pid.strip()]  # Remove empty strings
+                    vlc_pids = [
+                        pid for pid in vlc_pids if pid.strip()
+                    ]  # Remove empty strings
                     info["vlc_status"] = f'Running (PID: {", ".join(vlc_pids)})'
                     info["vlc_status_class"] = "good"
                     info["vlc_process"] = f'PIDs: {", ".join(vlc_pids)}'
@@ -555,19 +560,41 @@ class HTMLDebugOverlay:
                     if ps_result.returncode == 0:
                         vlc_processes = []
                         vlc_lines = []
-                        for line in ps_result.stdout.split('\n'):
-                            if 'vlc' in line.lower() and 'grep' not in line and line.strip():
+                        for line in ps_result.stdout.split("\n"):
+                            line_lower = line.lower()
+                            if (
+                                (
+                                    "vlc" in line_lower
+                                    or "media" in line_lower
+                                    or "video" in line_lower
+                                )
+                                and "grep" not in line_lower
+                                and line.strip()
+                            ):
                                 vlc_lines.append(line.strip())
                                 # Extract PID (second column)
                                 parts = line.split()
                                 if len(parts) > 1:
                                     vlc_processes.append(parts[1])
-                        
-                        # Debug logging
-                        log_info(f"ps aux found VLC lines: {vlc_lines}", component="overlay")
-                        
+
+                        # Debug logging - also log ALL processes to see what's running
+                        all_processes = []
+                        for line in ps_result.stdout.split("\n")[:20]:  # First 20 lines
+                            if line.strip():
+                                all_processes.append(line.strip())
+
+                        log_info(
+                            f"ps aux found VLC lines: {vlc_lines}", component="overlay"
+                        )
+                        log_info(
+                            f"Sample processes running: {all_processes[:10]}",
+                            component="overlay",
+                        )
+
                         if vlc_processes:
-                            info["vlc_status"] = f'Running (PID: {", ".join(vlc_processes)})'
+                            info["vlc_status"] = (
+                                f'Running (PID: {", ".join(vlc_processes)})'
+                            )
                             info["vlc_status_class"] = "good"
                             info["vlc_process"] = f'PIDs: {", ".join(vlc_processes)}'
                         else:
