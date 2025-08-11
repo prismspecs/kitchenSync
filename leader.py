@@ -61,7 +61,7 @@ class LeaderPi:
         # Create HTML debug overlay
         log_info("About to create HTML debug overlay", component="leader")
         pi_id = "leader-pi"  # Define the pi_id variable
-        self.html_debug = HTMLDebugManager(pi_id)
+        self.html_debug = HTMLDebugManager(pi_id, self.video_player)
         log_info("HTMLDebugManager created, about to start", component="leader")
         self.html_debug.start()
         log_info("HTML overlay started successfully", component="leader")

@@ -16,8 +16,9 @@ from src.core.logger import log_info, log_error, log_warning
 class HTMLDebugOverlay:
     """HTML-based debug overlay that opens in a browser window"""
 
-    def __init__(self, pi_id: str):
+    def __init__(self, pi_id: str, video_player=None):
         self.pi_id = pi_id
+        self.video_player = video_player
         self.running = True
         self.state_lock = threading.Lock()
         self.html_file = f"/tmp/kitchensync_debug_{pi_id}.html"
@@ -561,45 +562,42 @@ class HTMLDebugOverlay:
                         component="overlay",
                     )
 
+                    # If we have a video player reference and can get video info, VLC is running
                     try:
-                        from src.core.logger import log_file_paths
-
-                        paths = log_file_paths()
-
-                        # Check if VLC log file exists and has recent content
-                        import os
-                        import time
-
-                        log_info(
-                            f"Checking VLC log file: {paths['vlc_main']}",
-                            component="overlay",
-                        )
-
-                        if os.path.exists(paths["vlc_main"]):
-                            stat = os.stat(paths["vlc_main"])
-                            age_seconds = time.time() - stat.st_mtime
-                            log_info(
-                                f"VLC log file exists, age: {age_seconds:.1f} seconds",
-                                component="overlay",
-                            )
-
-                            if age_seconds < 60:  # Modified within last minute
+                        if self.video_player and hasattr(self.video_player, 'get_video_info'):
+                            # Try to get video info - if this works, VLC is definitely running
+                            video_info = self.video_player.get_video_info()
+                            if video_info["total_time"] > 0 or video_info["current_time"] >= 0:
                                 vlc_found = True
-                                log_info(
-                                    "VLC detected as active (recent log activity)",
-                                    component="overlay",
-                                )
+                                log_info("VLC detected as active (video player responsive)", component="overlay")
                             else:
+                                log_info("VLC player exists but no video info available", component="overlay")
+                        else:
+                            # Fallback to log file check (old method)
+                            from src.core.logger import log_file_paths
+                            paths = log_file_paths()
+                            
+                            import os
+                            import time
+
+                            if os.path.exists(paths["vlc_main"]):
+                                stat = os.stat(paths["vlc_main"])
+                                age_seconds = time.time() - stat.st_mtime
                                 log_info(
-                                    "VLC log file too old, considering inactive",
+                                    f"VLC log file exists, age: {age_seconds:.1f} seconds",
                                     component="overlay",
                                 )
-                        else:
-                            log_info("VLC log file does not exist", component="overlay")
+
+                                if age_seconds < 300:  # Extended to 5 minutes instead of 1 minute
+                                    vlc_found = True
+                                    log_info("VLC detected as active (log file method)", component="overlay")
+                                else:
+                                    log_info("VLC log file too old, considering inactive", component="overlay")
+                            else:
+                                log_info("VLC log file does not exist", component="overlay")
+                                
                     except Exception as e:
-                        log_error(
-                            f"Error checking VLC log file: {e}", component="overlay"
-                        )
+                        log_error(f"Error checking VLC status: {e}", component="overlay")
                 else:
                     log_info("leader.py process not found", component="overlay")
 
@@ -608,32 +606,30 @@ class HTMLDebugOverlay:
                     info["vlc_status_class"] = "good"
                     info["vlc_process"] = f"Python VLC bindings in PID: {vlc_pid}"
 
-                    # Try to get video playback information
+                    # Get video playback information directly from video player
                     try:
-                        # Access the video player through the leader instance
-                        # This is a bit hacky but works since we're in the same process
-                        import sys
-
-                        for obj in (
-                            sys.modules.get("__main__", []).__dict__.values()
-                            if hasattr(sys.modules.get("__main__", {}), "__dict__")
-                            else []
+                        if self.video_player and hasattr(
+                            self.video_player, "get_video_info"
                         ):
-                            if hasattr(obj, "video_player") and hasattr(
-                                obj.video_player, "get_video_info"
-                            ):
-                                video_info = obj.video_player.get_video_info()
-                                info["video_current_time"] = video_info["current_time"]
-                                info["video_total_time"] = video_info["total_time"]
-                                info["video_position"] = video_info["position"]
-                                info["video_state"] = video_info["state"]
-                                break
+                            video_info = self.video_player.get_video_info()
+                            info["video_current_time"] = video_info["current_time"]
+                            info["video_total_time"] = video_info["total_time"]
+                            info["video_position"] = video_info["position"]
+                            info["video_state"] = video_info["state"]
+                            log_info(
+                                f"Video info: {video_info['current_time']:.1f}s / {video_info['total_time']:.1f}s ({video_info['state']})",
+                                component="overlay",
+                            )
                         else:
-                            # Fallback - set default values
+                            # No video player reference
                             info["video_current_time"] = 0.0
                             info["video_total_time"] = 0.0
                             info["video_position"] = 0.0
-                            info["video_state"] = "unknown"
+                            info["video_state"] = "no_player"
+                            log_warning(
+                                "No video player reference available",
+                                component="overlay",
+                            )
                     except Exception as e:
                         log_error(f"Error getting video info: {e}", component="overlay")
                         info["video_current_time"] = 0.0
@@ -688,8 +684,8 @@ class HTMLDebugOverlay:
 class HTMLDebugManager:
     """Manages the HTML debug overlay"""
 
-    def __init__(self, pi_id: str):
-        self.overlay = HTMLDebugOverlay(pi_id)
+    def __init__(self, pi_id: str, video_player=None):
+        self.overlay = HTMLDebugOverlay(pi_id, video_player)
         self.update_thread = None
         self.running = False
 
