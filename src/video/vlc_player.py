@@ -226,20 +226,17 @@ class VLCVideoPlayer:
             cmd = ["vlc", "--intf", "dummy"]  # No interface
             cmd.extend(self._get_vlc_args())
 
-            if self.debug_mode:
-                # Place video on the right leaving space at left/top for overlay
-                cmd.extend(
-                    [
-                        "--no-fullscreen",
-                        "--width=1440",
-                        "--height=900",
-                        "--video-x=460",
-                        "--video-y=60",
-                        "--no-video-deco",
-                    ]
-                )
-            else:
-                cmd.append("--fullscreen")
+            # Use consistent positioning - left side for VLC
+            cmd.extend(
+                [
+                    "--no-fullscreen",
+                    "--width=1280",
+                    "--height=720",
+                    "--video-x=0",  # Left side of screen
+                    "--video-y=0",  # Top of screen
+                    "--no-video-deco",
+                ]
+            )
 
             cmd.append(self.video_path)
 
@@ -280,20 +277,17 @@ class VLCVideoPlayer:
             cmd = ["vlc", "--intf", "dummy"]  # No interface
             cmd.extend(self._get_vlc_args_no_audio())
 
-            if self.debug_mode:
-                # Place video on the right leaving space at left/top for overlay
-                cmd.extend(
-                    [
-                        "--no-fullscreen",
-                        "--width=1440",
-                        "--height=900",
-                        "--video-x=460",
-                        "--video-y=60",
-                        "--no-video-deco",
-                    ]
-                )
-            else:
-                cmd.append("--fullscreen")
+            # Use consistent positioning - left side for VLC
+            cmd.extend(
+                [
+                    "--no-fullscreen",
+                    "--width=1280",
+                    "--height=720",
+                    "--video-x=0",  # Left side of screen
+                    "--video-y=0",  # Top of screen
+                    "--no-video-deco",
+                ]
+            )
 
             cmd.append(self.video_path)
 

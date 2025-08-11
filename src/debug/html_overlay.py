@@ -12,6 +12,9 @@ from pathlib import Path
 from typing import Optional, Dict, Any
 from core.logger import log_info, log_warning, log_error
 
+# Global flag to prevent multiple overlay instances
+_overlay_instance = None
+
 
 class HTMLDebugOverlay:
     """HTML-based debug overlay that opens in a browser window"""
@@ -547,7 +550,17 @@ class HTMLDebugManager:
     """Manages the HTML debug overlay"""
 
     def __init__(self, pi_id: str):
-        self.overlay = HTMLDebugOverlay(pi_id)
+        global _overlay_instance
+        if _overlay_instance is not None:
+            # Reuse existing instance
+            self.overlay = _overlay_instance
+            log_info("Reusing existing HTML debug overlay instance")
+        else:
+            # Create new instance
+            self.overlay = HTMLDebugOverlay(pi_id)
+            _overlay_instance = self.overlay
+            log_info("Created new HTML debug overlay instance")
+
         self.update_thread = None
         self.running = False
 
