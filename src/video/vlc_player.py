@@ -462,6 +462,8 @@ class VLCVideoPlayer:
             f"--logfile={paths['vlc_main']}",
             "--verbose=2",
             "--no-autoscale",  # Prevent VLC from resizing window to fit video aspect ratio
+            "--aspect-ratio",
+            "1280:1080",  # Force content to render at this ratio
         ]
 
         # Add fullscreen for production mode
