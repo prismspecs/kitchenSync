@@ -80,16 +80,8 @@ echo "Configuring desktop appearance for Wayfire (hide icons, black background).
 echo "Configuring wf-shell for black background..."
 mkdir -p ~/.config
 if [ -f ~/.config/wf-shell.ini ]; then
-    # Check if background section exists
-    if grep -q "^\[background\]" ~/.config/wf-shell.ini; then
-        # Update existing background color
-        sed -i 's|color = .*|color = \\#000000|g' ~/.config/wf-shell.ini
-    else
-        # Add background section
-        echo "" >> ~/.config/wf-shell.ini
-        echo "[background]" >> ~/.config/wf-shell.ini
-        echo "color = \\#000000" >> ~/.config/wf-shell.ini
-    fi
+    # Update existing background color to hex format
+    sed -i 's|color = .*|color = \\#000000|g' ~/.config/wf-shell.ini
 else
     # Create new wf-shell.ini with black background
     cat > ~/.config/wf-shell.ini << 'EOF'
@@ -98,22 +90,71 @@ color = \#000000
 EOF
 fi
 
-# Configure pcmanfm to not show desktop icons (if it's being used)
-echo "Disabling desktop icons in pcmanfm..."
-mkdir -p ~/.config/pcmanfm/default
-if [ -f ~/.config/pcmanfm/default/pcmanfm.conf ]; then
+# Configure wayfire.ini with proper background and core settings
+echo "Configuring wayfire.ini..."
+mkdir -p ~/.config
+if [ -f ~/.config/wayfire.ini ]; then
+    # Update background section to use hex format
+    if grep -q "^\[background\]" ~/.config/wayfire.ini; then
+        sed -i 's|color = .*|color = \\#000000|g' ~/.config/wayfire.ini
+    else
+        # Add background section
+        echo "" >> ~/.config/wayfire.ini
+        echo "[background]" >> ~/.config/wayfire.ini
+        echo "color = \\#000000" >> ~/.config/wayfire.ini
+    fi
+    
+    # Ensure core section has necessary plugins
+    if grep -q "^\[core\]" ~/.config/wayfire.ini; then
+        # Add hide-cursor if not present
+        if ! grep -q "hide-cursor" ~/.config/wayfire.ini; then
+            sed -i '/^\[core\]/a plugins = hide-cursor' ~/.config/wayfire.ini
+        fi
+    else
+        # Add core section
+        echo "" >> ~/.config/wayfire.ini
+        echo "[core]" >> ~/.config/wayfire.ini
+        echo "plugins = hide-cursor" >> ~/.config/wayfire.ini
+    fi
+else
+    # Create new wayfire.ini with proper configuration
+    cat > ~/.config/wayfire.ini << 'EOF'
+[core]
+plugins = hide-cursor
+
+[background]
+color = \#000000
+EOF
+fi
+
+# Configure pcmanfm LXDE-pi profile to hide desktop icons
+echo "Disabling desktop icons in pcmanfm LXDE-pi profile..."
+mkdir -p ~/.config/pcmanfm/LXDE-pi
+if [ -f ~/.config/pcmanfm/LXDE-pi/desktop-items-0.conf ]; then
+    # Update existing config
+    sed -i 's/show_desktop=1/show_desktop=0/g' ~/.config/pcmanfm/LXDE-pi/desktop-items-0.conf
+else
+    # Create new config file
+    cat > ~/.config/pcmanfm/LXDE-pi/desktop-items-0.conf << 'EOF'
+[*]
+show_desktop=0
+EOF
+fi
+
+# Also configure the main pcmanfm.conf for LXDE-pi profile
+if [ -f ~/.config/pcmanfm/LXDE-pi/pcmanfm.conf ]; then
     # Check if desktop section exists and modify it
-    if grep -q "^\[desktop\]" ~/.config/pcmanfm/default/pcmanfm.conf; then
-        sed -i '/^\[desktop\]/,/^\[/{s/show_desktop=1/show_desktop=0/g;}' ~/.config/pcmanfm/default/pcmanfm.conf
+    if grep -q "^\[desktop\]" ~/.config/pcmanfm/LXDE-pi/pcmanfm.conf; then
+        sed -i '/^\[desktop\]/,/^\[/{s/show_desktop=1/show_desktop=0/g;}' ~/.config/pcmanfm/LXDE-pi/pcmanfm.conf
     else
         # Add desktop section
-        echo "" >> ~/.config/pcmanfm/default/pcmanfm.conf
-        echo "[desktop]" >> ~/.config/pcmanfm/default/pcmanfm.conf
-        echo "show_desktop=0" >> ~/.config/pcmanfm/default/pcmanfm.conf
+        echo "" >> ~/.config/pcmanfm/LXDE-pi/pcmanfm.conf
+        echo "[desktop]" >> ~/.config/pcmanfm/LXDE-pi/pcmanfm.conf
+        echo "show_desktop=0" >> ~/.config/pcmanfm/LXDE-pi/pcmanfm.conf
     fi
 else
     # Create new pcmanfm.conf with desktop icons disabled
-    cat > ~/.config/pcmanfm/default/pcmanfm.conf << 'EOF'
+    cat > ~/.config/pcmanfm/LXDE-pi/pcmanfm.conf << 'EOF'
 [config]
 bm_open_method=0
 
@@ -122,7 +163,7 @@ show_desktop=0
 EOF
 fi
 
-# Install swaybg as fallback/alternative background setter
+# Install swaybg as fallback background setter
 echo "Installing swaybg as fallback background setter..."
 sudo apt install -y swaybg
 
@@ -135,9 +176,8 @@ swaybg -c '#000000' &
 EOF
 chmod +x ~/set_black_background_fallback.sh
 
-# Configure Wayfire autostart for fallback background (if wf-shell doesn't work)
+# Configure Wayfire autostart for fallback background
 echo "Configuring Wayfire autostart fallback..."
-mkdir -p ~/.config
 if [ -f ~/.config/wayfire.ini ]; then
     # Check if autostart section exists
     if grep -q "^\[autostart\]" ~/.config/wayfire.ini; then
@@ -151,13 +191,16 @@ if [ -f ~/.config/wayfire.ini ]; then
         echo "[autostart]" >> ~/.config/wayfire.ini
         echo "fallback_bg=~/set_black_background_fallback.sh" >> ~/.config/wayfire.ini
     fi
-else
-    # Create new wayfire.ini with autostart fallback
-    cat > ~/.config/wayfire.ini << 'EOF'
-[autostart]
-fallback_bg=~/set_black_background_fallback.sh
-EOF
 fi
+
+# Force Wayfire to start instead of labwc by configuring the session
+echo "Configuring session to use Wayfire..."
+mkdir -p ~/.config/lxsession/LXDE-pi
+cat > ~/.config/lxsession/LXDE-pi/desktop.conf << 'EOF'
+[Session]
+name=LXDE-pi
+required-components=wayfire
+EOF
 
 # Apply desktop configuration immediately if in Wayland session
 if [ -n "$WAYLAND_DISPLAY" ]; then
@@ -167,6 +210,7 @@ if [ -n "$WAYLAND_DISPLAY" ]; then
     # Start fallback background
     ~/set_black_background_fallback.sh
     echo "Wayfire desktop configuration applied (black background set, desktop icons disabled)"
+    echo "IMPORTANT: You may need to log out and back in for Wayfire to start instead of labwc"
 else
     echo "Desktop configuration will be applied on next Wayfire session"
 fi
