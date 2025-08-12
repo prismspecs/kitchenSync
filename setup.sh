@@ -252,18 +252,21 @@ KSYNC_SERVICE_PATH="/etc/systemd/system/kitchensync-x.service"
 sudo bash -c "cat > ${KSYNC_SERVICE_PATH} <<EOF
 [Unit]
 Description=KitchenSync X session (kiosk)
-After=systemd-user-sessions.service getty@tty1.service
-Wants=getty@tty1.service
+After=systemd-user-sessions.service systemd-logind.service getty@tty1.service
+Wants=getty@tty1.service systemd-logind.service
 
 [Service]
 User=${KSYNC_USER}
+Environment=HOME=${KSYNC_HOME}
 Environment=XDG_SESSION_TYPE=x11
+Environment=XDG_RUNTIME_DIR=/run/user/1000
 PAMName=login
 TTYPath=/dev/tty1
 StandardInput=tty
-StandardOutput=inherit
+StandardOutput=journal
 WorkingDirectory=${KSYNC_APP_DIR}
-ExecStart=/usr/bin/startx
+# Start X using xinit directly with explicit server options on vt1
+ExecStart=/usr/bin/xinit ${KSYNC_HOME}/.xinitrc -- :0 -nolisten tcp vt1 -keeptty -verbose 3
 Restart=always
 RestartSec=2
 
@@ -300,6 +303,7 @@ chmod +x "${KSYNC_HOME}/.xinitrc"
 # Enable the kiosk X service
 sudo systemctl daemon-reload
 sudo systemctl enable kitchensync-x.service
+sudo systemctl start kitchensync-x.service || true
 
 # Disable the previous user service to avoid double-launch
 systemctl --user disable kitchensync.service >/dev/null 2>&1 || true
@@ -308,6 +312,8 @@ systemctl --user disable kitchensync.service >/dev/null 2>&1 || true
 sudo systemctl disable lightdm.service >/dev/null 2>&1 || true
 
 echo "Kiosk X session configured: kitchensync-x.service enabled, LightDM disabled."
+echo "If you are at a CLI now, the service should start X shortly (or after reboot)."
 echo "Reboot to start in kiosk mode (no LXDE, black background, no panel/icons)."
 echo "Rollback (SSH): sudo systemctl disable kitchensync-x && sudo systemctl enable lightdm && sudo reboot"
+echo "Debug: sudo systemctl status kitchensync-x.service; journalctl -u kitchensync-x -b -e | tail -n 100"
 
