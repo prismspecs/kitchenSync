@@ -127,33 +127,54 @@ color = \#000000
 EOF
 fi
 
-# Remove unwanted desktop management components entirely
-echo "Removing unwanted desktop management components..."
+# Remove only the desktop icon management, keep session management for auto-login
+echo "Removing desktop icon management while preserving auto-login..."
 
-# Remove pcmanfm desktop functionality (keep file manager for USB mounting)
-echo "Removing pcmanfm desktop mode..."
-sudo apt remove -y pcmanfm 2>/dev/null || true
+# Remove pcmanfm desktop functionality but keep the package for USB mounting
+echo "Disabling pcmanfm desktop mode without removing the package..."
+mkdir -p ~/.config/pcmanfm/LXDE-pi
+cat > ~/.config/pcmanfm/LXDE-pi/desktop-items-0.conf << 'EOF'
+[*]
+show_desktop=0
+EOF
 
-# Remove lwrespawn and lxsession (LXDE session management)
-echo "Removing LXDE session management..."
-sudo apt remove -y lwrespawn lxsession 2>/dev/null || true
+# Also disable in the main pcmanfm config
+mkdir -p ~/.config/pcmanfm/LXDE-pi
+cat > ~/.config/pcmanfm/LXDE-pi/pcmanfm.conf << 'EOF'
+[config]
+bm_open_method=0
 
-# Remove other desktop-related packages that might interfere
-echo "Removing other desktop management packages..."
-sudo apt remove -y lxpanel lxappearance lxrandr lxinput 2>/dev/null || true
+[desktop]
+show_desktop=0
+EOF
 
-# Clean up any remaining configuration files
-echo "Cleaning up desktop configuration files..."
-rm -rf ~/.config/lxsession 2>/dev/null || true
-rm -rf ~/.config/pcmanfm 2>/dev/null || true
-rm -rf ~/.config/autostart 2>/dev/null || true
+# Keep lxsession and lwrespawn for auto-login, but disable desktop management
+echo "Preserving session management for auto-login..."
+mkdir -p ~/.config/lxsession/LXDE-pi
+if [ -f ~/.config/lxsession/LXDE-pi/autostart ]; then
+    # Remove only the pcmanfm --desktop line, keep everything else
+    sed -i '/pcmanfm.*--desktop/d' ~/.config/lxsession/LXDE-pi/autostart
+    sed -i '/lwrespawn.*pcmanfm.*--desktop/d' ~/.config/lxsession/LXDE-pi/autostart
+else
+    # Create minimal autostart without desktop management
+    echo "# LXDE-pi autostart - minimal configuration" > ~/.config/lxsession/LXDE-pi/autostart
+fi
 
-# Install minimal file manager for USB mounting (if needed)
-echo "Installing minimal file manager for USB operations..."
-sudo apt install -y thunar 2>/dev/null || true
-
-# Note: pcmanfm and LXDE components have been removed above
-echo "Desktop management components removed - no autostart configuration needed"
+# Ensure auto-login is still configured
+echo "Ensuring auto-login configuration is preserved..."
+if [ -f /etc/systemd/system/getty@tty1.service.d/autologin.conf ]; then
+    echo "Auto-login configuration found - preserving..."
+else
+    echo "Creating auto-login configuration..."
+    sudo mkdir -p /etc/systemd/system/getty@tty1.service.d
+    sudo tee /etc/systemd/system/getty@tty1.service.d/autologin.conf > /dev/null << 'EOF'
+[Service]
+ExecStart=
+ExecStart=-/sbin/agetty --autologin kitchensync --noclear %I $TERM
+EOF
+    sudo systemctl daemon-reload
+    sudo systemctl enable getty@tty1.service
+fi
 
 # Install swaybg as fallback background setter
 echo "Installing swaybg as fallback background setter..."
