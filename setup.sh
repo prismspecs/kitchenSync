@@ -73,6 +73,51 @@ if ! grep -q "boot_delay=0" /boot/config.txt; then
 fi
 # --- End OS Optimizations ---
 
+# --- Desktop Environment Customization ---
+echo "Customizing desktop environment for clean output..."
+
+# Set a black background and hide desktop icons
+# This targets the PCManFM file manager which handles the desktop
+LXDE_CONFIG_DIR="$HOME/.config/pcmanfm/LXDE-pi"
+mkdir -p "$LXDE_CONFIG_DIR"
+DESKTOP_CONFIG_FILE="$LXDE_CONFIG_DIR/desktop-items-0.conf"
+
+# Write the configuration to hide icons and set a black background
+cat <<EOL > "$DESKTOP_CONFIG_FILE"
+[*]
+wallpaper_mode=0
+wallpaper_common=1
+wallpaper=
+background_color=#000000
+show_trash=0
+show_computer=0
+show_documents=0
+show_network=0
+show_mounts=0
+EOL
+
+# Auto-hide the top panel (menu bar)
+# This targets the LXPanel configuration
+LXPANEL_CONFIG_FILE="$HOME/.config/lxpanel/LXDE-pi/panels/panel"
+if [ -f "$LXPANEL_CONFIG_FILE" ]; then
+    echo "Setting panel to autohide..."
+    # Ensure autohide is enabled and the hidden height is 0
+    if grep -q "autohide=" "$LXPANEL_CONFIG_FILE"; then
+        sed -i 's/autohide=.*/autohide=1/' "$LXPANEL_CONFIG_FILE"
+    else
+        echo "autohide=1" >> "$LXPANEL_CONFIG_FILE"
+    fi
+    
+    if grep -q "heightwhenhidden=" "$LXPANEL_CONFIG_FILE"; then
+        sed -i 's/heightwhenhidden=.*/heightwhenhidden=0/' "$LXPANEL_CONFIG_FILE"
+    else
+        echo "heightwhenhidden=0" >> "$LXPANEL_CONFIG_FILE"
+    fi
+else
+    echo "LXPanel config not found. Skipping panel customization."
+fi
+# --- End Desktop Environment Customization ---
+
 
 # Setup auto-start service
 echo "Setting up auto-start service..."
