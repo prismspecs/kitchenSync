@@ -124,31 +124,47 @@ class LeaderPi:
                         import threading
 
                         def position_vlc_window():
-                            time.sleep(3)  # Wait for VLC window to appear first
                             try:
                                 import subprocess
+                                import time
 
-                                result = subprocess.run(
-                                    [
-                                        "wmctrl",
-                                        "-r",
-                                        "VLC media player",
-                                        "-e",
-                                        "0,0,0,1280,1080",
-                                    ],
-                                    check=False,
-                                    timeout=5,
-                                    stdout=subprocess.DEVNULL,
-                                    stderr=subprocess.DEVNULL,
+                                log_info(
+                                    "Attempting to position 'VLC media player' window...",
+                                    component="leader",
                                 )
-                                if result.returncode == 0:
-                                    log_info(
-                                        "Positioned VLC window on left side",
-                                        component="leader",
+
+                                timeout = 5  # Total time to wait for the window
+                                poll_interval = 0.2  # Time to wait between checks
+                                start_time = time.time()
+                                success = False
+
+                                while time.time() - start_time < timeout:
+                                    result = subprocess.run(
+                                        [
+                                            "wmctrl",
+                                            "-r",
+                                            "VLC media player",
+                                            "-e",
+                                            "0,0,0,1280,1080",
+                                        ],
+                                        check=False,
+                                        timeout=5,
+                                        stdout=subprocess.DEVNULL,
+                                        stderr=subprocess.DEVNULL,
                                     )
-                                else:
+                                    if result.returncode == 0:
+                                        log_info(
+                                            "Positioned VLC window on left side",
+                                            component="leader",
+                                        )
+                                        success = True
+                                        break
+                                    else:
+                                        time.sleep(poll_interval)
+
+                                if not success:
                                     log_warning(
-                                        "Could not position VLC window",
+                                        "Could not position VLC window after timeout.",
                                         component="leader",
                                     )
                             except Exception as e:
