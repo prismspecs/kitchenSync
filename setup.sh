@@ -73,50 +73,41 @@ if ! grep -q "boot_delay=0" /boot/config.txt; then
 fi
 # --- End OS Optimizations ---
 
-# --- Desktop Environment Customization ---
-echo "Customizing desktop environment for clean output..."
+# --- Desktop Environment Configuration ---
+echo "Configuring desktop environment..."
 
-# Set a black background and hide desktop icons
-# This targets the PCManFM file manager which handles the desktop
-LXDE_CONFIG_DIR="$HOME/.config/pcmanfm/LXDE-pi"
-mkdir -p "$LXDE_CONFIG_DIR"
-DESKTOP_CONFIG_FILE="$LXDE_CONFIG_DIR/desktop-items-0.conf"
+# Configure LXDE to hide desktop, icons, and menu bar with black background
+echo "Setting up LXDE configuration..."
+mkdir -p ~/.config/lxsession/LXDE-pi
 
-# Write the configuration to hide icons and set a black background
-cat <<EOL > "$DESKTOP_CONFIG_FILE"
-[*]
-wallpaper_mode=0
-wallpaper_common=1
-wallpaper=
-background_color=#000000
-show_trash=0
-show_computer=0
-show_documents=0
-show_network=0
-show_mounts=0
-EOL
-
-# Auto-hide the top panel (menu bar)
-# This targets the LXPanel configuration
-LXPANEL_CONFIG_FILE="$HOME/.config/lxpanel/LXDE-pi/panels/panel"
-if [ -f "$LXPANEL_CONFIG_FILE" ]; then
-    echo "Setting panel to autohide..."
-    # Ensure autohide is enabled and the hidden height is 0
-    if grep -q "autohide=" "$LXPANEL_CONFIG_FILE"; then
-        sed -i 's/autohide=.*/autohide=1/' "$LXPANEL_CONFIG_FILE"
-    else
-        echo "autohide=1" >> "$LXPANEL_CONFIG_FILE"
-    fi
-    
-    if grep -q "heightwhenhidden=" "$LXPANEL_CONFIG_FILE"; then
-        sed -i 's/heightwhenhidden=.*/heightwhenhidden=0/' "$LXPANEL_CONFIG_FILE"
-    else
-        echo "heightwhenhidden=0" >> "$LXPANEL_CONFIG_FILE"
-    fi
+# Copy the default autostart configuration
+if [ -f /etc/xdg/lxsession/LXDE-pi/autostart ]; then
+    cp /etc/xdg/lxsession/LXDE-pi/autostart ~/.config/lxsession/LXDE-pi/autostart
 else
-    echo "LXPanel config not found. Skipping panel customization."
+    # Create a minimal autostart file if the default doesn't exist
+    cat > ~/.config/lxsession/LXDE-pi/autostart << 'EOF'
+@lxpanel --profile LXDE-pi
+@pcmanfm --desktop --profile LXDE-pi
+@xscreensaver -no-splash
+EOF
 fi
-# --- End Desktop Environment Customization ---
+
+# Remove desktop icons and file manager desktop handling
+echo "Disabling desktop icons..."
+sed -i '/@pcmanfm --desktop/d' ~/.config/lxsession/LXDE-pi/autostart
+
+# Remove the top menu bar (panel)
+echo "Disabling top menu bar..."
+sed -i '/@lxpanel --profile LXDE-pi/d' ~/.config/lxsession/LXDE-pi/autostart
+
+# Set solid black background
+echo "Setting black background..."
+if ! grep -qxF '@xsetroot -solid black' ~/.config/lxsession/LXDE-pi/autostart; then
+    echo '@xsetroot -solid black' >> ~/.config/lxsession/LXDE-pi/autostart
+fi
+
+echo "Desktop environment configured for minimal display"
+# --- End Desktop Environment Configuration ---
 
 
 # Setup auto-start service
@@ -157,6 +148,7 @@ echo ""
 echo "Video player: VLC"
 echo "Python packages installed system-wide"
 echo "🔄 Auto-start service: ENABLED"
+echo "🖥️  Desktop: Hidden (icons, menu bar, black background)"
 echo ""
 echo "🚀 PLUG-AND-PLAY OPERATION:"
 echo "1. Create kitchensync.ini on your USB drive with:"
@@ -184,6 +176,10 @@ echo "� Service Management:"
 echo "- Check status: sudo systemctl status kitchensync"
 echo "- View logs: sudo journalctl -u kitchensync -f"
 echo "- Disable auto-start: sudo systemctl disable kitchensync"
+echo ""
+echo "🖥️  To restore desktop/menu bar:"
+echo "- Delete: ~/.config/lxsession/LXDE-pi/autostart"
+echo "- Then reboot or logout/login"
 echo ""
 echo "💡 READY FOR DEPLOYMENT! Just plug in USB drive and power on!"
 echo ""
