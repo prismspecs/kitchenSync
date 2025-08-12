@@ -271,14 +271,14 @@ class VLCVideoPlayer:
                                         "-ir",
                                         window_id,
                                         "-e",
-                                        "0,0,0,1280,720",
+                                        "0,0,0,1280,1080",
                                     ],
                                     check=False,
                                     timeout=5,
                                 )
                                 if pos_result.returncode == 0:
                                     log_info(
-                                        f"Forced VLC window {window_id} to left side (0,0,1280,720)",
+                                        f"Forced VLC window {window_id} to left side (0,0,1280,1080)",
                                         component="vlc",
                                     )
                                     # Bring to front
@@ -354,20 +354,23 @@ class VLCVideoPlayer:
             timeout = 5
             poll_interval = 0.1
             start_time = time.time()
+            success = False
             while time.time() - start_time < timeout:
                 if self.command_process.poll() is None:
-                    self.is_playing = True
-                    log_info(
-                        "VLC command started successfully with audio", component="vlc"
-                    )
-                    return True
+                    success = True
+                    break
                 time.sleep(poll_interval)
 
-            log_warning(
-                "VLC process did not start within timeout, trying without audio",
-                component="vlc",
-            )
-            return self._start_with_command_vlc_no_audio()
+            if success:
+                self.is_playing = True
+                log_info("VLC command started successfully with audio", component="vlc")
+                return True
+            else:
+                log_warning(
+                    "VLC process did not start within timeout, trying without audio",
+                    component="vlc",
+                )
+                return self._start_with_command_vlc_no_audio()
 
         except Exception as e:
             log_error(f"Error with VLC command: {e}", component="vlc")
@@ -426,21 +429,25 @@ class VLCVideoPlayer:
             timeout = 5
             poll_interval = 0.1
             start_time = time.time()
+            success = False
             while time.time() - start_time < timeout:
                 if self.command_process.poll() is None:
-                    self.is_playing = True
-                    log_info(
-                        "VLC command started successfully without audio",
-                        component="vlc",
-                    )
-                    return True
+                    success = True
+                    break
                 time.sleep(poll_interval)
 
-            log_error(
-                "VLC command process failed to start even without audio",
-                component="vlc",
-            )
-            return False
+            if success:
+                self.is_playing = True
+                log_info(
+                    "VLC command started successfully without audio", component="vlc"
+                )
+                return True
+            else:
+                log_error(
+                    "VLC command process failed to start even without audio",
+                    component="vlc",
+                )
+                return False
 
         except Exception as e:
             log_error(f"Error with VLC command (no audio): {e}", component="vlc")
