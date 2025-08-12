@@ -291,10 +291,14 @@ class VLCVideoPlayer:
 
             # Window configuration based on debug mode
             if self.debug_mode:
-                # Debug mode: windowed for overlay, position set by wmctrl
+                # Debug mode: windowed on left side for overlay
                 cmd.extend(
                     [
                         "--no-fullscreen",
+                        "--width=1280",
+                        "--height=1080",
+                        "--video-x=0",  # Left side of screen
+                        "--video-y=0",  # Top of screen
                         "--no-video-deco",
                     ]
                 )
@@ -326,16 +330,13 @@ class VLCVideoPlayer:
                 if self.command_process.poll() is None:
                     # Process is running
                     self.is_playing = True
-                    log_info(
-                        "VLC command started successfully with audio", component="vlc"
-                    )
+                    log_info("VLC command started successfully with audio", component="vlc")
                     return True
                 # Process has terminated, wait a bit before checking again
                 time.sleep(0.1)
 
             log_warning(
-                "VLC with audio failed to stay running, trying without audio",
-                component="vlc",
+                "VLC with audio failed to start, trying without audio", component="vlc"
             )
             return self._start_with_command_vlc_no_audio()
 
@@ -359,10 +360,14 @@ class VLCVideoPlayer:
 
             # Window configuration based on debug mode
             if self.debug_mode:
-                # Debug mode: windowed for overlay, position set by wmctrl
+                # Debug mode: windowed on left side for overlay
                 cmd.extend(
                     [
                         "--no-fullscreen",
+                        "--width=1280",
+                        "--height=1080",
+                        "--video-x=0",  # Left side of screen
+                        "--video-y=0",  # Top of screen
                         "--no-video-deco",
                     ]
                 )
@@ -395,14 +400,15 @@ class VLCVideoPlayer:
                     # Process is running
                     self.is_playing = True
                     log_info(
-                        "VLC command started successfully without audio",
-                        component="vlc",
+                        "VLC command started successfully without audio", component="vlc"
                     )
                     return True
                 # Process has terminated, wait a bit before checking again
                 time.sleep(0.1)
 
-            log_error("VLC command process failed even without audio", component="vlc")
+            log_error(
+                "VLC command process failed even without audio", component="vlc"
+            )
             return False
 
         except Exception as e:
