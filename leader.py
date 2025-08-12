@@ -132,34 +132,61 @@ class LeaderPi:
                             interval_sec = 0.2
                             start_time = time.monotonic()
 
+                            video_filename = (
+                                os.path.basename(self.video_player.video_path)
+                                if self.video_player.video_path
+                                else "VLC media player"
+                            )
+
                             while time.monotonic() - start_time < max_wait_sec:
                                 try:
-                                    # This command will fail if the window doesn't exist yet
-                                    subprocess.run(
-                                        [
-                                            "wmctrl",
-                                            "-r",
-                                            "VLC media player",
-                                            "-e",
-                                            "0,0,0,1280,1080",
-                                        ],
-                                        check=True,  # Raise an exception on failure
-                                        timeout=2,
-                                        stdout=subprocess.DEVNULL,
-                                        stderr=subprocess.DEVNULL,
+                                    # Find the VLC window ID
+                                    result = subprocess.run(
+                                        ["wmctrl", "-l"],
+                                        capture_output=True,
+                                        text=True,
+                                        check=True,
                                     )
-                                    log_info(
-                                        "Positioned VLC window on left side",
-                                        component="leader",
-                                    )
-                                    return  # Success
+                                    window_id = None
+                                    for line in result.stdout.splitlines():
+                                        if (
+                                            "vlc" in line.lower()
+                                            or video_filename in line
+                                        ):
+                                            window_id = line.split()[0]
+                                            break
+
+                                    if window_id:
+                                        # Move and resize the window by its ID
+                                        subprocess.run(
+                                            [
+                                                "wmctrl",
+                                                "-i",  # Act on window ID
+                                                "-r",
+                                                window_id,
+                                                "-e",
+                                                "0,0,0,1280,1080",
+                                            ],
+                                            check=True,
+                                            timeout=2,
+                                            stdout=subprocess.DEVNULL,
+                                            stderr=subprocess.DEVNULL,
+                                        )
+                                        log_info(
+                                            f"Positioned VLC window ({window_id}) on left side",
+                                            component="leader",
+                                        )
+                                        return  # Success
+                                    else:
+                                        # Window not found yet, wait and retry
+                                        time.sleep(interval_sec)
+
                                 except (
                                     subprocess.CalledProcessError,
                                     subprocess.TimeoutExpired,
                                     FileNotFoundError,
                                 ):
-                                    # Window not ready, wmctrl not found, or command timed out.
-                                    # Wait and try again.
+                                    # wmctrl might not be installed, or the window isn't ready
                                     time.sleep(interval_sec)
                                 except Exception as e:
                                     log_warning(
@@ -169,7 +196,7 @@ class LeaderPi:
                                     return  # Stop trying on other errors
 
                             log_warning(
-                                "Failed to position VLC window within the time limit. It may not be visible.",
+                                "Failed to find and position VLC window within the time limit.",
                                 component="leader",
                             )
 
