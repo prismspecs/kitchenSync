@@ -14,11 +14,7 @@ fi
 # Check for Raspberry Pi OS
 if ! grep -q "Raspberry Pi OS" /etc/os-release 2>/dev/null; then
     echo "⚠️  This script is designed for Raspberry Pi OS"
-    read -p "Continue anyway? (y/N): " -n 1 -r
-    echo
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        exit 1
-    fi
+    echo "Continuing anyway..."
 fi
 
 # Fix APT cache if needed
@@ -68,54 +64,23 @@ echo "⚡ Applying safe OS optimizations..."
 echo "Disabling Bluetooth (safe to disable)..."
 sudo systemctl disable bluetooth.service hciuart.service 2>/dev/null || true
 
-# Ask before disabling other services
-echo ""
-echo "⚠️  The following services are needed for desktop environment:"
-echo "   - avahi-daemon (network discovery)"
-echo "   - cups (printing)"
-echo "   - triggerhappy (keyboard shortcuts)"
-echo ""
-read -p "Disable these services anyway? This may break desktop! (y/N): " -n 1 -r
-echo
+# Automatically disable additional services for performance
+echo "Disabling additional services for performance..."
+sudo systemctl disable cups.service 2>/dev/null || true
+sudo systemctl disable triggerhappy.service 2>/dev/null || true
+sudo systemctl disable avahi-daemon.service 2>/dev/null || true
+echo "⚠️  Desktop environment may not work properly after reboot!"
 
-if [[ $REPLY =~ ^[Yy]$ ]]; then
-    echo "Disabling additional services..."
-    sudo systemctl disable cups.service 2>/dev/null || true
-    sudo systemctl disable triggerhappy.service 2>/dev/null || true
-    sudo systemctl disable avahi-daemon.service 2>/dev/null || true
-    echo "⚠️  Desktop environment may not work properly after reboot!"
-else
-    echo "✅ Keeping desktop services enabled"
-fi
+# Automatically remove unused packages
+echo "Removing unused packages..."
+sudo apt purge -y wolfram-engine sonic-pi scratch nuscratch smartsim libreoffice* 2>/dev/null || true
 
-# Ask before removing packages
-echo ""
-read -p "Remove unused packages (Wolfram, LibreOffice, etc.)? (y/N): " -n 1 -r
-echo
+echo "Running apt autoremove for cleanup..."
+sudo apt autoremove -y
+echo "⚠️  If desktop doesn't work after reboot, run:"
+echo "   sudo apt install --reinstall raspberrypi-ui-mods"
 
-if [[ $REPLY =~ ^[Yy]$ ]]; then
-    echo "Removing unused packages..."
-    sudo apt purge -y wolfram-engine sonic-pi scratch nuscratch smartsim libreoffice* 2>/dev/null || true
-    
-    echo ""
-    echo "⚠️  WARNING: apt autoremove can remove desktop environment packages!"
-    echo "   This may cause your system to boot to command line only."
-    read -p "Run apt autoremove anyway? (y/N): " -n 1 -r
-    echo
-    
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-        echo "Running apt autoremove (this may break desktop)..."
-        sudo apt autoremove -y
-        echo "⚠️  If desktop doesn't work after reboot, run:"
-        echo "   sudo apt install --reinstall raspberrypi-ui-mods"
-    else
-        echo "✅ Skipping autoremove to preserve desktop environment"
-    fi
-    
-    sudo apt clean
-else
-    echo "✅ Keeping all packages"
-fi
+sudo apt clean
 
 # Safe boot optimizations
 echo "Applying safe boot optimizations..."
@@ -156,18 +121,3 @@ except Exception as e:
 
 echo ""
 echo "✅ Setup Complete!"
-echo ""
-echo "🎯 Quick Start:"
-echo "1. Create kitchensync.ini on USB drive"
-echo "2. Power on Pi - KitchenSync starts automatically"
-echo ""
-echo "🔧 Testing:"
-echo "- Test service: sudo systemctl start kitchensync"
-echo "- Check status: sudo systemctl status kitchensync"
-echo "- View logs: sudo journalctl -u kitchensync -f"
-echo ""
-echo "⚠️  IMPORTANT: If you disabled desktop services, you may need to:"
-echo "   - Re-enable them: sudo systemctl enable avahi-daemon cups triggerhappy"
-echo "   - Or reboot and see if desktop still works"
-echo ""
-echo "💡 Ready for deployment!"
