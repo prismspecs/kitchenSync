@@ -129,7 +129,21 @@ fi
 
 # Stop pcmanfm from managing the desktop entirely (Wayfire will handle it)
 echo "Stopping pcmanfm desktop management..."
+
+# Kill all pcmanfm processes including the lwrespawn wrapper
+pkill -f "lwrespawn.*pcmanfm.*--desktop" 2>/dev/null || true
 pkill pcmanfm 2>/dev/null || true
+sleep 1
+pkill -f "lwrespawn.*pcmanfm.*--desktop" 2>/dev/null || true
+pkill pcmanfm 2>/dev/null || true
+
+# Disable the lwrespawn mechanism for pcmanfm desktop
+echo "Disabling lwrespawn for pcmanfm desktop..."
+if [ -f ~/.config/lxsession/LXDE-pi/autostart ]; then
+    # Remove the lwrespawn line that starts pcmanfm --desktop
+    sed -i '/lwrespawn.*pcmanfm.*--desktop/d' ~/.config/lxsession/LXDE-pi/autostart
+    sed -i '/pcmanfm.*--desktop/d' ~/.config/lxsession/LXDE-pi/autostart
+fi
 
 # Configure pcmanfm to never start in desktop mode
 echo "Configuring pcmanfm to not auto-start in desktop mode..."
@@ -200,17 +214,22 @@ EOF
 # Apply desktop configuration immediately if in Wayland session
 if [ -n "$WAYLAND_DISPLAY" ]; then
     echo "Applying Wayfire desktop configuration immediately..."
-    # Kill any existing desktop icon managers and prevent restart
+    
+    # Kill the lwrespawn wrapper and pcmanfm desktop processes
+    echo "Stopping lwrespawn and pcmanfm desktop processes..."
+    pkill -f "lwrespawn.*pcmanfm.*--desktop" 2>/dev/null || true
     pkill pcmanfm 2>/dev/null || true
-    sleep 1
-    pkill pcmanfm 2>/dev/null || true  # Double-check it's stopped
+    sleep 2
+    pkill -f "lwrespawn.*pcmanfm.*--desktop" 2>/dev/null || true
+    pkill pcmanfm 2>/dev/null || true
     
     # Start fallback background
     ~/set_black_background_fallback.sh
     
     echo "Wayfire desktop configuration applied (black background set, desktop icons disabled)"
     echo "IMPORTANT: You may need to log out and back in for Wayfire to start instead of labwc"
-    echo "Desktop icons should now be hidden - if they reappear, pcmanfm is auto-restarting"
+    echo "Desktop icons should now be hidden - if they reappear, lwrespawn is restarting pcmanfm"
+    echo "Check: ps aux | grep lwrespawn | grep pcmanfm"
 else
     echo "Desktop configuration will be applied on next Wayfire session"
 fi
