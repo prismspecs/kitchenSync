@@ -10,6 +10,7 @@ import threading
 import time
 from pathlib import Path
 import os  # Added for os.path.basename
+import subprocess
 
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent / "src"))
@@ -80,6 +81,32 @@ class LeaderPi:
         self.command_manager.register_handler("register", self._handle_registration)
         self.command_manager.register_handler("heartbeat", self._handle_heartbeat)
 
+    def _wait_for_vlc_window(self, timeout: int = 5) -> bool:
+        """Wait for the VLC window to appear using wmctrl"""
+        start_time = time.time()
+        while time.time() - start_time < timeout:
+            try:
+                result = subprocess.run(
+                    ["wmctrl", "-l"],
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                    timeout=1,
+                )
+                if "VLC media player" in result.stdout:
+                    log_info("VLC window found.", component="leader")
+                    return True
+            except (
+                subprocess.TimeoutExpired,
+                subprocess.CalledProcessError,
+                FileNotFoundError,
+            ):
+                # Ignore errors and retry
+                pass
+            time.sleep(0.2)  # Poll every 200ms
+        log_warning(f"VLC window not found after {timeout}s.", component="leader")
+        return False
+
     def _handle_registration(self, msg: dict, addr: tuple) -> None:
         """Handle collaborator registration"""
         pi_id = msg.get("pi_id")
@@ -124,38 +151,38 @@ class LeaderPi:
                         import threading
 
                         def position_vlc_window():
-                            time.sleep(3)  # Wait for VLC window to appear first
-                            try:
-                                import subprocess
+                            if self._wait_for_vlc_window():
+                                try:
+                                    import subprocess
 
-                                result = subprocess.run(
-                                    [
-                                        "wmctrl",
-                                        "-r",
-                                        "VLC media player",
-                                        "-e",
-                                        "0,0,0,1280,1080",
-                                    ],
-                                    check=False,
-                                    timeout=5,
-                                    stdout=subprocess.DEVNULL,
-                                    stderr=subprocess.DEVNULL,
-                                )
-                                if result.returncode == 0:
-                                    log_info(
-                                        "Positioned VLC window on left side",
-                                        component="leader",
+                                    result = subprocess.run(
+                                        [
+                                            "wmctrl",
+                                            "-r",
+                                            "VLC media player",
+                                            "-e",
+                                            "0,0,0,1280,1080",
+                                        ],
+                                        check=False,
+                                        timeout=5,
+                                        stdout=subprocess.DEVNULL,
+                                        stderr=subprocess.DEVNULL,
                                     )
-                                else:
+                                    if result.returncode == 0:
+                                        log_info(
+                                            "Positioned VLC window on left side",
+                                            component="leader",
+                                        )
+                                    else:
+                                        log_warning(
+                                            "Could not position VLC window",
+                                            component="leader",
+                                        )
+                                except Exception as e:
                                     log_warning(
-                                        "Could not position VLC window",
+                                        f"Failed to position VLC window: {e}",
                                         component="leader",
                                     )
-                            except Exception as e:
-                                log_warning(
-                                    f"Failed to position VLC window: {e}",
-                                    component="leader",
-                                )
 
                         threading.Thread(
                             target=position_vlc_window, daemon=True

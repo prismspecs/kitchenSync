@@ -291,14 +291,10 @@ class VLCVideoPlayer:
 
             # Window configuration based on debug mode
             if self.debug_mode:
-                # Debug mode: windowed on left side for overlay
+                # Debug mode: windowed for overlay, position set by wmctrl
                 cmd.extend(
                     [
                         "--no-fullscreen",
-                        "--width=1280",
-                        "--height=1080",
-                        "--video-x=0",  # Left side of screen
-                        "--video-y=0",  # Top of screen
                         "--no-video-deco",
                     ]
                 )
@@ -324,18 +320,24 @@ class VLCVideoPlayer:
             )
             log_info(f"Launched VLC with audio: {' '.join(cmd)}", component="vlc")
 
-            # Give VLC time to start
-            time.sleep(3)
+            # Wait up to 3 seconds for VLC to start
+            start_time = time.time()
+            while time.time() - start_time < 3:
+                if self.command_process.poll() is None:
+                    # Process is running
+                    self.is_playing = True
+                    log_info(
+                        "VLC command started successfully with audio", component="vlc"
+                    )
+                    return True
+                # Process has terminated, wait a bit before checking again
+                time.sleep(0.1)
 
-            if self.command_process.poll() is None:
-                self.is_playing = True
-                log_info("VLC command started successfully with audio", component="vlc")
-                return True
-            else:
-                log_warning(
-                    "VLC with audio failed, trying without audio", component="vlc"
-                )
-                return self._start_with_command_vlc_no_audio()
+            log_warning(
+                "VLC with audio failed to stay running, trying without audio",
+                component="vlc",
+            )
+            return self._start_with_command_vlc_no_audio()
 
         except Exception as e:
             log_error(f"Error with VLC command: {e}", component="vlc")
@@ -357,14 +359,10 @@ class VLCVideoPlayer:
 
             # Window configuration based on debug mode
             if self.debug_mode:
-                # Debug mode: windowed on left side for overlay
+                # Debug mode: windowed for overlay, position set by wmctrl
                 cmd.extend(
                     [
                         "--no-fullscreen",
-                        "--width=1280",
-                        "--height=1080",
-                        "--video-x=0",  # Left side of screen
-                        "--video-y=0",  # Top of screen
                         "--no-video-deco",
                     ]
                 )
@@ -390,20 +388,22 @@ class VLCVideoPlayer:
             )
             log_info(f"Launched VLC without audio: {' '.join(cmd)}", component="vlc")
 
-            # Give VLC time to start
-            time.sleep(3)
+            # Wait up to 3 seconds for VLC to start
+            start_time = time.time()
+            while time.time() - start_time < 3:
+                if self.command_process.poll() is None:
+                    # Process is running
+                    self.is_playing = True
+                    log_info(
+                        "VLC command started successfully without audio",
+                        component="vlc",
+                    )
+                    return True
+                # Process has terminated, wait a bit before checking again
+                time.sleep(0.1)
 
-            if self.command_process.poll() is None:
-                self.is_playing = True
-                log_info(
-                    "VLC command started successfully without audio", component="vlc"
-                )
-                return True
-            else:
-                log_error(
-                    "VLC command process failed even without audio", component="vlc"
-                )
-                return False
+            log_error("VLC command process failed even without audio", component="vlc")
+            return False
 
         except Exception as e:
             log_error(f"Error with VLC command (no audio): {e}", component="vlc")
