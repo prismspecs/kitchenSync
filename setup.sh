@@ -127,40 +127,35 @@ color = \#000000
 EOF
 fi
 
-# Configure pcmanfm LXDE-pi profile to hide desktop icons
-echo "Disabling desktop icons in pcmanfm LXDE-pi profile..."
-mkdir -p ~/.config/pcmanfm/LXDE-pi
-if [ -f ~/.config/pcmanfm/LXDE-pi/desktop-items-0.conf ]; then
-    # Update existing config
-    sed -i 's/show_desktop=1/show_desktop=0/g' ~/.config/pcmanfm/LXDE-pi/desktop-items-0.conf
+# Stop pcmanfm from managing the desktop entirely (Wayfire will handle it)
+echo "Stopping pcmanfm desktop management..."
+pkill pcmanfm 2>/dev/null || true
+
+# Configure pcmanfm to never start in desktop mode
+echo "Configuring pcmanfm to not auto-start in desktop mode..."
+mkdir -p ~/.config/autostart
+if [ -f ~/.config/autostart/pcmanfm.desktop ]; then
+    # Disable existing autostart
+    sed -i 's/Exec=.*/Exec=pcmanfm --no-desktop/g' ~/.config/autostart/pcmanfm.desktop
 else
-    # Create new config file
-    cat > ~/.config/pcmanfm/LXDE-pi/desktop-items-0.conf << 'EOF'
-[*]
-show_desktop=0
+    # Create disabled autostart entry
+    cat > ~/.config/autostart/pcmanfm.desktop << 'EOF'
+[Desktop Entry]
+Type=Application
+Name=PCManFM
+Comment=File Manager
+Exec=pcmanfm --no-desktop
+Terminal=false
+X-GNOME-Autostart-enabled=false
 EOF
 fi
 
-# Also configure the main pcmanfm.conf for LXDE-pi profile
-if [ -f ~/.config/pcmanfm/LXDE-pi/pcmanfm.conf ]; then
-    # Check if desktop section exists and modify it
-    if grep -q "^\[desktop\]" ~/.config/pcmanfm/LXDE-pi/pcmanfm.conf; then
-        sed -i '/^\[desktop\]/,/^\[/{s/show_desktop=1/show_desktop=0/g;}' ~/.config/pcmanfm/LXDE-pi/pcmanfm.conf
-    else
-        # Add desktop section
-        echo "" >> ~/.config/pcmanfm/LXDE-pi/pcmanfm.conf
-        echo "[desktop]" >> ~/.config/pcmanfm/LXDE-pi/pcmanfm.conf
-        echo "show_desktop=0" >> ~/.config/pcmanfm/LXDE-pi/pcmanfm.conf
-    fi
-else
-    # Create new pcmanfm.conf with desktop icons disabled
-    cat > ~/.config/pcmanfm/LXDE-pi/pcmanfm.conf << 'EOF'
-[config]
-bm_open_method=0
-
-[desktop]
-show_desktop=0
-EOF
+# Also disable any LXDE-pi desktop management
+echo "Disabling LXDE-pi desktop management..."
+mkdir -p ~/.config/lxsession/LXDE-pi
+if [ -f ~/.config/lxsession/LXDE-pi/autostart ]; then
+    # Remove pcmanfm --desktop from autostart
+    sed -i '/pcmanfm.*--desktop/d' ~/.config/lxsession/LXDE-pi/autostart
 fi
 
 # Install swaybg as fallback background setter
@@ -205,12 +200,17 @@ EOF
 # Apply desktop configuration immediately if in Wayland session
 if [ -n "$WAYLAND_DISPLAY" ]; then
     echo "Applying Wayfire desktop configuration immediately..."
-    # Kill any existing desktop icon managers
+    # Kill any existing desktop icon managers and prevent restart
     pkill pcmanfm 2>/dev/null || true
+    sleep 1
+    pkill pcmanfm 2>/dev/null || true  # Double-check it's stopped
+    
     # Start fallback background
     ~/set_black_background_fallback.sh
+    
     echo "Wayfire desktop configuration applied (black background set, desktop icons disabled)"
     echo "IMPORTANT: You may need to log out and back in for Wayfire to start instead of labwc"
+    echo "Desktop icons should now be hidden - if they reappear, pcmanfm is auto-restarting"
 else
     echo "Desktop configuration will be applied on next Wayfire session"
 fi
