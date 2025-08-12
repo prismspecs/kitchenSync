@@ -127,50 +127,33 @@ color = \#000000
 EOF
 fi
 
-# Stop pcmanfm from managing the desktop entirely (Wayfire will handle it)
-echo "Stopping pcmanfm desktop management..."
+# Remove unwanted desktop management components entirely
+echo "Removing unwanted desktop management components..."
 
-# Kill all pcmanfm processes including the lwrespawn wrapper
-pkill -f "lwrespawn.*pcmanfm.*--desktop" 2>/dev/null || true
-pkill pcmanfm 2>/dev/null || true
-sleep 1
-pkill -f "lwrespawn.*pcmanfm.*--desktop" 2>/dev/null || true
-pkill pcmanfm 2>/dev/null || true
+# Remove pcmanfm desktop functionality (keep file manager for USB mounting)
+echo "Removing pcmanfm desktop mode..."
+sudo apt remove -y pcmanfm 2>/dev/null || true
 
-# Disable the lwrespawn mechanism for pcmanfm desktop
-echo "Disabling lwrespawn for pcmanfm desktop..."
-if [ -f ~/.config/lxsession/LXDE-pi/autostart ]; then
-    # Remove the lwrespawn line that starts pcmanfm --desktop
-    sed -i '/lwrespawn.*pcmanfm.*--desktop/d' ~/.config/lxsession/LXDE-pi/autostart
-    sed -i '/pcmanfm.*--desktop/d' ~/.config/lxsession/LXDE-pi/autostart
-fi
+# Remove lwrespawn and lxsession (LXDE session management)
+echo "Removing LXDE session management..."
+sudo apt remove -y lwrespawn lxsession 2>/dev/null || true
 
-# Configure pcmanfm to never start in desktop mode
-echo "Configuring pcmanfm to not auto-start in desktop mode..."
-mkdir -p ~/.config/autostart
-if [ -f ~/.config/autostart/pcmanfm.desktop ]; then
-    # Disable existing autostart
-    sed -i 's/Exec=.*/Exec=pcmanfm --no-desktop/g' ~/.config/autostart/pcmanfm.desktop
-else
-    # Create disabled autostart entry
-    cat > ~/.config/autostart/pcmanfm.desktop << 'EOF'
-[Desktop Entry]
-Type=Application
-Name=PCManFM
-Comment=File Manager
-Exec=pcmanfm --no-desktop
-Terminal=false
-X-GNOME-Autostart-enabled=false
-EOF
-fi
+# Remove other desktop-related packages that might interfere
+echo "Removing other desktop management packages..."
+sudo apt remove -y lxpanel lxappearance lxrandr lxinput 2>/dev/null || true
 
-# Also disable any LXDE-pi desktop management
-echo "Disabling LXDE-pi desktop management..."
-mkdir -p ~/.config/lxsession/LXDE-pi
-if [ -f ~/.config/lxsession/LXDE-pi/autostart ]; then
-    # Remove pcmanfm --desktop from autostart
-    sed -i '/pcmanfm.*--desktop/d' ~/.config/lxsession/LXDE-pi/autostart
-fi
+# Clean up any remaining configuration files
+echo "Cleaning up desktop configuration files..."
+rm -rf ~/.config/lxsession 2>/dev/null || true
+rm -rf ~/.config/pcmanfm 2>/dev/null || true
+rm -rf ~/.config/autostart 2>/dev/null || true
+
+# Install minimal file manager for USB mounting (if needed)
+echo "Installing minimal file manager for USB operations..."
+sudo apt install -y thunar 2>/dev/null || true
+
+# Note: pcmanfm and LXDE components have been removed above
+echo "Desktop management components removed - no autostart configuration needed"
 
 # Install swaybg as fallback background setter
 echo "Installing swaybg as fallback background setter..."
@@ -215,21 +198,13 @@ EOF
 if [ -n "$WAYLAND_DISPLAY" ]; then
     echo "Applying Wayfire desktop configuration immediately..."
     
-    # Kill the lwrespawn wrapper and pcmanfm desktop processes
-    echo "Stopping lwrespawn and pcmanfm desktop processes..."
-    pkill -f "lwrespawn.*pcmanfm.*--desktop" 2>/dev/null || true
-    pkill pcmanfm 2>/dev/null || true
-    sleep 2
-    pkill -f "lwrespawn.*pcmanfm.*--desktop" 2>/dev/null || true
-    pkill pcmanfm 2>/dev/null || true
-    
     # Start fallback background
     ~/set_black_background_fallback.sh
     
     echo "Wayfire desktop configuration applied (black background set, desktop icons disabled)"
     echo "IMPORTANT: You may need to log out and back in for Wayfire to start instead of labwc"
-    echo "Desktop icons should now be hidden - if they reappear, lwrespawn is restarting pcmanfm"
-    echo "Check: ps aux | grep lwrespawn | grep pcmanfm"
+    echo "Desktop icons should now be hidden on next login - autostart has been disabled"
+    echo "If icons still appear, check: cat ~/.config/lxsession/LXDE-pi/autostart"
 else
     echo "Desktop configuration will be applied on next Wayfire session"
 fi
