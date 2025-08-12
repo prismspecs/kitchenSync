@@ -140,10 +140,11 @@ I am developing this on a separate computer than the one on which it will run. C
 
 1. Install VLC and Python dependencies system-wide
 2. **(Recommended)** Optimize the OS by removing unused packages and services
-3. Copy systemd service file and enable auto-start
-4. Prepare USB drives with configuration and video files
-5. Deploy to Raspberry Pis and power on
-6. System auto-starts and begins synchronized playback
+3. Configure desktop appearance (hide icons, set black background)
+4. Copy systemd service file and enable auto-start
+5. Prepare USB drives with configuration and video files
+6. Deploy to Raspberry Pis and power on
+7. System auto-starts and begins synchronized playback
 
 ### Operational Features
 
@@ -287,6 +288,24 @@ Add the following to `/boot/config.txt` to speed up the boot sequence:
 ```ini
 disable_splash=1
 boot_delay=0
+```
+
+**4. Desktop Configuration (Pi Bookworm/Wayfire)**
+Configure a clean desktop appearance for stage deployment:
+```bash
+# Set black background using wf-shell (Wayfire's desktop shell)
+mkdir -p ~/.config
+echo "[background]" > ~/.config/wf-shell.ini
+echo "color = \\#000000" >> ~/.config/wf-shell.ini
+
+# Disable desktop icons in pcmanfm (if used)
+mkdir -p ~/.config/pcmanfm/default
+echo "[desktop]" >> ~/.config/pcmanfm/default/pcmanfm.conf
+echo "show_desktop=0" >> ~/.config/pcmanfm/default/pcmanfm.conf
+
+# Install swaybg as fallback
+sudo apt install -y swaybg
+echo "fallback_bg=~/set_black_background_fallback.sh" >> ~/.config/wayfire.ini
 ```
 
 ### Quick Test Procedure

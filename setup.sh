@@ -73,62 +73,117 @@ if ! grep -q "boot_delay=0" /boot/config.txt; then
 fi
 # --- End OS Optimizations ---
 
-# --- Desktop Environment: Wayfire/Labwc clean kiosk setup ---
-echo "Configuring Wayfire for clean kiosk mode (no panels, black background)..."
+# --- Desktop Configuration for Wayfire/Wayland ---
+echo "Configuring desktop appearance for Wayfire (hide icons, black background)..."
 
-# Ensure we have the UI packages and LightDM
-sudo apt update >/dev/null 2>&1 || true
-sudo apt install -y raspberrypi-ui-mods lightdm >/dev/null 2>&1 || true
-sudo systemctl enable --now lightdm >/dev/null 2>&1 || true
-
-# Clean previous overrides created by earlier revisions
-rm -f "$HOME/.config/autostart/lxpanel.desktop" "$HOME/.config/autostart/pcmanfm.desktop" 2>/dev/null || true
-sed -i '/@xsetroot -solid black/d' "$HOME/.config/lxsession/LXDE-pi/autostart" 2>/dev/null || true
-rm -f "$HOME/.config/pcmanfm/LXDE-pi/desktop-items-0.conf" 2>/dev/null || true
-
-# Remove kiosk X service if it exists
-sudo systemctl disable kitchensync-x.service >/dev/null 2>&1 || true
-sudo systemctl stop kitchensync-x.service >/dev/null 2>&1 || true
-sudo rm -f /etc/systemd/system/kitchensync-x.service 2>/dev/null || true
-sudo systemctl daemon-reload
-rm -f "$HOME/.xinitrc" 2>/dev/null || true
-
-# Configure Wayfire for clean kiosk (no panels, black background)
-mkdir -p "$HOME/.config"
-cat > "$HOME/.config/wayfire.ini" <<'EOF'
-[core]
-plugins = hide-cursor
-
+# Configure wf-shell for black background (Wayfire's desktop shell)
+echo "Configuring wf-shell for black background..."
+mkdir -p ~/.config
+if [ -f ~/.config/wf-shell.ini ]; then
+    # Check if background section exists
+    if grep -q "^\[background\]" ~/.config/wf-shell.ini; then
+        # Update existing background color
+        sed -i 's|color = .*|color = \\#000000|g' ~/.config/wf-shell.ini
+    else
+        # Add background section
+        echo "" >> ~/.config/wf-shell.ini
+        echo "[background]" >> ~/.config/wf-shell.ini
+        echo "color = \\#000000" >> ~/.config/wf-shell.ini
+    fi
+else
+    # Create new wf-shell.ini with black background
+    cat > ~/.config/wf-shell.ini << 'EOF'
 [background]
-color = 0 0 0
+color = \#000000
 EOF
+fi
 
-# Create KitchenSync autostart .desktop file
-mkdir -p "$HOME/.config/autostart"
-cat > "$HOME/.config/autostart/kitchensync.desktop" <<EOF
-[Desktop Entry]
-Type=Application
-Name=KitchenSync
-Exec=python3 $(pwd)/kitchensync.py
-X-GNOME-Autostart-enabled=true
+# Configure pcmanfm to not show desktop icons (if it's being used)
+echo "Disabling desktop icons in pcmanfm..."
+mkdir -p ~/.config/pcmanfm/default
+if [ -f ~/.config/pcmanfm/default/pcmanfm.conf ]; then
+    # Check if desktop section exists and modify it
+    if grep -q "^\[desktop\]" ~/.config/pcmanfm/default/pcmanfm.conf; then
+        sed -i '/^\[desktop\]/,/^\[/{s/show_desktop=1/show_desktop=0/g;}' ~/.config/pcmanfm/default/pcmanfm.conf
+    else
+        # Add desktop section
+        echo "" >> ~/.config/pcmanfm/default/pcmanfm.conf
+        echo "[desktop]" >> ~/.config/pcmanfm/default/pcmanfm.conf
+        echo "show_desktop=0" >> ~/.config/pcmanfm/default/pcmanfm.conf
+    fi
+else
+    # Create new pcmanfm.conf with desktop icons disabled
+    cat > ~/.config/pcmanfm/default/pcmanfm.conf << 'EOF'
+[config]
+bm_open_method=0
+
+[desktop]
+show_desktop=0
 EOF
+fi
 
-# Disable the user systemd service since we're using .desktop autostart
-systemctl --user disable kitchensync.service >/dev/null 2>&1 || true
+# Install swaybg as fallback/alternative background setter
+echo "Installing swaybg as fallback background setter..."
+sudo apt install -y swaybg
 
-echo "Wayfire configured for kiosk mode with KitchenSync autostart"
-# --- End Desktop Environment configuration ---
+# Create fallback black background script using swaybg
+cat > ~/set_black_background_fallback.sh << 'EOF'
+#!/bin/bash
+# Fallback black background using swaybg
+pkill swaybg 2>/dev/null || true
+swaybg -c '#000000' &
+EOF
+chmod +x ~/set_black_background_fallback.sh
 
+# Configure Wayfire autostart for fallback background (if wf-shell doesn't work)
+echo "Configuring Wayfire autostart fallback..."
+mkdir -p ~/.config
+if [ -f ~/.config/wayfire.ini ]; then
+    # Check if autostart section exists
+    if grep -q "^\[autostart\]" ~/.config/wayfire.ini; then
+        # Add fallback background if not already present
+        if ! grep -q "fallback_bg=" ~/.config/wayfire.ini; then
+            sed -i '/^\[autostart\]/a fallback_bg=~/set_black_background_fallback.sh' ~/.config/wayfire.ini
+        fi
+    else
+        # Add entire autostart section with fallback
+        echo "" >> ~/.config/wayfire.ini
+        echo "[autostart]" >> ~/.config/wayfire.ini
+        echo "fallback_bg=~/set_black_background_fallback.sh" >> ~/.config/wayfire.ini
+    fi
+else
+    # Create new wayfire.ini with autostart fallback
+    cat > ~/.config/wayfire.ini << 'EOF'
+[autostart]
+fallback_bg=~/set_black_background_fallback.sh
+EOF
+fi
 
-# Setup backup auto-start service (disabled by default, using .desktop instead)
-echo "Setting up backup auto-start service (disabled)..."
+# Apply desktop configuration immediately if in Wayland session
+if [ -n "$WAYLAND_DISPLAY" ]; then
+    echo "Applying Wayfire desktop configuration immediately..."
+    # Kill any existing desktop icon managers
+    pkill pcmanfm 2>/dev/null || true
+    # Start fallback background
+    ~/set_black_background_fallback.sh
+    echo "Wayfire desktop configuration applied (black background set, desktop icons disabled)"
+else
+    echo "Desktop configuration will be applied on next Wayfire session"
+fi
+
+echo "Wayfire desktop configuration complete"
+# --- End Desktop Configuration ---
+
+# Setup auto-start service
+echo "Setting up auto-start service..."
 mkdir -p ~/.config/systemd/user
 cp kitchensync.service ~/.config/systemd/user/
 sed -i "s/kitchensync/$USER/g" ~/.config/systemd/user/kitchensync.service
 sed -i "s|/home/kitchensync/kitchenSync|$(pwd)|g" ~/.config/systemd/user/kitchensync.service
 systemctl --user daemon-reload
+systemctl --user enable kitchensync.service
 
-echo "Auto-start via .desktop file configured. KitchenSync will start automatically on login."
+echo "Auto-start service installed. KitchenSync will start automatically on boot."
 
 # Test networking imports after cleanup
 echo ""
@@ -157,7 +212,6 @@ echo ""
 echo "Video player: VLC"
 echo "Python packages installed system-wide"
 echo "🔄 Auto-start service: ENABLED"
-echo "🖥️  Desktop: Wayfire kiosk mode (black background, no panels)"
 echo ""
 echo "🚀 PLUG-AND-PLAY OPERATION:"
 echo "1. Create kitchensync.ini on your USB drive with:"
@@ -186,9 +240,5 @@ echo "- Check status: sudo systemctl status kitchensync"
 echo "- View logs: sudo journalctl -u kitchensync -f"
 echo "- Disable auto-start: sudo systemctl disable kitchensync"
 echo ""
-:
 echo "💡 READY FOR DEPLOYMENT! Just plug in USB drive and power on!"
 echo ""
-
-:
-
