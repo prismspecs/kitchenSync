@@ -1,143 +1,66 @@
 #!/bin/bash
-# KitchenSync Setup Script - Minimal Raspberry Pi OS Lite Version
+# KitchenSync Setup Script
 
-set -e  # Exit on any error
+echo "=== KitchenSync Setup ==="
 
-echo "=== KitchenSync Minimal Setup (Raspberry Pi OS Lite) ==="
+# Check for Raspberry Pi OS version
+PI_VERSION=$(grep VERSION_CODENAME /etc/os-release 2>/dev/null | cut -d= -f2 | tr -d '"')
 
-# Check if running as root
-if [[ $EUID -eq 0 ]]; then
-   echo "❌ Don't run as root. Use: sudo ./setup.sh"
-   exit 1
-fi
-
-# Check for Raspberry Pi OS
-if ! grep -q "Raspberry Pi OS" /etc/os-release 2>/dev/null; then
-    echo "⚠️  This script is designed for Raspberry Pi OS"
-    echo "Continuing anyway..."
-fi
-
-# Fix APT cache if needed
-echo "🔍 Checking APT cache..."
+# Fix APT cache corruption if it exists
+echo "Checking APT cache integrity..."
 if ! sudo apt update 2>/dev/null; then
-    echo "🛠️  Fixing APT cache..."
+    echo "APT cache corruption detected, fixing..."
     sudo rm -rf /var/lib/apt/lists/*
+    echo "Updating package lists..."
     sudo apt update
+else
+    echo "APT cache is healthy"
 fi
 
-# Install minimal packages for KitchenSync on Raspberry Pi OS Lite
-echo "📦 Installing minimal packages for Raspberry Pi OS Lite..."
-sudo apt install --no-install-recommends -y \
-    xserver-xorg \
-    openbox \
-    vlc \
-    python3-vlc \
-    python3-pip \
-    python3-dev \
-    libasound2-dev \
-    alsa-utils \
-    udisks2 \
-    usbutils \
-    libdbus-1-dev \
-    libglib2.0-dev \
-    wmctrl \
-    xterm \
-    xinit \
-    x11-xserver-utils
+# Install VLC and dependencies
+echo "Installing VLC and dependencies..."
+sudo apt install -y vlc libvlc-dev python3-vlc python3-pip python3-dev libasound2-dev alsa-utils
 
-# Install Python packages
-echo "🐍 Installing Python packages..."
-sudo pip3 install --break-system-packages \
-    python-rtmidi \
-    dbus-python \
-    python-vlc
+# Install USB mounting utilities
+echo "Installing USB mounting utilities..."
+sudo apt install -y udisks2 usbutils
 
-# Setup USB mount points
-echo "💾 Setting up USB mount points..."
-sudo mkdir -p /media/usb{0..3}
-sudo chown $USER:$USER /media/usb*
+# Install dbus development libraries (needed for dbus-python)
+echo "Installing dbus development libraries..."
+sudo apt install -y libdbus-1-dev libglib2.0-dev
 
-# Add user to groups
-echo "👤 Configuring permissions..."
+# Install required packages
+sudo apt-get update
+sudo apt-get install -y python3-pip python3-vlc vlc
+sudo apt-get install -y wmctrl  # For window management
+
+# Create media directories for USB mounting
+echo "Setting up USB mount points..."
+sudo mkdir -p /media/usb /media/usb0 /media/usb1
+sudo chown -R $USER:$USER /media/usb* 2>/dev/null || true
+
+# Add user to necessary groups for USB access
+echo "Configuring USB access permissions..."
 sudo usermod -a -G plugdev,disk $USER
 
-# Create minimal Openbox configuration for KitchenSync
-echo "🪟 Setting up Openbox configuration..."
-mkdir -p ~/.config/openbox
-cat > ~/.config/openbox/autostart << 'EOF'
-#!/bin/bash
-# KitchenSync autostart script
-cd /home/pi/kitchenSync
-python3 kitchensync.py
-EOF
+# Install Python packages system-wide
+echo "Installing Python packages system-wide..."
+sudo pip install python-rtmidi dbus-python python-vlc --break-system-packages
 
-chmod +x ~/.config/openbox/autostart
+# Setup auto-start service
+echo "Setting up auto-start service..."
+mkdir -p ~/.config/systemd/user
+cp kitchensync.service ~/.config/systemd/user/
+sed -i "s/kitchensync/$USER/g" ~/.config/systemd/user/kitchensync.service
+sed -i "s|/home/kitchensync/kitchenSync|$(pwd)|g" ~/.config/systemd/user/kitchensync.service
+systemctl --user daemon-reload
+systemctl --user enable kitchensync.service
 
-# Create .xinitrc to start Openbox automatically
-echo "🚀 Setting up auto-start with X11..."
-cat > ~/.xinitrc << 'EOF'
-#!/bin/bash
-# Start Openbox window manager
-exec openbox-session
-EOF
+echo "Auto-start service installed. KitchenSync will start automatically on boot."
 
-chmod +x ~/.xinitrc
-
-# Create systemd service for auto-login and X11 start
-echo "🔧 Setting up systemd auto-login service..."
-sudo tee /etc/systemd/system/getty@tty1.service.d/autologin.conf > /dev/null << 'EOF'
-[Service]
-ExecStart=
-ExecStart=-/sbin/agetty --autologin pi --noclear %I $TERM
-Type=idle
-EOF
-
-# Create .bash_profile to auto-start X11
-echo "📱 Setting up auto-start X11 on login..."
-cat >> ~/.bash_profile << 'EOF'
-
-# Auto-start X11 if not already running
-if [[ -z $DISPLAY ]] && [[ $(tty) = /dev/tty1 ]]; then
-    startx
-fi
-EOF
-
-# Disable unnecessary services for minimal setup
-echo "⚡ Disabling unnecessary services..."
-sudo systemctl disable bluetooth.service hciuart.service 2>/dev/null || true
-sudo systemctl disable cups.service 2>/dev/null || true
-sudo systemctl disable triggerhappy.service 2>/dev/null || true
-sudo systemctl disable avahi-daemon.service 2>/dev/null || true
-sudo systemctl disable lightdm.service 2>/dev/null || true
-sudo systemctl disable gdm.service 2>/dev/null || true
-
-# Remove any existing desktop environment packages if they exist
-echo "🧹 Cleaning up any existing desktop packages..."
-sudo apt purge -y raspberrypi-ui-mods lxde* gnome* kde* xfce* 2>/dev/null || true
-
-# Clean up package cache
-sudo apt autoremove -y
-sudo apt clean
-
-# Safe boot optimizations
-echo "Applying safe boot optimizations..."
-if ! grep -q "disable_splash=1" /boot/config.txt; then
-    echo "disable_splash=1" | sudo tee -a /boot/config.txt >/dev/null 2>&1 || true
-fi
-if ! grep -q "boot_delay=0" /boot/config.txt; then
-    echo "boot_delay=0" | sudo tee -a /boot/config.txt >/dev/null 2>&1 || true
-fi
-
-# Install KitchenSync systemd service
-echo "🚀 Setting up KitchenSync auto-start service..."
-sudo cp kitchensync.service /etc/systemd/system/
-sudo sed -i "s/kitchensync/$USER/g" /etc/systemd/system/kitchensync.service
-sudo sed -i "s|/home/kitchensync/kitchenSync|$(pwd)|g" /etc/systemd/system/kitchensync.service
-sudo systemctl daemon-reload
-sudo systemctl enable kitchensync.service
-
-# Test imports
-echo "🧪 Testing imports..."
+# Test networking imports after cleanup
+echo ""
+echo "🔍 Testing networking imports..."
 python3 -c "
 import sys
 from pathlib import Path
@@ -145,32 +68,50 @@ sys.path.insert(0, str(Path.cwd() / 'src'))
 
 try:
     from networking import SyncBroadcaster, CommandManager
-    print('✅ Leader networking: OK')
+    print('✅ Leader networking imports OK')
 except Exception as e:
-    print(f'❌ Leader networking: {e}')
+    print(f'❌ Leader networking imports failed: {e}')
 
 try:
     from networking import SyncReceiver, CommandListener  
-    print('✅ Collaborator networking: OK')
+    print('✅ Collaborator networking imports OK')
 except Exception as e:
-    print(f'❌ Collaborator networking: {e}')
+    print(f'❌ Collaborator networking imports failed: {e}')
 "
 
 echo ""
-echo "✅ Minimal Setup Complete!"
+echo "=== Setup Complete! ==="
 echo ""
-echo "📋 What was installed:"
-echo "   - X11 server (graphics foundation)"
-echo "   - Openbox (lightweight window manager)"
-echo "   - VLC media player"
-echo "   - Essential Python packages"
-echo "   - USB and audio support"
+echo "Video player: VLC"
+echo "Python packages installed system-wide"
+echo "🔄 Auto-start service: ENABLED"
 echo ""
-echo "🚀 System will now:"
-echo "   - Boot directly to command line"
-echo "   - Auto-login as $USER"
-echo "   - Start X11 automatically"
-echo "   - Launch KitchenSync in Openbox"
+echo "🚀 PLUG-AND-PLAY OPERATION:"
+echo "1. Create kitchensync.ini on your USB drive with:"
+echo "   - is_leader = true/false (designates leader or collaborator)"
+echo "   - pi_id = unique ID for each Pi" 
+echo "   - video_file = specific video filename (optional)"
+echo "2. Power on the Pi - KitchenSync starts automatically!"
 echo ""
-echo "⚠️  Note: This is a minimal setup without full desktop environment."
-echo "   If you need a full desktop, run: sudo apt install raspberrypi-ui-mods"
+echo "📁 USB Drive Contents:"
+echo "   - kitchensync.ini (configuration file)"
+echo "   - Your video file(s) at the root level"
+echo ""
+echo "🔧 MANUAL TESTING (Optional):"
+echo "- Test auto-detection: python3 kitchensync.py"
+echo "- Test with display (SSH): DISPLAY=:0 PULSE_SERVER=unix:/run/user/1000/pulse/native python3 kitchensync.py"
+echo "- Test service: sudo systemctl start kitchensync"
+echo "- Manual leader: python3 leader.py"
+echo "- Manual collaborator: python3 collaborator.py"
+echo ""
+echo "🎵 MIDI Setup:"
+echo "1. Connect USB MIDI interface to collaborator Pis"
+echo "2. Test connection: aconnect -l or amidi -l"
+echo ""
+echo "� Service Management:"
+echo "- Check status: sudo systemctl status kitchensync"
+echo "- View logs: sudo journalctl -u kitchensync -f"
+echo "- Disable auto-start: sudo systemctl disable kitchensync"
+echo ""
+echo "💡 READY FOR DEPLOYMENT! Just plug in USB drive and power on!"
+echo ""
