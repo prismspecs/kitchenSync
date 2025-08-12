@@ -244,62 +244,36 @@ class VLCVideoPlayer:
             import subprocess
             import time
 
-            log_info(
-                "Attempting to position VLC window via _force_vlc_position...",
-                component="vlc",
+            # Wait for VLC window to appear
+            time.sleep(3)
+
+            # Find VLC windows and force position
+            result = subprocess.run(
+                ["wmctrl", "-l"], capture_output=True, text=True, timeout=10
             )
-            timeout = 5  # Total time to wait for the window
-            poll_interval = 0.2  # Time to wait between checks
-            start_time = time.time()
-            success = False
+            if result.returncode == 0:
+                for line in result.stdout.split("\n"):
+                    if "vlc" in line.lower() or "test_video" in line.lower():
+                        parts = line.split()
+                        if len(parts) >= 2:
+                            window_id = parts[0]
+                            # Force VLC to left side: x=0, y=0, width=1280, height=720
+                            subprocess.run(
+                                ["wmctrl", "-ir", window_id, "-e", "0,0,0,1280,720"],
+                                check=False,
+                                timeout=5,
+                            )
+                            log_info(
+                                f"Forced VLC window {window_id} to left side (0,0,1280,720)"
+                            )
 
-            while time.time() - start_time < timeout:
-                # Find VLC windows and force position
-                result = subprocess.run(
-                    ["wmctrl", "-l"], capture_output=True, text=True, timeout=10
-                )
-                if result.returncode == 0:
-                    for line in result.stdout.split("\n"):
-                        if "vlc" in line.lower() or "test_video" in line.lower():
-                            parts = line.split()
-                            if len(parts) >= 2:
-                                window_id = parts[0]
-                                # Force VLC to left side
-                                pos_result = subprocess.run(
-                                    [
-                                        "wmctrl",
-                                        "-ir",
-                                        window_id,
-                                        "-e",
-                                        "0,0,0,1280,1080",
-                                    ],
-                                    check=False,
-                                    timeout=5,
-                                )
-                                if pos_result.returncode == 0:
-                                    log_info(
-                                        f"Forced VLC window {window_id} to left side (0,0,1280,1080)",
-                                        component="vlc",
-                                    )
-                                    # Bring to front
-                                    subprocess.run(
-                                        ["wmctrl", "-ia", window_id],
-                                        check=False,
-                                        timeout=5,
-                                    )
-                                    success = True
-                    if success:
-                        break
-                time.sleep(poll_interval)
-
-            if not success:
-                log_warning(
-                    "Could not find or position VLC window after timeout.",
-                    component="vlc",
-                )
+                            # Bring to front
+                            subprocess.run(
+                                ["wmctrl", "-ia", window_id], check=False, timeout=5
+                            )
 
         except Exception as e:
-            log_warning(f"Failed to force VLC window position: {e}", component="vlc")
+            log_warning(f"Failed to force VLC window position: {e}")
 
     def _start_with_command_vlc(self) -> bool:
         """Start video using VLC command line"""
@@ -350,25 +324,16 @@ class VLCVideoPlayer:
             )
             log_info(f"Launched VLC with audio: {' '.join(cmd)}", component="vlc")
 
-            # Give VLC time to start by polling
-            timeout = 5
-            poll_interval = 0.1
-            start_time = time.time()
-            success = False
-            while time.time() - start_time < timeout:
-                if self.command_process.poll() is None:
-                    success = True
-                    break
-                time.sleep(poll_interval)
+            # Give VLC time to start
+            time.sleep(3)
 
-            if success:
+            if self.command_process.poll() is None:
                 self.is_playing = True
                 log_info("VLC command started successfully with audio", component="vlc")
                 return True
             else:
                 log_warning(
-                    "VLC process did not start within timeout, trying without audio",
-                    component="vlc",
+                    "VLC with audio failed, trying without audio", component="vlc"
                 )
                 return self._start_with_command_vlc_no_audio()
 
@@ -425,18 +390,10 @@ class VLCVideoPlayer:
             )
             log_info(f"Launched VLC without audio: {' '.join(cmd)}", component="vlc")
 
-            # Give VLC time to start by polling
-            timeout = 5
-            poll_interval = 0.1
-            start_time = time.time()
-            success = False
-            while time.time() - start_time < timeout:
-                if self.command_process.poll() is None:
-                    success = True
-                    break
-                time.sleep(poll_interval)
+            # Give VLC time to start
+            time.sleep(3)
 
-            if success:
+            if self.command_process.poll() is None:
                 self.is_playing = True
                 log_info(
                     "VLC command started successfully without audio", component="vlc"
@@ -444,8 +401,7 @@ class VLCVideoPlayer:
                 return True
             else:
                 log_error(
-                    "VLC command process failed to start even without audio",
-                    component="vlc",
+                    "VLC command process failed even without audio", component="vlc"
                 )
                 return False
 
@@ -461,9 +417,6 @@ class VLCVideoPlayer:
             "--file-logging",
             f"--logfile={paths['vlc_main']}",
             "--verbose=2",
-            "--no-autoscale",  # Prevent VLC from resizing window to fit video aspect ratio
-            "--aspect-ratio",
-            "1280:1080",  # Force content to render at this ratio
         ]
 
         # Add fullscreen for production mode
