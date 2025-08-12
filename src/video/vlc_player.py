@@ -461,6 +461,7 @@ class VLCVideoPlayer:
             "--file-logging",
             f"--logfile={paths['vlc_main']}",
             "--verbose=2",
+            "--no-autoscale",  # Prevent VLC from resizing window to fit video aspect ratio
         ]
 
         # Add fullscreen for production mode
