@@ -119,13 +119,65 @@ class LeaderPi:
                 if not result:
                     log_error("Video playback failed to start", component="leader")
                 else:
-                    # In debug mode, VLC is already started with the correct position
-                    # by vlc_player.py, so no extra positioning is needed here.
+                    # Position VLC window on the left side after it starts (debug mode only)
                     if self.config.debug_mode:
-                        log_info(
-                            "Debug mode: VLC window positioning is handled by the player.",
-                            component="leader",
-                        )
+                        import threading
+
+                        def position_vlc_window():
+                            try:
+                                import subprocess
+                                import time
+
+                                log_info(
+                                    "Attempting to position 'VLC media player' window...",
+                                    component="leader",
+                                )
+
+                                timeout = 5  # Total time to wait for the window
+                                poll_interval = 0.2  # Time to wait between checks
+                                start_time = time.time()
+                                success = False
+
+                                while time.time() - start_time < timeout:
+                                    # Use wmctrl to find and resize the window
+                                    result = subprocess.run(
+                                        [
+                                            "wmctrl",
+                                            "-r",
+                                            "VLC media player",
+                                            "-e",
+                                            "0,0,0,1280,1080",
+                                        ],
+                                        check=False,
+                                        timeout=5,
+                                        stdout=subprocess.DEVNULL,
+                                        stderr=subprocess.DEVNULL,
+                                    )
+                                    if result.returncode == 0:
+                                        log_info(
+                                            "Positioned VLC window on left side",
+                                            component="leader",
+                                        )
+                                        success = True
+                                        break
+                                    else:
+                                        # Wait and try again if window not found
+                                        time.sleep(poll_interval)
+
+                                if not success:
+                                    log_warning(
+                                        "Could not position VLC window after timeout.",
+                                        component="leader",
+                                    )
+                            except Exception as e:
+                                log_warning(
+                                    f"Failed to position VLC window: {e}",
+                                    component="leader",
+                                )
+
+                        threading.Thread(
+                            target=position_vlc_window, daemon=True
+                        ).start()
                     else:
                         log_info(
                             "Production mode - no window positioning",

@@ -316,27 +316,26 @@ class VLCVideoPlayer:
                 log_info("Command-line VLC looping enabled", component="vlc")
 
             # Window configuration based on debug mode
-            # This is now handled by _get_vlc_args
-            # if self.debug_mode:
-            #     # Debug mode: windowed on left side for overlay
-            #     cmd.extend(
-            #         [
-            #             "--no-fullscreen",
-            #             "--width=1280",
-            #             "--height=1080",
-            #             "--video-x=0",  # Left side of screen
-            #             "--video-y=0",  # Top of screen
-            #             "--no-video-deco",
-            #         ]
-            #     )
-            # else:
-            #     # Production mode: fullscreen
-            #     cmd.extend(
-            #         [
-            #             "--fullscreen",
-            #             "--no-video-deco",
-            #         ]
-            #     )
+            if self.debug_mode:
+                # Debug mode: windowed on left side for overlay
+                cmd.extend(
+                    [
+                        "--no-fullscreen",
+                        "--width=1280",
+                        "--height=1080",
+                        "--video-x=0",  # Left side of screen
+                        "--video-y=0",  # Top of screen
+                        "--no-video-deco",
+                    ]
+                )
+            else:
+                # Production mode: fullscreen
+                cmd.extend(
+                    [
+                        "--fullscreen",
+                        "--no-video-deco",
+                    ]
+                )
 
             cmd.append(self.video_path)
 
@@ -392,27 +391,26 @@ class VLCVideoPlayer:
                 log_info("Command-line VLC looping enabled (no audio)", component="vlc")
 
             # Window configuration based on debug mode
-            # This is now handled by _get_vlc_args
-            # if self.debug_mode:
-            #     # Debug mode: windowed on left side for overlay
-            #     cmd.extend(
-            #         [
-            #             "--no-fullscreen",
-            #             "--width=1280",
-            #             "--height=1080",
-            #             "--video-x=0",  # Left side of screen
-            #             "--video-y=0",  # Top of screen
-            #             "--no-video-deco",
-            #         ]
-            #     )
-            # else:
-            #     # Production mode: fullscreen
-            #     cmd.extend(
-            #         [
-            #             "--fullscreen",
-            #             "--no-video-deco",
-            #         ]
-            #     )
+            if self.debug_mode:
+                # Debug mode: windowed on left side for overlay
+                cmd.extend(
+                    [
+                        "--no-fullscreen",
+                        "--width=1280",
+                        "--height=1080",
+                        "--video-x=0",  # Left side of screen
+                        "--video-y=0",  # Top of screen
+                        "--no-video-deco",
+                    ]
+                )
+            else:
+                # Production mode: fullscreen
+                cmd.extend(
+                    [
+                        "--fullscreen",
+                        "--no-video-deco",
+                    ]
+                )
 
             cmd.append(self.video_path)
 
@@ -465,20 +463,8 @@ class VLCVideoPlayer:
             "--verbose=2",
         ]
 
-        if self.debug_mode:
-            # Debug mode: windowed on left side for overlay
-            args.extend(
-                [
-                    "--no-fullscreen",
-                    "--width=1280",
-                    "--height=1080",
-                    "--video-x=0",
-                    "--video-y=0",
-                    "--no-video-deco",
-                ]
-            )
-        else:
-            # Production mode: fullscreen
+        # Add fullscreen for production mode
+        if not self.debug_mode:
             args.extend(
                 [
                     "--fullscreen",
