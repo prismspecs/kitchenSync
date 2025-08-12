@@ -356,6 +356,7 @@ The systemd service includes proper environment variables:
 
 ## future necessities
 
++ Remove desktop environment, etc. just have a totally slimmed down OS
 + Read only root filesystem to prevent disk errors, etc.
 + Remote management
 + Ensure total hardware acceleration
