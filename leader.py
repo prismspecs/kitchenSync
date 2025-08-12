@@ -124,38 +124,54 @@ class LeaderPi:
                         import threading
 
                         def position_vlc_window():
-                            time.sleep(0.1)  # A small delay is likely still needed
-                            try:
-                                import subprocess
+                            """Poll until the VLC window is found and can be moved."""
+                            import subprocess
+                            import time
 
-                                result = subprocess.run(
-                                    [
-                                        "wmctrl",
-                                        "-r",
-                                        "VLC media player",
-                                        "-e",
-                                        "0,0,0,1280,1080",
-                                    ],
-                                    check=False,
-                                    timeout=5,
-                                    stdout=subprocess.DEVNULL,
-                                    stderr=subprocess.DEVNULL,
-                                )
-                                if result.returncode == 0:
+                            max_wait_sec = 5.0
+                            interval_sec = 0.2
+                            start_time = time.monotonic()
+
+                            while time.monotonic() - start_time < max_wait_sec:
+                                try:
+                                    # This command will fail if the window doesn't exist yet
+                                    subprocess.run(
+                                        [
+                                            "wmctrl",
+                                            "-r",
+                                            "VLC media player",
+                                            "-e",
+                                            "0,0,0,1280,1080",
+                                        ],
+                                        check=True,  # Raise an exception on failure
+                                        timeout=2,
+                                        stdout=subprocess.DEVNULL,
+                                        stderr=subprocess.DEVNULL,
+                                    )
                                     log_info(
                                         "Positioned VLC window on left side",
                                         component="leader",
                                     )
-                                else:
+                                    return  # Success
+                                except (
+                                    subprocess.CalledProcessError,
+                                    subprocess.TimeoutExpired,
+                                    FileNotFoundError,
+                                ):
+                                    # Window not ready, wmctrl not found, or command timed out.
+                                    # Wait and try again.
+                                    time.sleep(interval_sec)
+                                except Exception as e:
                                     log_warning(
-                                        "Could not position VLC window. This might be okay if VLC is already positioned.",
+                                        f"An unexpected error occurred while positioning VLC window: {e}",
                                         component="leader",
                                     )
-                            except Exception as e:
-                                log_warning(
-                                    f"Failed to position VLC window: {e}",
-                                    component="leader",
-                                )
+                                    return  # Stop trying on other errors
+
+                            log_warning(
+                                "Failed to position VLC window within the time limit. It may not be visible.",
+                                component="leader",
+                            )
 
                         threading.Thread(
                             target=position_vlc_window, daemon=True
