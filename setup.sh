@@ -1,9 +1,9 @@
 #!/bin/bash
-# KitchenSync Setup Script
+# KitchenSync Setup Script - Minimal Raspberry Pi OS Lite Version
 
 set -e  # Exit on any error
 
-echo "=== KitchenSync Setup ==="
+echo "=== KitchenSync Minimal Setup (Raspberry Pi OS Lite) ==="
 
 # Check if running as root
 if [[ $EUID -eq 0 ]]; then
@@ -25,11 +25,12 @@ if ! sudo apt update 2>/dev/null; then
     sudo apt update
 fi
 
-# Install packages in one go
-echo "📦 Installing packages..."
-sudo apt install -y \
+# Install minimal packages for KitchenSync on Raspberry Pi OS Lite
+echo "📦 Installing minimal packages for Raspberry Pi OS Lite..."
+sudo apt install --no-install-recommends -y \
+    xserver-xorg \
+    openbox \
     vlc \
-    libvlc-dev \
     python3-vlc \
     python3-pip \
     python3-dev \
@@ -39,7 +40,10 @@ sudo apt install -y \
     usbutils \
     libdbus-1-dev \
     libglib2.0-dev \
-    wmctrl
+    wmctrl \
+    xterm \
+    xinit \
+    x11-xserver-utils
 
 # Install Python packages
 echo "🐍 Installing Python packages..."
@@ -57,29 +61,62 @@ sudo chown $USER:$USER /media/usb*
 echo "👤 Configuring permissions..."
 sudo usermod -a -G plugdev,disk $USER
 
-# Safe OS Optimizations (Desktop Environment Preserved)
-echo "⚡ Applying safe OS optimizations..."
+# Create minimal Openbox configuration for KitchenSync
+echo "🪟 Setting up Openbox configuration..."
+mkdir -p ~/.config/openbox
+cat > ~/.config/openbox/autostart << 'EOF'
+#!/bin/bash
+# KitchenSync autostart script
+cd /home/pi/kitchenSync
+python3 kitchensync.py
+EOF
 
-# Only disable clearly safe services
-echo "Disabling Bluetooth (safe to disable)..."
+chmod +x ~/.config/openbox/autostart
+
+# Create .xinitrc to start Openbox automatically
+echo "🚀 Setting up auto-start with X11..."
+cat > ~/.xinitrc << 'EOF'
+#!/bin/bash
+# Start Openbox window manager
+exec openbox-session
+EOF
+
+chmod +x ~/.xinitrc
+
+# Create systemd service for auto-login and X11 start
+echo "🔧 Setting up systemd auto-login service..."
+sudo tee /etc/systemd/system/getty@tty1.service.d/autologin.conf > /dev/null << 'EOF'
+[Service]
+ExecStart=
+ExecStart=-/sbin/agetty --autologin pi --noclear %I $TERM
+Type=idle
+EOF
+
+# Create .bash_profile to auto-start X11
+echo "📱 Setting up auto-start X11 on login..."
+cat >> ~/.bash_profile << 'EOF'
+
+# Auto-start X11 if not already running
+if [[ -z $DISPLAY ]] && [[ $(tty) = /dev/tty1 ]]; then
+    startx
+fi
+EOF
+
+# Disable unnecessary services for minimal setup
+echo "⚡ Disabling unnecessary services..."
 sudo systemctl disable bluetooth.service hciuart.service 2>/dev/null || true
-
-# Automatically disable additional services for performance
-echo "Disabling additional services for performance..."
 sudo systemctl disable cups.service 2>/dev/null || true
 sudo systemctl disable triggerhappy.service 2>/dev/null || true
 sudo systemctl disable avahi-daemon.service 2>/dev/null || true
-echo "⚠️  Desktop environment may not work properly after reboot!"
+sudo systemctl disable lightdm.service 2>/dev/null || true
+sudo systemctl disable gdm.service 2>/dev/null || true
 
-# Automatically remove unused packages
-echo "Removing unused packages..."
-sudo apt purge -y wolfram-engine sonic-pi scratch nuscratch smartsim libreoffice* 2>/dev/null || true
+# Remove any existing desktop environment packages if they exist
+echo "🧹 Cleaning up any existing desktop packages..."
+sudo apt purge -y raspberrypi-ui-mods lxde* gnome* kde* xfce* 2>/dev/null || true
 
-echo "Running apt autoremove for cleanup..."
+# Clean up package cache
 sudo apt autoremove -y
-echo "⚠️  If desktop doesn't work after reboot, run:"
-echo "   sudo apt install --reinstall raspberrypi-ui-mods"
-
 sudo apt clean
 
 # Safe boot optimizations
@@ -91,8 +128,8 @@ if ! grep -q "boot_delay=0" /boot/config.txt; then
     echo "boot_delay=0" | sudo tee -a /boot/config.txt >/dev/null 2>&1 || true
 fi
 
-# Install systemd service
-echo "🚀 Setting up auto-start service..."
+# Install KitchenSync systemd service
+echo "🚀 Setting up KitchenSync auto-start service..."
 sudo cp kitchensync.service /etc/systemd/system/
 sudo sed -i "s/kitchensync/$USER/g" /etc/systemd/system/kitchensync.service
 sudo sed -i "s|/home/kitchensync/kitchenSync|$(pwd)|g" /etc/systemd/system/kitchensync.service
@@ -120,4 +157,20 @@ except Exception as e:
 "
 
 echo ""
-echo "✅ Setup Complete!"
+echo "✅ Minimal Setup Complete!"
+echo ""
+echo "📋 What was installed:"
+echo "   - X11 server (graphics foundation)"
+echo "   - Openbox (lightweight window manager)"
+echo "   - VLC media player"
+echo "   - Essential Python packages"
+echo "   - USB and audio support"
+echo ""
+echo "🚀 System will now:"
+echo "   - Boot directly to command line"
+echo "   - Auto-login as $USER"
+echo "   - Start X11 automatically"
+echo "   - Launch KitchenSync in Openbox"
+echo ""
+echo "⚠️  Note: This is a minimal setup without full desktop environment."
+echo "   If you need a full desktop, run: sudo apt install raspberrypi-ui-mods"
