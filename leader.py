@@ -122,10 +122,45 @@ class LeaderPi:
                 else:
                     # Position VLC window on the left side after it starts (debug mode only)
                     if self.config.debug_mode:
-                        log_info(
-                            "VLC window positioning is handled by vlc_player.py",
-                            component="leader",
-                        )
+                        import threading
+
+                        def position_vlc_window():
+                            time.sleep(3)  # Wait for VLC window to appear first
+                            try:
+                                import subprocess
+
+                                result = subprocess.run(
+                                    [
+                                        "wmctrl",
+                                        "-r",
+                                        "VLC media player",
+                                        "-e",
+                                        "0,0,0,1280,1080",
+                                    ],
+                                    check=False,
+                                    timeout=5,
+                                    stdout=subprocess.DEVNULL,
+                                    stderr=subprocess.DEVNULL,
+                                )
+                                if result.returncode == 0:
+                                    log_info(
+                                        "Positioned VLC window on left side",
+                                        component="leader",
+                                    )
+                                else:
+                                    log_warning(
+                                        "Could not position VLC window",
+                                        component="leader",
+                                    )
+                            except Exception as e:
+                                log_warning(
+                                    f"Failed to position VLC window: {e}",
+                                    component="leader",
+                                )
+
+                        threading.Thread(
+                            target=position_vlc_window, daemon=True
+                        ).start()
                     else:
                         log_info(
                             "Production mode - no window positioning",
