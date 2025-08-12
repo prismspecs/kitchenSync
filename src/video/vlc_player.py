@@ -324,21 +324,18 @@ class VLCVideoPlayer:
             )
             log_info(f"Launched VLC with audio: {' '.join(cmd)}", component="vlc")
 
-            # Wait up to 3 seconds for VLC to start
-            start_time = time.time()
-            while time.time() - start_time < 3:
-                if self.command_process.poll() is None:
-                    # Process is running
-                    self.is_playing = True
-                    log_info("VLC command started successfully with audio", component="vlc")
-                    return True
-                # Process has terminated, wait a bit before checking again
-                time.sleep(0.1)
+            # Give VLC time to start
+            time.sleep(3)
 
-            log_warning(
-                "VLC with audio failed to start, trying without audio", component="vlc"
-            )
-            return self._start_with_command_vlc_no_audio()
+            if self.command_process.poll() is None:
+                self.is_playing = True
+                log_info("VLC command started successfully with audio", component="vlc")
+                return True
+            else:
+                log_warning(
+                    "VLC with audio failed, trying without audio", component="vlc"
+                )
+                return self._start_with_command_vlc_no_audio()
 
         except Exception as e:
             log_error(f"Error with VLC command: {e}", component="vlc")
@@ -393,23 +390,20 @@ class VLCVideoPlayer:
             )
             log_info(f"Launched VLC without audio: {' '.join(cmd)}", component="vlc")
 
-            # Wait up to 3 seconds for VLC to start
-            start_time = time.time()
-            while time.time() - start_time < 3:
-                if self.command_process.poll() is None:
-                    # Process is running
-                    self.is_playing = True
-                    log_info(
-                        "VLC command started successfully without audio", component="vlc"
-                    )
-                    return True
-                # Process has terminated, wait a bit before checking again
-                time.sleep(0.1)
+            # Give VLC time to start
+            time.sleep(3)
 
-            log_error(
-                "VLC command process failed even without audio", component="vlc"
-            )
-            return False
+            if self.command_process.poll() is None:
+                self.is_playing = True
+                log_info(
+                    "VLC command started successfully without audio", component="vlc"
+                )
+                return True
+            else:
+                log_error(
+                    "VLC command process failed even without audio", component="vlc"
+                )
+                return False
 
         except Exception as e:
             log_error(f"Error with VLC command (no audio): {e}", component="vlc")
