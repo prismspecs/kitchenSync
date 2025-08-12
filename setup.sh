@@ -74,39 +74,85 @@ fi
 # --- End OS Optimizations ---
 
 # --- Desktop Environment Configuration ---
-echo "Configuring desktop environment..."
+echo "Configuring desktop environment (disabling panel, desktop icons, setting black background)..."
 
-# Configure LXDE to hide desktop, icons, and menu bar with black background
-echo "Setting up LXDE configuration..."
-mkdir -p ~/.config/lxsession/LXDE-pi
+# ---- disable panel & desktop and force black background ----
+# create autostart override dir
+mkdir -p "$HOME/.config/autostart" "$HOME/.config/lxsession/LXDE-pi"
 
-# Copy the default autostart configuration
-if [ -f /etc/xdg/lxsession/LXDE-pi/autostart ]; then
-    cp /etc/xdg/lxsession/LXDE-pi/autostart ~/.config/lxsession/LXDE-pi/autostart
-else
-    # Create a minimal autostart file if the default doesn't exist
-    cat > ~/.config/lxsession/LXDE-pi/autostart << 'EOF'
-@lxpanel --profile LXDE-pi
-@pcmanfm --desktop --profile LXDE-pi
-@xscreensaver -no-splash
+# create per-user autostart overrides to block system autostarts
+cat > "$HOME/.config/autostart/lxpanel.desktop" <<'EOF'
+[Desktop Entry]
+Type=Application
+Name=lxpanel
+Hidden=true
+X-GNOME-Autostart-enabled=false
 EOF
+
+cat > "$HOME/.config/autostart/pcmanfm.desktop" <<'EOF'
+[Desktop Entry]
+Type=Application
+Name=pcmanfm
+Hidden=true
+X-GNOME-Autostart-enabled=false
+EOF
+
+# copy system autostart if present, then remove the lines to be safe
+if [ -f /etc/xdg/lxsession/LXDE-pi/autostart ]; then
+    cp /etc/xdg/lxsession/LXDE-pi/autostart "$HOME/.config/lxsession/LXDE-pi/autostart"
 fi
 
-# Remove desktop icons and file manager desktop handling
-echo "Disabling desktop icons..."
-sed -i '/@pcmanfm --desktop/d' ~/.config/lxsession/LXDE-pi/autostart
+# remove pcmanfm and lxpanel entries (safe even if not present)
+sed -i '/@pcmanfm --desktop/d' "$HOME/.config/lxsession/LXDE-pi/autostart" 2>/dev/null || true
+sed -i '/@lxpanel --profile LXDE-pi/d' "$HOME/.config/lxsession/LXDE-pi/autostart" 2>/dev/null || true
 
-# Remove the top menu bar (panel)
-echo "Disabling top menu bar..."
-sed -i '/@lxpanel --profile LXDE-pi/d' ~/.config/lxsession/LXDE-pi/autostart
+# ensure black background is set on session start
+grep -qxF '@xsetroot -solid black' "$HOME/.config/lxsession/LXDE-pi/autostart" 2>/dev/null \
+  || echo '@xsetroot -solid black' >> "$HOME/.config/lxsession/LXDE-pi/autostart"
 
-# Set solid black background
-echo "Setting black background..."
-if ! grep -qxF '@xsetroot -solid black' ~/.config/lxsession/LXDE-pi/autostart; then
-    echo '@xsetroot -solid black' >> ~/.config/lxsession/LXDE-pi/autostart
-fi
+# create minimal pcmanfm desktop-settings disable (extra safety)
+mkdir -p "$HOME/.config/pcmanfm/LXDE-pi"
+cat > "$HOME/.config/pcmanfm/LXDE-pi/desktop-items-0.conf" <<'EOF'
+[*]
+show_desktop=0
+EOF
 
 echo "Desktop environment configured for minimal display"
+echo "Changes will take effect after reboot or logout/login"
+
+# Immediate test (if running with display access)
+if [ -n "$DISPLAY" ] || [ "$DISPLAY" = ":0" ]; then
+    echo "Testing desktop changes immediately..."
+    
+    # Set environment variables for X access
+    export DISPLAY=${DISPLAY:-:0}
+    export XAUTHORITY="$HOME/.Xauthority"
+    
+    # Stop currently running desktop processes
+    pkill -f lxpanel 2>/dev/null || true
+    pkill -f pcmanfm 2>/dev/null || true
+    sleep 0.5
+    
+    # Set black root background for current X session
+    DISPLAY=$DISPLAY XAUTHORITY=$XAUTHORITY xsetroot -solid black 2>/dev/null || true
+    
+    # Verify processes are gone
+    if ! pgrep -a lxpanel >/dev/null 2>&1; then
+        echo "✅ lxpanel stopped"
+    else
+        echo "⚠️  lxpanel still running"
+    fi
+    
+    if ! pgrep -a pcmanfm >/dev/null 2>&1; then
+        echo "✅ pcmanfm stopped" 
+    else
+        echo "⚠️  pcmanfm still running"
+    fi
+    
+    echo "Desktop should now show black background with no icons/panel"
+else
+    echo "No display detected - changes will apply on next graphical login"
+fi
 # --- End Desktop Environment Configuration ---
 
 
@@ -177,9 +223,15 @@ echo "- Check status: sudo systemctl status kitchensync"
 echo "- View logs: sudo journalctl -u kitchensync -f"
 echo "- Disable auto-start: sudo systemctl disable kitchensync"
 echo ""
-echo "🖥️  To restore desktop/menu bar:"
-echo "- Delete: ~/.config/lxsession/LXDE-pi/autostart"
-echo "- Then reboot or logout/login"
+echo "🖥️  Desktop Configuration:"
+echo "- Desktop icons/panel: DISABLED"
+echo "- Background: BLACK"
+echo "- To restore: rm ~/.config/autostart/{lxpanel,pcmanfm}.desktop && reboot"
+echo ""
+echo "🔧 Desktop Diagnostics (if issues):"
+echo "- Check autostart: cat ~/.config/lxsession/LXDE-pi/autostart"
+echo "- Check processes: ps aux | grep -E 'lxpanel|pcmanfm'"
+echo "- Manual test: pkill lxpanel pcmanfm; xsetroot -solid black"
 echo ""
 echo "💡 READY FOR DEPLOYMENT! Just plug in USB drive and power on!"
 echo ""
