@@ -122,9 +122,38 @@ class LeaderPi:
                     # Position VLC window on the left side after it starts (debug mode only)
                     if self.config.debug_mode:
                         import threading
+                        import subprocess
 
                         def position_vlc_window():
-                            time.sleep(3)  # Wait for VLC window to appear first
+                            max_wait_time = 5  # seconds
+                            poll_interval = 0.2  # seconds
+                            waited_time = 0
+
+                            while waited_time < max_wait_time:
+                                try:
+                                    # Check if the window exists using wmctrl
+                                    proc = subprocess.run(
+                                        ["wmctrl", "-l"],
+                                        check=True,
+                                        capture_output=True,
+                                        text=True,
+                                    )
+                                    if "VLC media player" in proc.stdout:
+                                        break  # Found it!
+                                except (
+                                    subprocess.CalledProcessError,
+                                    FileNotFoundError,
+                                ):
+                                    # wmctrl not installed or other error, proceed with positioning attempt
+                                    break
+                                time.sleep(poll_interval)
+                                waited_time += poll_interval
+                            else:
+                                log_warning(
+                                    f"VLC window not found after {max_wait_time}s, positioning may fail.",
+                                    component="leader",
+                                )
+
                             try:
                                 import subprocess
 

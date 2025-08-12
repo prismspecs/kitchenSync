@@ -164,10 +164,10 @@ class HTMLDebugOverlay:
         while self.running:
             try:
                 self.update_content()
-                time.sleep(5)  # Update every 5 seconds
+                time.sleep(2)  # Update every 2 seconds
             except Exception as e:
                 log_error(f"HTML update error: {e}", component="overlay")
-                time.sleep(5)
+                time.sleep(2)
 
     def cleanup(self):
         """Clean up resources"""
@@ -208,11 +208,17 @@ class HTMLDebugOverlay:
 
             # Kill any existing Firefox processes first to avoid tab accumulation
             try:
-                subprocess.run(["pkill", "-f", "firefox"], check=False, timeout=5)
-                time.sleep(1)  # Give it time to close
+                p = subprocess.Popen(
+                    ["pkill", "-f", "firefox"],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+                p.wait(timeout=5)  # Wait for pkill to finish
                 self.firefox_opened = False  # Reset flag after killing
-            except:
-                pass
+            except (subprocess.TimeoutExpired, FileNotFoundError):
+                pass  # pkill either timed out or wasn't found, continue
+            except Exception as e:
+                log_warning(f"Error killing firefox: {e}", component="overlay")
 
             # Create a temporary Firefox profile directory
             profile_dir = "/tmp/firefox-debug-profile"
@@ -819,13 +825,13 @@ class HTMLDebugManager:
                 self.overlay.update_content()
 
                 log_info(f"HTML update #{update_count} completed", component="overlay")
-                time.sleep(5)  # Update every 5 seconds
+                time.sleep(2)  # Update every 2 seconds
 
             except Exception as e:
                 log_error(
                     f"Error in HTML update loop #{update_count}: {e}",
                     component="overlay",
                 )
-                time.sleep(5)  # Continue trying
+                time.sleep(2)  # Continue trying
 
         log_info("HTML update loop stopped", component="overlay")

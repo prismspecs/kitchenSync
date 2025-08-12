@@ -333,3 +333,15 @@ The systemd service includes proper environment variables:
 2. **Check VLC errors**: `tail -f /tmp/kitchensync_vlc_stderr.log`  
 3. **Service status**: `systemctl status kitchensync.service`
 4. **Window positioning**: Logs show wmctrl positioning results
+
+
+## future necessities
+
++ Read only root filesystem to prevent disk errors, etc.
++ Remote management
++ Ensure total hardware acceleration
++ Custom OS build: Base on a lightweight Linux (Yocto, Buildroot, or optimized Debian variant) tuned for fast boot, stable VLC playback, and real-time scheduling
++ Network resilience: Robust UDP multicast/broadcast handling, auto-recovery from network drops
++ Systemd integration: Auto-start is mandatory; add watchdog timers to auto-restart on failure Logging & diagnostics: multi-log approach is solid; consider remote log aggregation and alerting for commercial use
++ Ensure wide codec compatibility
++ Secure SSH and network channels; disable unused services to minimize attack surface

@@ -245,7 +245,36 @@ class VLCVideoPlayer:
             import time
 
             # Wait for VLC window to appear
-            time.sleep(3)
+            max_wait_time = 5  # seconds
+            poll_interval = 0.2  # seconds
+            waited_time = 0
+            vlc_window_found = False
+
+            while waited_time < max_wait_time:
+                try:
+                    proc = subprocess.run(
+                        ["wmctrl", "-l"],
+                        check=True,
+                        capture_output=True,
+                        text=True,
+                    )
+                    if (
+                        "vlc" in proc.stdout.lower()
+                        or "test_video" in proc.stdout.lower()
+                    ):
+                        vlc_window_found = True
+                        break  # Found it!
+                except (subprocess.CalledProcessError, FileNotFoundError):
+                    # wmctrl not installed or other error, proceed with positioning attempt
+                    break
+                time.sleep(poll_interval)
+                waited_time += poll_interval
+
+            if not vlc_window_found:
+                log_warning(
+                    f"VLC window not found after {max_wait_time}s for positioning.",
+                    component="vlc",
+                )
 
             # Find VLC windows and force position
             result = subprocess.run(
@@ -324,16 +353,26 @@ class VLCVideoPlayer:
             )
             log_info(f"Launched VLC with audio: {' '.join(cmd)}", component="vlc")
 
-            # Give VLC time to start
-            time.sleep(3)
+            # Wait for VLC to start by polling
+            max_wait_time = 5  # seconds
+            poll_interval = 0.2  # seconds
+            waited_time = 0
+            started_successfully = False
+            while waited_time < max_wait_time:
+                if self.command_process.poll() is None:
+                    started_successfully = True
+                    break
+                time.sleep(poll_interval)
+                waited_time += poll_interval
 
-            if self.command_process.poll() is None:
+            if started_successfully:
                 self.is_playing = True
                 log_info("VLC command started successfully with audio", component="vlc")
                 return True
             else:
                 log_warning(
-                    "VLC with audio failed, trying without audio", component="vlc"
+                    "VLC with audio failed to start, trying without audio",
+                    component="vlc",
                 )
                 return self._start_with_command_vlc_no_audio()
 
@@ -390,10 +429,19 @@ class VLCVideoPlayer:
             )
             log_info(f"Launched VLC without audio: {' '.join(cmd)}", component="vlc")
 
-            # Give VLC time to start
-            time.sleep(3)
+            # Wait for VLC to start by polling
+            max_wait_time = 5  # seconds
+            poll_interval = 0.2  # seconds
+            waited_time = 0
+            started_successfully = False
+            while waited_time < max_wait_time:
+                if self.command_process.poll() is None:
+                    started_successfully = True
+                    break
+                time.sleep(poll_interval)
+                waited_time += poll_interval
 
-            if self.command_process.poll() is None:
+            if started_successfully:
                 self.is_playing = True
                 log_info(
                     "VLC command started successfully without audio", component="vlc"
