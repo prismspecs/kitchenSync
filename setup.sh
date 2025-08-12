@@ -73,36 +73,62 @@ if ! grep -q "boot_delay=0" /boot/config.txt; then
 fi
 # --- End OS Optimizations ---
 
-# --- Desktop Environment: leave defaults; clean previous overrides if any ---
-echo "Ensuring default desktop environment (no overrides)..."
+# --- Desktop Environment: Wayfire/Labwc clean kiosk setup ---
+echo "Configuring Wayfire for clean kiosk mode (no panels, black background)..."
 
-# Remove per-user overrides created by earlier revisions
+# Ensure we have the UI packages and LightDM
+sudo apt update >/dev/null 2>&1 || true
+sudo apt install -y raspberrypi-ui-mods lightdm >/dev/null 2>&1 || true
+sudo systemctl enable --now lightdm >/dev/null 2>&1 || true
+
+# Clean previous overrides created by earlier revisions
 rm -f "$HOME/.config/autostart/lxpanel.desktop" "$HOME/.config/autostart/pcmanfm.desktop" 2>/dev/null || true
 sed -i '/@xsetroot -solid black/d' "$HOME/.config/lxsession/LXDE-pi/autostart" 2>/dev/null || true
 rm -f "$HOME/.config/pcmanfm/LXDE-pi/desktop-items-0.conf" 2>/dev/null || true
 
-# Remove kiosk X service and restore LightDM
+# Remove kiosk X service if it exists
 sudo systemctl disable kitchensync-x.service >/dev/null 2>&1 || true
 sudo systemctl stop kitchensync-x.service >/dev/null 2>&1 || true
 sudo rm -f /etc/systemd/system/kitchensync-x.service 2>/dev/null || true
 sudo systemctl daemon-reload
-sudo systemctl enable lightdm.service >/dev/null 2>&1 || true
-
-# Remove user .xinitrc that kiosk mode created
 rm -f "$HOME/.xinitrc" 2>/dev/null || true
-# --- End Desktop Environment cleanup ---
+
+# Configure Wayfire for clean kiosk (no panels, black background)
+mkdir -p "$HOME/.config"
+cat > "$HOME/.config/wayfire.ini" <<'EOF'
+[core]
+plugins = hide-cursor
+
+[background]
+color = 0 0 0
+EOF
+
+# Create KitchenSync autostart .desktop file
+mkdir -p "$HOME/.config/autostart"
+cat > "$HOME/.config/autostart/kitchensync.desktop" <<EOF
+[Desktop Entry]
+Type=Application
+Name=KitchenSync
+Exec=python3 $(pwd)/kitchensync.py
+X-GNOME-Autostart-enabled=true
+EOF
+
+# Disable the user systemd service since we're using .desktop autostart
+systemctl --user disable kitchensync.service >/dev/null 2>&1 || true
+
+echo "Wayfire configured for kiosk mode with KitchenSync autostart"
+# --- End Desktop Environment configuration ---
 
 
-# Setup auto-start service
-echo "Setting up auto-start service..."
+# Setup backup auto-start service (disabled by default, using .desktop instead)
+echo "Setting up backup auto-start service (disabled)..."
 mkdir -p ~/.config/systemd/user
 cp kitchensync.service ~/.config/systemd/user/
 sed -i "s/kitchensync/$USER/g" ~/.config/systemd/user/kitchensync.service
 sed -i "s|/home/kitchensync/kitchenSync|$(pwd)|g" ~/.config/systemd/user/kitchensync.service
 systemctl --user daemon-reload
-systemctl --user enable kitchensync.service
 
-echo "Auto-start service installed. KitchenSync will start automatically on boot."
+echo "Auto-start via .desktop file configured. KitchenSync will start automatically on login."
 
 # Test networking imports after cleanup
 echo ""
@@ -131,7 +157,7 @@ echo ""
 echo "Video player: VLC"
 echo "Python packages installed system-wide"
 echo "🔄 Auto-start service: ENABLED"
-echo "🖥️  Desktop: Unmodified"
+echo "🖥️  Desktop: Wayfire kiosk mode (black background, no panels)"
 echo ""
 echo "🚀 PLUG-AND-PLAY OPERATION:"
 echo "1. Create kitchensync.ini on your USB drive with:"
