@@ -122,34 +122,38 @@ class LeaderPi:
                     # Position VLC window on the left side after it starts (debug mode only)
                     if self.config.debug_mode:
                         import threading
-                        import subprocess
 
                         def position_vlc_window():
-                            # This function now uses a simpler, more direct approach.
-                            # It waits a fixed short time for VLC to start, then issues
-                            # a command to move any window with "VLC media player" in its title.
-                            # This is more robust than polling for a window that may not be ready.
-                            time.sleep(1.5)  # A reasonable delay for VLC to launch
+                            time.sleep(0.1)  # A small delay is likely still needed
                             try:
+                                import subprocess
+
                                 result = subprocess.run(
                                     [
                                         "wmctrl",
-                                        "-r",  # Find window by title
+                                        "-r",
                                         "VLC media player",
                                         "-e",
-                                        "0,0,0,1280,1080",  # Gravity,X,Y,W,H
+                                        "0,0,0,1280,1080",
                                     ],
-                                    check=True,
+                                    check=False,
                                     timeout=5,
-                                    capture_output=True,
+                                    stdout=subprocess.DEVNULL,
+                                    stderr=subprocess.DEVNULL,
                                 )
-                                log_info(
-                                    "Positioned VLC window on left side using title.",
-                                    component="leader",
-                                )
+                                if result.returncode == 0:
+                                    log_info(
+                                        "Positioned VLC window on left side",
+                                        component="leader",
+                                    )
+                                else:
+                                    log_warning(
+                                        "Could not position VLC window. This might be okay if VLC is already positioned.",
+                                        component="leader",
+                                    )
                             except Exception as e:
                                 log_warning(
-                                    f"Could not position VLC window by title. It might already be positioned or the title is unexpected. Error: {e}",
+                                    f"Failed to position VLC window: {e}",
                                     component="leader",
                                 )
 

@@ -164,10 +164,10 @@ class HTMLDebugOverlay:
         while self.running:
             try:
                 self.update_content()
-                time.sleep(2)  # Update every 2 seconds
+                time.sleep(5)  # Update every 5 seconds
             except Exception as e:
                 log_error(f"HTML update error: {e}", component="overlay")
-                time.sleep(2)
+                time.sleep(5)
 
     def cleanup(self):
         """Clean up resources"""
@@ -208,17 +208,11 @@ class HTMLDebugOverlay:
 
             # Kill any existing Firefox processes first to avoid tab accumulation
             try:
-                p = subprocess.Popen(
-                    ["pkill", "-f", "firefox"],
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                )
-                p.wait(timeout=5)  # Wait for pkill to finish
+                subprocess.run(["pkill", "-f", "firefox"], check=False, timeout=5)
+                time.sleep(1)  # Give it time to close
                 self.firefox_opened = False  # Reset flag after killing
-            except (subprocess.TimeoutExpired, FileNotFoundError):
-                pass  # pkill either timed out or wasn't found, continue
-            except Exception as e:
-                log_warning(f"Error killing firefox: {e}", component="overlay")
+            except:
+                pass
 
             # Create a temporary Firefox profile directory
             profile_dir = "/tmp/firefox-debug-profile"
@@ -246,29 +240,82 @@ class HTMLDebugOverlay:
 
             # Position window after a short delay (in background thread)
             def position_window():
-                # A simple, direct approach to positioning the Firefox window.
-                # It waits a fixed time for the window to appear and then moves it.
-                time.sleep(2.0)  # Wait for Firefox to open and settle
-                try:
-                    subprocess.run(
-                        [
-                            "wmctrl",
-                            "-r",  # Find window by title
-                            "KitchenSync",  # This should be part of the title
-                            "-e",
-                            "0,1280,0,640,1080",  # Gravity,X,Y,W,H
-                        ],
-                        check=True,
-                        timeout=5,
-                        capture_output=True,
-                    )
-                    log_info(
-                        "Positioned Firefox window on right side.",
-                        component="overlay",
-                    )
-                except Exception as e:
+                max_wait_seconds = 30
+                start_time = time.time()
+                firefox_window_id = None
+
+                log_info("Starting to poll for Firefox window...", component="overlay")
+
+                while time.time() - start_time < max_wait_seconds:
+                    try:
+                        # Get list of all windows and find Firefox
+                        result = subprocess.run(
+                            ["wmctrl", "-l"], capture_output=True, text=True, timeout=5
+                        )
+
+                        if result.returncode == 0:
+                            for line in result.stdout.strip().split("\n"):
+                                if line and (
+                                    "firefox" in line.lower()
+                                    or "kitchensync" in line.lower()
+                                ):
+                                    if (
+                                        "vlc" not in line.lower()
+                                        and "media player" not in line.lower()
+                                    ):
+                                        window_id = line.split()[0]
+                                        firefox_window_id = window_id
+                                        log_info(
+                                            f"Found Firefox window: {line.strip()}",
+                                            component="overlay",
+                                        )
+                                        break  # Exit the for loop
+
+                        if firefox_window_id:
+                            break  # Exit the while loop
+
+                    except Exception as e:
+                        log_warning(
+                            f"Error while polling for window: {e}", component="overlay"
+                        )
+
+                    time.sleep(1)  # Wait 1 second before polling again
+
+                if firefox_window_id:
+                    try:
+                        # Position using window ID instead of title
+                        pos_result = subprocess.run(
+                            [
+                                "wmctrl",
+                                "-i",
+                                "-r",
+                                firefox_window_id,
+                                "-e",
+                                "0,1280,0,640,1080",
+                            ],
+                            check=False,
+                            timeout=5,
+                            stdout=subprocess.DEVNULL,
+                            stderr=subprocess.DEVNULL,
+                        )
+                        if pos_result.returncode == 0:
+                            log_info(
+                                f"Positioned Firefox window on right side using window ID: {firefox_window_id}",
+                                component="overlay",
+                            )
+                        else:
+                            log_warning(
+                                f"Failed to position Firefox window with ID: {firefox_window_id}",
+                                component="overlay",
+                            )
+                    except Exception as e:
+                        log_warning(
+                            f"Exception while positioning Firefox window: {e}",
+                            component="overlay",
+                        )
+                else:
                     log_warning(
-                        f"Could not position Firefox window by title. Error: {e}",
+                        f"Could not find Firefox window after {max_wait_seconds} seconds.",
                         component="overlay",
                     )
 
@@ -772,13 +819,13 @@ class HTMLDebugManager:
                 self.overlay.update_content()
 
                 log_info(f"HTML update #{update_count} completed", component="overlay")
-                time.sleep(2)  # Update every 2 seconds
+                time.sleep(5)  # Update every 5 seconds
 
             except Exception as e:
                 log_error(
                     f"Error in HTML update loop #{update_count}: {e}",
                     component="overlay",
                 )
-                time.sleep(2)  # Continue trying
+                time.sleep(5)  # Continue trying
 
         log_info("HTML update loop stopped", component="overlay")
