@@ -62,7 +62,6 @@ def snapshot_env() -> Dict[str, str]:
         "DISPLAY",
         "XDG_SESSION_TYPE",
         "XDG_RUNTIME_DIR",
-        "SDL_VIDEODRIVER",
         "WAYLAND_DISPLAY",
         "XAUTHORITY",
     ]

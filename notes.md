@@ -16,7 +16,6 @@ pkill vlc
 
 # Clean up debug terminals MORE CAREFULLY (avoid killing SSH session)
 pkill -f "KitchenSync Debug"
-pkill -f pygame
 # Only kill terminals with specific debug titles, not all terminals
 wmctrl -c "KitchenSync Debug" 2>/dev/null || true
 pkill -f "tmp.*kitchensync.*\.sh"  # Only kill kitchensync temp scripts

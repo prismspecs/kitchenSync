@@ -142,7 +142,7 @@ cd kitchenSync
 
 # Install dependencies 
 sudo apt install -y vlc libvlc-dev python3-vlc python3-pip python3-dev libasound2-dev
-sudo pip install python-rtmidi python-vlc pygame --break-system-packages
+sudo pip install python-rtmidi python-vlc --break-system-packages
 
 # Enable service on ALL Pis
 sudo cp kitchensync.service /etc/systemd/system/
@@ -577,7 +577,7 @@ debug = true  # Can be overridden by leader
 
 **Features:**
 - Leader Pi enables debug mode for all connected collaborators
-- Automatic pygame-based overlay when available
+- HTML-based debug overlay in browser
 - Fallback to console output when GUI not available
 - Monospace font for consistent display formatting
 - 10 FPS update rate to minimize performance impact

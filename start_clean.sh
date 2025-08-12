@@ -8,16 +8,16 @@ set -e  # Exit on any error
 # Log startup attempt
 echo "$(date): KitchenSync startup initiated" >> /tmp/kitchensync_startup.log
 
+# Resolve project directory relative to this script
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
+
 # Set up X11 display environment variables
-export DISPLAY=:0
-export XAUTHORITY=/home/kitchensync/.Xauthority
-export XDG_RUNTIME_DIR=/run/user/1000
+export DISPLAY=${DISPLAY:-:0}
+export XAUTHORITY=${XAUTHORITY:-"$HOME/.Xauthority"}
+# XDG_RUNTIME_DIR is typically set by user services; do not override if present
+export XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-"/run/user/$(id -u)"}
 
-# SDL video driver settings for pygame/overlay
-export SDL_VIDEODRIVER=x11
-
-# Ensure we're in the right directory
-cd /home/kitchensync/kitchenSync
 
 # Log environment and directory
 echo "$(date): Working directory: $(pwd)" >> /tmp/kitchensync_startup.log

@@ -37,11 +37,6 @@ try:
 except ImportError:
     print('   ✗ python-rtmidi not available')
 
-try:
-    import pygame
-    print('   ✓ pygame available')
-except ImportError:
-    print('   ✗ pygame not available')
 "
 
 # Test 4: Check systemd service
