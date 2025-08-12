@@ -138,35 +138,64 @@ class LeaderPi:
                                 start_time = time.time()
                                 success = False
 
+                                # 1. Wait for the window to exist
                                 while time.time() - start_time < timeout:
-                                    # Use wmctrl to find and resize the window
-                                    result = subprocess.run(
-                                        [
-                                            "wmctrl",
-                                            "-r",
-                                            "VLC media player",
-                                            "-e",
-                                            "0,0,0,1280,1080",
-                                        ],
-                                        check=False,
-                                        timeout=5,
-                                        stdout=subprocess.DEVNULL,
-                                        stderr=subprocess.DEVNULL,
-                                    )
-                                    if result.returncode == 0:
-                                        log_info(
-                                            "Positioned VLC window on left side",
+                                    try:
+                                        wmctrl_list = subprocess.run(
+                                            ["wmctrl", "-l"],
+                                            capture_output=True,
+                                            text=True,
+                                            timeout=2,
+                                        )
+                                        if (
+                                            wmctrl_list.returncode == 0
+                                            and "VLC media player" in wmctrl_list.stdout
+                                        ):
+                                            log_info(
+                                                "Found 'VLC media player' window.",
+                                                component="leader",
+                                            )
+                                            success = True
+                                            break
+                                    except Exception:
+                                        # Ignore exceptions during polling
+                                        pass
+                                    time.sleep(poll_interval)
+
+                                # 2. If found, try to move and resize it
+                                if success:
+                                    try:
+                                        result = subprocess.run(
+                                            [
+                                                "wmctrl",
+                                                "-r",
+                                                "VLC media player",
+                                                "-e",
+                                                "0,0,0,1280,1080",
+                                            ],
+                                            check=False,
+                                            timeout=5,
+                                            stdout=subprocess.DEVNULL,
+                                            stderr=subprocess.DEVNULL,
+                                        )
+                                        if result.returncode == 0:
+                                            log_info(
+                                                "Successfully positioned VLC window.",
+                                                component="leader",
+                                            )
+                                        else:
+                                            log_warning(
+                                                "Found VLC window, but failed to position it.",
+                                                component="leader",
+                                            )
+                                    except Exception as e:
+                                        log_warning(
+                                            f"Error positioning VLC window: {e}",
                                             component="leader",
                                         )
-                                        success = True
-                                        break
-                                    else:
-                                        # Wait and try again if window not found
-                                        time.sleep(poll_interval)
-
-                                if not success:
+                                else:
                                     log_warning(
-                                        "Could not position VLC window after timeout.",
+                                        "Could not find VLC window after timeout.",
                                         component="leader",
                                     )
                             except Exception as e:
