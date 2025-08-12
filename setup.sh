@@ -73,87 +73,24 @@ if ! grep -q "boot_delay=0" /boot/config.txt; then
 fi
 # --- End OS Optimizations ---
 
-# --- Desktop Environment Configuration ---
-echo "Configuring desktop environment (disabling panel, desktop icons, setting black background)..."
+# --- Desktop Environment: leave defaults; clean previous overrides if any ---
+echo "Ensuring default desktop environment (no overrides)..."
 
-# ---- disable panel & desktop and force black background ----
-# create autostart override dir
-mkdir -p "$HOME/.config/autostart" "$HOME/.config/lxsession/LXDE-pi"
+# Remove per-user overrides created by earlier revisions
+rm -f "$HOME/.config/autostart/lxpanel.desktop" "$HOME/.config/autostart/pcmanfm.desktop" 2>/dev/null || true
+sed -i '/@xsetroot -solid black/d' "$HOME/.config/lxsession/LXDE-pi/autostart" 2>/dev/null || true
+rm -f "$HOME/.config/pcmanfm/LXDE-pi/desktop-items-0.conf" 2>/dev/null || true
 
-# create per-user autostart overrides to block system autostarts
-cat > "$HOME/.config/autostart/lxpanel.desktop" <<'EOF'
-[Desktop Entry]
-Type=Application
-Name=lxpanel
-Hidden=true
-X-GNOME-Autostart-enabled=false
-EOF
+# Remove kiosk X service and restore LightDM
+sudo systemctl disable kitchensync-x.service >/dev/null 2>&1 || true
+sudo systemctl stop kitchensync-x.service >/dev/null 2>&1 || true
+sudo rm -f /etc/systemd/system/kitchensync-x.service 2>/dev/null || true
+sudo systemctl daemon-reload
+sudo systemctl enable lightdm.service >/dev/null 2>&1 || true
 
-cat > "$HOME/.config/autostart/pcmanfm.desktop" <<'EOF'
-[Desktop Entry]
-Type=Application
-Name=pcmanfm
-Hidden=true
-X-GNOME-Autostart-enabled=false
-EOF
-
-# copy system autostart if present, then remove the lines to be safe
-if [ -f /etc/xdg/lxsession/LXDE-pi/autostart ]; then
-    cp /etc/xdg/lxsession/LXDE-pi/autostart "$HOME/.config/lxsession/LXDE-pi/autostart"
-fi
-
-# remove pcmanfm and lxpanel entries (safe even if not present)
-sed -i '/@pcmanfm --desktop/d' "$HOME/.config/lxsession/LXDE-pi/autostart" 2>/dev/null || true
-sed -i '/@lxpanel --profile LXDE-pi/d' "$HOME/.config/lxsession/LXDE-pi/autostart" 2>/dev/null || true
-
-# ensure black background is set on session start
-grep -qxF '@xsetroot -solid black' "$HOME/.config/lxsession/LXDE-pi/autostart" 2>/dev/null \
-  || echo '@xsetroot -solid black' >> "$HOME/.config/lxsession/LXDE-pi/autostart"
-
-# create minimal pcmanfm desktop-settings disable (extra safety)
-mkdir -p "$HOME/.config/pcmanfm/LXDE-pi"
-cat > "$HOME/.config/pcmanfm/LXDE-pi/desktop-items-0.conf" <<'EOF'
-[*]
-show_desktop=0
-EOF
-
-echo "Desktop environment configured for minimal display"
-echo "Changes will take effect after reboot or logout/login"
-
-# Immediate test (if running with display access)
-if [ -n "$DISPLAY" ] || [ "$DISPLAY" = ":0" ]; then
-    echo "Testing desktop changes immediately..."
-    
-    # Set environment variables for X access
-    export DISPLAY=${DISPLAY:-:0}
-    export XAUTHORITY="$HOME/.Xauthority"
-    
-    # Stop currently running desktop processes
-    pkill -f lxpanel 2>/dev/null || true
-    pkill -f pcmanfm 2>/dev/null || true
-    sleep 0.5
-    
-    # Set black root background for current X session
-    DISPLAY=$DISPLAY XAUTHORITY=$XAUTHORITY xsetroot -solid black 2>/dev/null || true
-    
-    # Verify processes are gone
-    if ! pgrep -a lxpanel >/dev/null 2>&1; then
-        echo "✅ lxpanel stopped"
-    else
-        echo "⚠️  lxpanel still running"
-    fi
-    
-    if ! pgrep -a pcmanfm >/dev/null 2>&1; then
-        echo "✅ pcmanfm stopped" 
-    else
-        echo "⚠️  pcmanfm still running"
-    fi
-    
-    echo "Desktop should now show black background with no icons/panel"
-else
-    echo "No display detected - changes will apply on next graphical login"
-fi
-# --- End Desktop Environment Configuration ---
+# Remove user .xinitrc that kiosk mode created
+rm -f "$HOME/.xinitrc" 2>/dev/null || true
+# --- End Desktop Environment cleanup ---
 
 
 # Setup auto-start service
@@ -194,7 +131,7 @@ echo ""
 echo "Video player: VLC"
 echo "Python packages installed system-wide"
 echo "🔄 Auto-start service: ENABLED"
-echo "🖥️  Desktop: Hidden (icons, menu bar, black background)"
+echo "🖥️  Desktop: Unmodified"
 echo ""
 echo "🚀 PLUG-AND-PLAY OPERATION:"
 echo "1. Create kitchensync.ini on your USB drive with:"
@@ -223,97 +160,9 @@ echo "- Check status: sudo systemctl status kitchensync"
 echo "- View logs: sudo journalctl -u kitchensync -f"
 echo "- Disable auto-start: sudo systemctl disable kitchensync"
 echo ""
-echo "🖥️  Desktop Configuration:"
-echo "- Desktop icons/panel: DISABLED"
-echo "- Background: BLACK"
-echo "- To restore: rm ~/.config/autostart/{lxpanel,pcmanfm}.desktop && reboot"
-echo ""
-echo "🔧 Desktop Diagnostics (if issues):"
-echo "- Check autostart: cat ~/.config/lxsession/LXDE-pi/autostart"
-echo "- Check processes: ps aux | grep -E 'lxpanel|pcmanfm'"
-echo "- Manual test: pkill lxpanel pcmanfm; xsetroot -solid black"
-echo ""
+:
 echo "💡 READY FOR DEPLOYMENT! Just plug in USB drive and power on!"
 echo ""
 
-# --- Minimal X Session (Kiosk Mode) Option ---
-echo "Configuring Minimal X session (kiosk mode) to avoid LXDE entirely..."
-
-# Install minimal X stack and lightweight WM
-sudo apt-get update -y >/dev/null 2>&1 || true
-sudo apt-get install -y xorg xinit openbox >/dev/null 2>&1 || true
-
-# Create systemd service to start X on tty1 for the current user
-KSYNC_USER="$USER"
-KSYNC_HOME="$(eval echo ~${KSYNC_USER})"
-KSYNC_APP_DIR="$(pwd)"
-
-KSYNC_SERVICE_PATH="/etc/systemd/system/kitchensync-x.service"
-sudo bash -c "cat > ${KSYNC_SERVICE_PATH} <<EOF
-[Unit]
-Description=KitchenSync X session (kiosk)
-After=systemd-user-sessions.service systemd-logind.service getty@tty1.service
-Wants=getty@tty1.service systemd-logind.service
-
-[Service]
-User=${KSYNC_USER}
-Environment=HOME=${KSYNC_HOME}
-Environment=XDG_SESSION_TYPE=x11
-Environment=XDG_RUNTIME_DIR=/run/user/1000
-PAMName=login
-TTYPath=/dev/tty1
-StandardInput=tty
-StandardOutput=journal
-WorkingDirectory=${KSYNC_APP_DIR}
-# Start X using xinit directly with explicit server options on vt1
-ExecStart=/usr/bin/xinit ${KSYNC_HOME}/.xinitrc -- :0 -nolisten tcp vt1 -keeptty -verbose 3
-Restart=always
-RestartSec=2
-
-[Install]
-WantedBy=multi-user.target
-EOF"
-
-# Write a minimal .xinitrc for the user
-cat > "${KSYNC_HOME}/.xinitrc" <<EOF
-#!/bin/sh
-# Minimal X session for KitchenSync
-
-# make root background black
-xsetroot -solid black
-
-# disable DPMS / screen blanking
-xset s off
-xset -dpms
-
-# Start a tiny window manager (optional)
-openbox-session &
-
-# small delay to let WM initialize
-sleep 0.5
-
-# Start KitchenSync app
-export DISPLAY=:0
-exec /usr/bin/python3 ${KSYNC_APP_DIR}/kitchensync.py
-EOF
-
-sudo chown ${KSYNC_USER}:${KSYNC_USER} "${KSYNC_HOME}/.xinitrc"
-chmod +x "${KSYNC_HOME}/.xinitrc"
-
-# Enable the kiosk X service
-sudo systemctl daemon-reload
-sudo systemctl enable kitchensync-x.service
-sudo systemctl start kitchensync-x.service || true
-
-# Disable the previous user service to avoid double-launch
-systemctl --user disable kitchensync.service >/dev/null 2>&1 || true
-
-# Disable LightDM display manager to prevent LXDE from starting (safe for kiosk)
-sudo systemctl disable lightdm.service >/dev/null 2>&1 || true
-
-echo "Kiosk X session configured: kitchensync-x.service enabled, LightDM disabled."
-echo "If you are at a CLI now, the service should start X shortly (or after reboot)."
-echo "Reboot to start in kiosk mode (no LXDE, black background, no panel/icons)."
-echo "Rollback (SSH): sudo systemctl disable kitchensync-x && sudo systemctl enable lightdm && sudo reboot"
-echo "Debug: sudo systemctl status kitchensync-x.service; journalctl -u kitchensync-x -b -e | tail -n 100"
+:
 
