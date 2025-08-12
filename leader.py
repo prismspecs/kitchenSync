@@ -167,30 +167,43 @@ class LeaderPi:
                                 )
                                 return
 
-                            # Now, position the window using its ID
-                            try:
-                                result = subprocess.run(
-                                    [
-                                        "wmctrl",
-                                        "-i",  # Use window ID
-                                        "-r",
-                                        window_id,
-                                        "-e",
-                                        "0,0,0,1280,1080",  # Gravity,X,Y,W,H
-                                    ],
-                                    check=True,
-                                    timeout=5,
-                                    capture_output=True,
-                                )
-                                log_info(
-                                    f"Positioned VLC window {window_id} on left side",
-                                    component="leader",
-                                )
-                            except Exception as e:
-                                log_warning(
-                                    f"Failed to position VLC window with ID {window_id}: {e}",
-                                    component="leader",
-                                )
+                            # Give the window manager a moment to settle
+                            time.sleep(0.5)
+
+                            # Now, try to position the window, with retries
+                            max_retries = 5
+                            for i in range(max_retries):
+                                try:
+                                    result = subprocess.run(
+                                        [
+                                            "wmctrl",
+                                            "-i",  # Use window ID
+                                            "-r",
+                                            window_id,
+                                            "-e",
+                                            "0,0,0,1280,1080",  # Gravity,X,Y,W,H
+                                        ],
+                                        check=True,
+                                        timeout=5,
+                                        capture_output=True,
+                                    )
+                                    log_info(
+                                        f"Positioned VLC window {window_id} on left side",
+                                        component="leader",
+                                    )
+                                    return  # Success, exit the function
+                                except Exception as e:
+                                    log_warning(
+                                        f"Attempt {i+1} to position VLC window failed: {e}",
+                                        component="leader",
+                                    )
+                                    if i < max_retries - 1:
+                                        time.sleep(0.5)  # Wait before retrying
+
+                            log_error(
+                                "Failed to position VLC window after multiple retries.",
+                                component="leader",
+                            )
 
                         threading.Thread(
                             target=position_vlc_window, daemon=True
