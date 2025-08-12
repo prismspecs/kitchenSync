@@ -235,3 +235,79 @@ echo "- Manual test: pkill lxpanel pcmanfm; xsetroot -solid black"
 echo ""
 echo "💡 READY FOR DEPLOYMENT! Just plug in USB drive and power on!"
 echo ""
+
+# --- Minimal X Session (Kiosk Mode) Option ---
+echo "Configuring Minimal X session (kiosk mode) to avoid LXDE entirely..."
+
+# Install minimal X stack and lightweight WM
+sudo apt-get update -y >/dev/null 2>&1 || true
+sudo apt-get install -y xorg xinit openbox >/dev/null 2>&1 || true
+
+# Create systemd service to start X on tty1 for the current user
+KSYNC_USER="$USER"
+KSYNC_HOME="$(eval echo ~${KSYNC_USER})"
+KSYNC_APP_DIR="$(pwd)"
+
+KSYNC_SERVICE_PATH="/etc/systemd/system/kitchensync-x.service"
+sudo bash -c "cat > ${KSYNC_SERVICE_PATH} <<EOF
+[Unit]
+Description=KitchenSync X session (kiosk)
+After=systemd-user-sessions.service getty@tty1.service
+Wants=getty@tty1.service
+
+[Service]
+User=${KSYNC_USER}
+Environment=XDG_SESSION_TYPE=x11
+PAMName=login
+TTYPath=/dev/tty1
+StandardInput=tty
+StandardOutput=inherit
+WorkingDirectory=${KSYNC_APP_DIR}
+ExecStart=/usr/bin/startx
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target
+EOF"
+
+# Write a minimal .xinitrc for the user
+cat > "${KSYNC_HOME}/.xinitrc" <<EOF
+#!/bin/sh
+# Minimal X session for KitchenSync
+
+# make root background black
+xsetroot -solid black
+
+# disable DPMS / screen blanking
+xset s off
+xset -dpms
+
+# Start a tiny window manager (optional)
+openbox-session &
+
+# small delay to let WM initialize
+sleep 0.5
+
+# Start KitchenSync app
+export DISPLAY=:0
+exec /usr/bin/python3 ${KSYNC_APP_DIR}/kitchensync.py
+EOF
+
+sudo chown ${KSYNC_USER}:${KSYNC_USER} "${KSYNC_HOME}/.xinitrc"
+chmod +x "${KSYNC_HOME}/.xinitrc"
+
+# Enable the kiosk X service
+sudo systemctl daemon-reload
+sudo systemctl enable kitchensync-x.service
+
+# Disable the previous user service to avoid double-launch
+systemctl --user disable kitchensync.service >/dev/null 2>&1 || true
+
+# Disable LightDM display manager to prevent LXDE from starting (safe for kiosk)
+sudo systemctl disable lightdm.service >/dev/null 2>&1 || true
+
+echo "Kiosk X session configured: kitchensync-x.service enabled, LightDM disabled."
+echo "Reboot to start in kiosk mode (no LXDE, black background, no panel/icons)."
+echo "Rollback (SSH): sudo systemctl disable kitchensync-x && sudo systemctl enable lightdm && sudo reboot"
+
