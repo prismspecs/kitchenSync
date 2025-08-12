@@ -211,7 +211,7 @@ The system features a clean, consolidated debug architecture:
   - Enhanced error handling for OS module scope issues
 
 **Collaborator Pi (Simple Debug Overlay)**
-- `HTMLDebugManager` - HTML-based debug overlay system
+- `SimpleDebugManager` - Lightweight debug overlay system
 - File-based fallback for reliable systemd service operation
 - Real-time MIDI and video synchronization status
 - Minimal resource footprint for Pi deployment
@@ -251,7 +251,7 @@ What to check after reboot:
 
 3) If overlay is blank
    - `tail -n 200 /tmp/kitchensync_debug_leader-pi.txt`
-- Confirms overlay updates, current time, MIDI info; HTML overlay via browser
+   - Confirms overlay updates, current time, MIDI info; indicates pygame/display fallbacks
 
 4) If no logs appear at all
    - Check emergency startup log: `cat /tmp/kitchensync_startup.log`
@@ -259,7 +259,7 @@ What to check after reboot:
 
 Notes
 - Logs are appended with timestamps; they survive until next reboot or manual cleanup.
-- Environment snapshot includes `DISPLAY`, `XDG_SESSION_TYPE`, `XDG_RUNTIME_DIR`, `WAYLAND_DISPLAY`, `XAUTHORITY`.
+- Environment snapshot includes `DISPLAY`, `XDG_SESSION_TYPE`, `XDG_RUNTIME_DIR`, `SDL_VIDEODRIVER`, `WAYLAND_DISPLAY`, `XAUTHORITY`.
 - Emergency logging ensures startup issues are captured even if main logging fails.
 
 ## Testing and Deployment (2025-08)

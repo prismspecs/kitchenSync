@@ -16,6 +16,7 @@ RestartSec=10
 Environment=DISPLAY=:0
 Environment=XAUTHORITY=/home/kitchensync/.Xauthority
 Environment=XDG_RUNTIME_DIR=/run/user/1000
+Environment=SDL_VIDEODRIVER=x11
 
 # Wait for desktop to be ready
 ExecStartPre=/bin/sleep 30

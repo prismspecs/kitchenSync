@@ -20,7 +20,7 @@ from networking import SyncReceiver, CommandListener
 from midi import MidiScheduler, MidiManager
 from core import SystemState, SyncTracker
 from core.logger import log_info, log_warning, log_error
-from debug.html_overlay import HTMLDebugManager
+from debug.simple_overlay import SimpleDebugManager
 
 
 class CollaboratorPi:
@@ -58,7 +58,7 @@ class CollaboratorPi:
             log_warning("No video file found at startup", component="collaborator")
 
         # Delay overlay creation until after VLC window exists (start_playback)
-        self.html_debug = None
+        self.simple_debug = None
 
         # Sync settings
         self.sync_tolerance = self.config.getfloat("sync_tolerance", 1.0)
@@ -168,20 +168,18 @@ class CollaboratorPi:
             self.video_player.start_playback()
 
         # Create overlay after VLC window exists
-        if self.config.debug_mode and self.html_debug is None:
-            self.html_debug = HTMLDebugManager(
-                self.config.device_id, self.video_player, self.midi_scheduler
+        if self.config.debug_mode and self.simple_debug is None:
+            self.simple_debug = SimpleDebugManager(
+                self.config.device_id, is_leader=False
             )
-            # Start the HTML overlay manager (opens browser and begins updates)
-            self.html_debug.start()
-            if self.html_debug.overlay:
+            if self.simple_debug.overlay:
                 log_info(
-                    f"HTML overlay created for {self.config.device_id}",
+                    f"Simple overlay created for {self.config.device_id}",
                     component="debug",
                 )
             else:
                 log_error(
-                    f"Failed to create HTML overlay for {self.config.device_id}",
+                    f"Failed to create overlay for {self.config.device_id}",
                     component="debug",
                 )
 
@@ -334,7 +332,7 @@ class CollaboratorPi:
                         )
 
                         # Update visual overlay
-                        if self.html_debug and self.html_debug.overlay:
+                        if self.simple_debug and self.simple_debug.overlay:
                             video_file = self.video_player.video_path or "Unknown"
 
                             # Get loop information
@@ -347,7 +345,7 @@ class CollaboratorPi:
                             midi_stats = self.midi_scheduler.get_stats()
                             midi_loop_count = midi_stats.get("loop_count", 0)
 
-                            self.html_debug.update_debug_info(
+                            self.simple_debug.update_debug_info(
                                 video_file=video_file,
                                 current_time=current_time,
                                 total_time=video_duration,
@@ -379,8 +377,8 @@ class CollaboratorPi:
 
         self.video_player.cleanup()
         self.midi_manager.cleanup()
-        if self.html_debug:
-            self.html_debug.cleanup()
+        if self.simple_debug:
+            self.simple_debug.cleanup()
         log_info("Cleanup completed", component="collaborator")
 
 
