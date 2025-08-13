@@ -9,7 +9,7 @@ I am developing this on a separate computer than the one on which it will run. C
 ## Technical Stack
 
 - **Language:** Python 3 (system-wide installation, no virtual environment)
-- **Media Player:** VLC with Python bindings for precise control and drift correction
+- **Media Player:** VLC with Python bindings (consolidated approach for both leader and collaborator)
 - **MIDI Library:** python-rtmidi for USB MIDI interface communication
 - **Networking:** UDP broadcast for time sync and control commands
 - **Hardware:** Raspberry Pi 4 (recommended) + USB MIDI interfaces
@@ -37,7 +37,7 @@ I am developing this on a separate computer than the one on which it will run. C
 
 **leader.py** - Leader Pi coordinator
 
-- Video playbook with VLC Python bindings
+- Video playback with Python VLC bindings (unified approach)
 - Time sync broadcasting (UDP port 5005)
 - Collaborator Pi registration and heartbeat monitoring
 - Interactive user interface with schedule editor
@@ -47,12 +47,12 @@ I am developing this on a separate computer than the one on which it will run. C
 **collaborator.py** - Collaborator Pi worker
 
 - Time sync reception and drift correction
-- VLC-based synchronized video playback
+- Python VLC-based synchronized video playback (same method as leader)
 - MIDI output via USB interfaces
 - Advanced median filtering for sync accuracy
 - Automatic leader discovery and registration
 - Heartbeat status reporting
- - Simplified mode (current): no start/stop commands; auto-starts playback on first timecode packet and continuously maintains sync from leader broadcasts
+- Simplified mode (current): no start/stop commands; auto-starts playback on first timecode packet and continuously maintains sync from leader broadcasts
 
 **kitchensync.service** - Systemd service
 
@@ -72,11 +72,12 @@ I am developing this on a separate computer than the one on which it will run. C
 
 **Video Synchronization Technology**
 
-- Python VLC bindings for programmatic control
+- Unified Python VLC bindings for all nodes (leader and collaborator)
 - Median deviation filtering to eliminate false corrections
 - Intelligent pause-during-correction for large deviations
 - Configurable thresholds and grace periods
 - Real-time position tracking and drift compensation
+- Consistent seeking behavior across all Pis
 
 **Network Architecture**
 
@@ -108,15 +109,17 @@ I am developing this on a separate computer than the one on which it will run. C
 - ✅ Comprehensive error handling and status reporting
 - ✅ Interactive schedule editor and system control interface
 - ✅ Production-ready deployment workflow
+- ✅ Consolidated VLC approach - both leader and collaborator use identical Python VLC method
 
 ### Technical Achievements
 
-- **Modern Video Engine**: Migrated to VLC for cross-platform compatibility
+- **Unified Video Engine**: Consolidated Python VLC approach for all nodes ensures consistent behavior
 - **Professional USB Handling**: Enterprise-grade drive detection and mounting
 - **Intelligent Sync**: Statistical median filtering prevents false corrections
 - **Plug-and-Play Design**: Zero-configuration deployment via USB drives
 - **Production Ready**: Systemd integration for reliable auto-start
 - **Raspberry Pi OS Bookworm**: Full compatibility with latest Pi OS
+- **Simplified Architecture**: Single VLC playback method eliminates complexity and debug/production differences
 
 ### Performance Characteristics
 

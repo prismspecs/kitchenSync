@@ -43,6 +43,8 @@ class LeaderPi:
             self.config.video_file, self.config.usb_mount_point
         )
         self.video_player = VLCVideoPlayer(self.config.debug_mode)
+        # Set video output for reliable display
+        self.video_player.video_output = "x11"
 
         # Initialize networking
         self.sync_broadcaster = SyncBroadcaster()
