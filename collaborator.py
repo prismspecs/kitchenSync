@@ -38,9 +38,10 @@ class CollaboratorPi:
             self.config.video_file, self.config.usb_mount_point
         )
         self.video_player = VLCVideoPlayer(self.config.debug_mode)
-        # Use command-line VLC for better seeking with hardware decoders
-        self.video_player.debug_mode = False  # Forces CLI VLC
-        self.video_player.force_python = False
+        # Force Python VLC for precise timecode control and fullscreen output
+        self.video_player.debug_mode = True
+        self.video_player.force_python = True
+        self.video_player.force_fullscreen = True
         # Ensure GUI output on local display and avoid terminal ASCII fallback
         try:
             from src.video.vlc_player import VLCVideoPlayer as _V
@@ -80,9 +81,6 @@ class CollaboratorPi:
         self.last_correction_time = 0
         self.video_start_time = None
 
-        # Test flag to disable sync correction (set via command line)
-        self.disable_sync_correction = False  # Default to sync enabled
-
         # Setup command handlers
         self._setup_command_handlers()
 
@@ -100,15 +98,6 @@ class CollaboratorPi:
         local_time = time.time()
         self.sync_tracker.record_sync(leader_time, local_time)
 
-        # Debug: Log sync reception every few seconds
-        if not hasattr(self, "_last_sync_log"):
-            self._last_sync_log = 0
-        if local_time - self._last_sync_log > 5:
-            log_info(
-                f"Receiving sync: leader_time={leader_time:.3f}s", component="sync"
-            )
-            self._last_sync_log = local_time
-
         # Auto-start playback on first valid sync
         if not self.system_state.is_running:
             self.start_playback()
@@ -124,12 +113,8 @@ class CollaboratorPi:
         # Process MIDI cues (safe no-op if no schedule)
         self.midi_scheduler.process_cues(leader_time)
 
-        # Check video sync (only if we've been running for a bit and sync correction is enabled)
-        if (
-            self.system_state.is_running
-            and self.video_start_time
-            and not self.disable_sync_correction
-        ):
+        # Check video sync (only if we've been running for a bit)
+        if self.system_state.is_running and self.video_start_time:
             time_since_start = time.time() - self.video_start_time
             if time_since_start > 2.0:  # Wait 2 seconds before sync corrections
                 self._check_video_sync(leader_time)
@@ -273,37 +258,46 @@ class CollaboratorPi:
             # Apply correction (respect duration wrap)
             target_position = expected_position
 
-            # Apply seeking correction with proper state checking
+            # Try multiple approaches for seeking
+            seek_success = False
             try:
-                log_info(
-                    f"Seeking to {target_position:.3f}s for sync", component="sync"
-                )
-
+                # Method 1: Direct position set
                 if self.video_player.set_position(target_position):
-                    self.last_correction_time = current_time
-                    self.deviation_samples.clear()
+                    seek_success = True
                     log_info(
                         f"Seek successful to {target_position:.3f}s", component="sync"
                     )
                 else:
                     log_warning(
-                        "Seek failed - VLC not ready or invalid position",
+                        "Position set failed, trying pause/seek/resume",
                         component="sync",
                     )
+                    # Method 2: Pause, seek, resume for stubborn hardware decoders
+                    self.video_player.pause()
+                    time.sleep(0.1)
+                    if self.video_player.set_position(target_position):
+                        time.sleep(0.1)
+                        self.video_player.resume()
+                        seek_success = True
+                        log_info(
+                            f"Pause/seek/resume successful to {target_position:.3f}s",
+                            component="sync",
+                        )
             except Exception as e:
                 log_error(f"Seek failed: {e}", component="sync")
+
+            if seek_success:
+                self.last_correction_time = current_time
+                self.deviation_samples.clear()
+            else:
+                log_warning("All seek methods failed", component="sync")
 
     def run(self) -> None:
         """Main run loop"""
         print(f"Starting KitchenSync Collaborator '{self.config.device_id}'")
 
         # Start networking
-        log_info("Starting sync receiver on port 5005", component="networking")
-        try:
-            self.sync_receiver.start_listening()
-            log_info("Sync receiver started successfully", component="networking")
-        except Exception as e:
-            log_error(f"Failed to start sync receiver: {e}", component="networking")
+        self.sync_receiver.start_listening()
         # No command listening needed; we only follow timecode
 
         # Register with leader
@@ -334,21 +328,6 @@ class CollaboratorPi:
         print("Collaborator ready. Waiting for time sync from leader...")
         print("Press Ctrl+C to exit")
 
-        # Debug: Test if we're receiving ANY UDP traffic on port 5005
-        def debug_udp():
-            import socket
-
-            try:
-                test_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-                test_sock.bind(("", 5006))  # Try different port to test
-                test_sock.settimeout(1.0)
-                log_info("UDP test socket created on port 5006", component="debug")
-                test_sock.close()
-            except Exception as e:
-                log_error(f"UDP test failed: {e}", component="debug")
-
-        threading.Thread(target=debug_udp, daemon=True).start()
-
         try:
             while True:
                 time.sleep(1)
@@ -378,9 +357,6 @@ def main():
         help="Configuration file to use",
     )
     parser.add_argument("--debug", action="store_true", help="Enable debug mode")
-    parser.add_argument(
-        "--no-sync", action="store_true", help="Disable sync correction for testing"
-    )
     args = parser.parse_args()
 
     try:
@@ -390,11 +366,6 @@ def main():
         if args.debug:
             collaborator.config.config["KITCHENSYNC"]["debug"] = "true"
             print("✓ Debug mode: ENABLED (via command line)")
-
-        # Override sync correction if specified
-        if args.no_sync:
-            collaborator.disable_sync_correction = True
-            print("✓ Sync correction: DISABLED (via command line)")
 
         collaborator.run()
     except KeyboardInterrupt:

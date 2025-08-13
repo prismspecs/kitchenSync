@@ -23,14 +23,6 @@ I am developing this on a separate computer than the one on which it will run. C
 - **Display Management:** Proper X11 display context handling for video output
 - **Deployment:** Production-ready with comprehensive error handling and status monitoring
 
-## Design Philosophy: Plain and Simple
-
-KitchenSync follows a "plain and simple" approach:
-- **One method that works**: Each function should do one thing well, not have complex fallback chains
-- **If it doesn't work, use the other one**: When one approach fails, switch to a different approach entirely, don't layer complexity
-- **Clear choices**: Configuration flags to select between approaches, not automatic fallback logic
-- **Transparent behavior**: What the system is doing should be obvious from logs and configuration
-
 ## Current Architecture
 
 ### Core Components
