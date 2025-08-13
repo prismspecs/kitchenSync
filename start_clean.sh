@@ -24,40 +24,22 @@ export WAYLAND_DISPLAY=
 # Ensure we're in the right directory
 cd /home/kitchensync/kitchenSync
 
-# Wait for X server (Xorg or Xwayland) to be fully ready
-echo "$(date): Waiting for X server to be ready..." >> /tmp/kitchensync_startup.log
-max_wait=60
-waited=0
-while [ $waited -lt $max_wait ]; do
-    # Check if X server is running AND responsive
-    if (pgrep -f "Xorg.*:0" > /dev/null || pgrep -f "Xwayland.*:0" > /dev/null) && xset q > /dev/null 2>&1; then
-        echo "$(date): X server is ready after ${waited}s" >> /tmp/kitchensync_startup.log
+# Wait for X11 desktop to be ready
+echo "$(date): Waiting for X11 desktop to be ready..." >> /tmp/kitchensync_startup.log
+desktop_wait=20
+desktop_waited=0
+while [ $desktop_waited -lt $desktop_wait ]; do
+    # Simple check: X server running and wmctrl works
+    if pgrep -f "Xorg.*:0" > /dev/null && wmctrl -l > /dev/null 2>&1; then
+        echo "$(date): X11 desktop ready after ${desktop_waited}s" >> /tmp/kitchensync_startup.log
         break
     fi
     sleep 2
-    waited=$((waited + 2))
+    desktop_waited=$((desktop_waited + 2))
 done
 
-if [ $waited -ge $max_wait ]; then
-    echo "$(date): WARNING: X server not ready after ${max_wait}s, proceeding anyway" >> /tmp/kitchensync_startup.log
-fi
-
-# Wait for window manager to be ready (needed for wmctrl)
-echo "$(date): Waiting for window manager to be ready..." >> /tmp/kitchensync_startup.log
-wm_wait=30
-wm_waited=0
-while [ $wm_waited -lt $wm_wait ]; do
-    # Check if wmctrl can list windows (window manager is responsive)
-    if wmctrl -l > /dev/null 2>&1; then
-        echo "$(date): Window manager is ready after ${wm_waited}s" >> /tmp/kitchensync_startup.log
-        break
-    fi
-    sleep 2
-    wm_waited=$((wm_waited + 2))
-done
-
-if [ $wm_waited -ge $wm_wait ]; then
-    echo "$(date): WARNING: Window manager not ready after ${wm_wait}s, proceeding anyway" >> /tmp/kitchensync_startup.log
+if [ $desktop_waited -ge $desktop_wait ]; then
+    echo "$(date): WARNING: X11 desktop not ready after ${desktop_wait}s, proceeding anyway" >> /tmp/kitchensync_startup.log
 fi
 
 # Log environment and directory
