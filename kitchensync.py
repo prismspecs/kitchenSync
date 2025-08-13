@@ -69,25 +69,28 @@ class KitchenSyncAutoStart:
         print("=" * 40)
         snapshot_env()
 
-        # Step 1: Load configuration
+        # Step 1: Load configuration (defaults to collaborator if none found)
         if not self._load_configuration():
-            ErrorDisplay.show_error("No USB configuration found")
-            self._show_manual_instructions()
+            ErrorDisplay.show_error("Failed to load configuration")
             return False
 
-        # Step 2: Set desktop background if available
-        self._set_desktop_background()
+        # Decide role early
+        is_leader = bool(getattr(self.config, "is_leader", False))
 
-        # Step 3: Validate video file
-        if not self._validate_video():
-            ErrorDisplay.show_error("No valid video file found")
-            return False
+        if is_leader:
+            # Leader flow: desktop background, video validation, update configs, start
+            self._set_desktop_background()
 
-        # Step 4: Update local configs
-        self._update_local_configs()
+            if not self._validate_video():
+                ErrorDisplay.show_error("No valid video file found")
+                return False
 
-        # Step 5: Start appropriate role
-        return self._start_role()
+            self._update_local_configs()
+            return self._start_role()
+        else:
+            # Collaborator flow: skip video validation (collaborator handles no-video)
+            self._update_local_configs()
+            return self._start_role()
 
     def _load_configuration(self) -> bool:
         """Load configuration from USB drive; default to collaborator if none found"""
