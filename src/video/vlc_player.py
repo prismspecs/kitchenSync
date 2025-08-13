@@ -268,6 +268,12 @@ class VLCVideoPlayer:
                 log_error("Failed to create VLC media", component="vlc")
                 return self._start_with_command_vlc()
 
+            # Add start-time option if offset specified (better for hardware decoders)
+            if hasattr(self, "start_time_offset") and self.start_time_offset > 0:
+                start_option = f"start-time={self.start_time_offset:.3f}"
+                self.vlc_media.add_option(start_option)
+                log_info(f"Added start-time option: {start_option}", component="vlc")
+
             self.vlc_player.set_media(self.vlc_media)
 
             # Set up looping event handler

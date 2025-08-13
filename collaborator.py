@@ -112,18 +112,23 @@ class CollaboratorPi:
                 component="collaborator",
             )
 
-            # TEST: Seek to 2 minutes after startup to test seeking
-            def test_seek():
+            # TEST: Restart video at 2 minutes to test start-time option (better for hardware decoders)
+            def test_start_time():
                 time.sleep(3)  # Wait for video to fully load
-                log_info("TEST: Attempting seek to 2 minutes (120s)", component="test")
-                if self.video_player.set_position(120.0):
-                    log_info("TEST: Seek to 2 minutes SUCCESS", component="test")
+                log_info(
+                    "TEST: Restarting video at 2 minutes (120s) using start-time",
+                    component="test",
+                )
+                self.video_player.stop_playback()
+                time.sleep(0.5)
+                if self.video_player.start_playback_at_time(120.0):
+                    log_info("TEST: Start at 2 minutes SUCCESS", component="test")
                 else:
-                    log_warning("TEST: Seek to 2 minutes FAILED", component="test")
+                    log_warning("TEST: Start at 2 minutes FAILED", component="test")
 
             import threading
 
-            threading.Thread(target=test_seek, daemon=True).start()
+            threading.Thread(target=test_start_time, daemon=True).start()
 
         # Update system time and maintain sync
         self.system_state.current_time = leader_time
