@@ -16,11 +16,68 @@ from src.core.logger import (
     log_error,
     debug_log_warning,
     debug_log_error,
+    _ENABLE_SYSTEM_LOGGING,
 )
 
 
 from src.debug.template_engine import DebugTemplateManager
 from src.ui.window_manager import WindowManager
+
+
+def _tail_log_file(file_path: str, max_lines: int = 10) -> list:
+    """Efficiently read only the last N lines from a log file without loading entire file"""
+    try:
+        if not os.path.exists(file_path):
+            return []
+
+        # Get file size first to avoid reading huge files
+        file_size = os.path.getsize(file_path)
+        if file_size == 0:
+            return []
+
+        # For very large files (>1MB), use efficient tail approach
+        if file_size > 1024 * 1024:  # 1MB threshold
+            try:
+                # Use system tail command for efficiency on large files
+                result = subprocess.run(
+                    ["tail", "-n", str(max_lines), file_path],
+                    capture_output=True,
+                    text=True,
+                    timeout=2,
+                )
+                if result.returncode == 0:
+                    return (
+                        result.stdout.strip().split("\n")
+                        if result.stdout.strip()
+                        else []
+                    )
+            except (subprocess.TimeoutExpired, FileNotFoundError):
+                pass  # Fall back to Python method
+
+        # For smaller files or if tail command fails, read efficiently
+        with open(file_path, "r") as f:
+            # Seek to end and read backwards for efficiency
+            lines = []
+            f.seek(0, 2)  # Seek to end
+            file_length = f.tell()
+
+            # Don't read more than 64KB from end for performance
+            read_size = min(65536, file_length)
+            f.seek(max(0, file_length - read_size))
+
+            content = f.read()
+            all_lines = content.split("\n")
+
+            # Get last N non-empty lines
+            non_empty_lines = [line for line in all_lines if line.strip()]
+            return (
+                non_empty_lines[-max_lines:]
+                if len(non_empty_lines) > max_lines
+                else non_empty_lines
+            )
+
+    except Exception as e:
+        return [f"Error reading {file_path}: {e}"]
 
 
 class HTMLDebugOverlay:
@@ -823,61 +880,67 @@ user_pref("browser.newtabpage.activity-stream.default.sites", "");
                 info["midi_recent"] = []
                 info["midi_upcoming"] = []
 
-            # Get recent logs
-            try:
-                from src.core.logger import log_file_paths
+            # Get recent logs ONLY if system logging is enabled
+            if _ENABLE_SYSTEM_LOGGING:
+                try:
+                    from src.core.logger import log_file_paths
 
-                paths = log_file_paths()
-                debug_log_info(f"Log paths: {paths}")
+                    paths = log_file_paths()
+                    debug_log_info(f"Log paths: {paths}")
 
-                # Recent system logs
-                system_path = paths["system"]
-                if system_path and os.path.exists(system_path):
-                    try:
-                        with open(system_path, "r") as f:
-                            lines = f.readlines()
-                            recent = lines[-20:] if len(lines) > 20 else lines
-                            info["recent_logs"] = "".join(recent)
-                            debug_log_info(
-                                f"Read {len(recent)} lines from system log",
-                                component="overlay",
-                            )
-                    except Exception as e:
-                        info["recent_logs"] = f"Error reading system log: {e}"
-                        log_error(f"Error reading system log: {e}")
-                else:
-                    debug_log_warning(
-                        f"System log file not found: {system_path}",
-                        component="overlay",
-                    )
-                    info["recent_logs"] = "System log file not found"
+                    # Recent system logs - use efficient tailing (only last 10 lines)
+                    system_path = paths["system"]
+                    if system_path and os.path.exists(system_path):
+                        recent_lines = _tail_log_file(system_path, max_lines=10)
+                        info["recent_logs"] = "\n".join(recent_lines)
+                        debug_log_info(
+                            f"Read {len(recent_lines)} lines from system log"
+                        )
+                    else:
+                        info["recent_logs"] = "System log file not found"
 
-                # Recent VLC logs
-                vlc_path = paths["vlc_main"]
-                if vlc_path and os.path.exists(vlc_path):
-                    try:
-                        with open(vlc_path, "r") as f:
-                            lines = f.readlines()
-                            recent = lines[-20:] if len(lines) > 20 else lines
-                            info["vlc_logs"] = "".join(recent)
-                            debug_log_info(
-                                f"Read {len(recent)} lines from VLC log",
-                                component="overlay",
-                            )
-                    except Exception as e:
-                        info["vlc_logs"] = f"Error reading VLC log: {e}"
-                        log_error(f"Error reading VLC log: {e}")
-                else:
-                    debug_log_warning(
-                        f"VLC log file not found: {vlc_path}",
-                        component="overlay",
-                    )
-                    info["vlc_logs"] = "VLC log file not found"
+                    # Recent VLC logs - use efficient tailing (only last 10 lines)
+                    vlc_path = paths["vlc_main"]
+                    if vlc_path and os.path.exists(vlc_path):
+                        recent_lines = _tail_log_file(vlc_path, max_lines=10)
+                        info["vlc_logs"] = "\n".join(recent_lines)
+                        debug_log_info(f"Read {len(recent_lines)} lines from VLC log")
+                    else:
+                        info["vlc_logs"] = "VLC log file not found"
 
-            except Exception as e:
-                log_error(f"Error reading log files: {e}")
-                info["recent_logs"] = f"Error reading logs: {e}"
-                info["vlc_logs"] = f"Error reading logs: {e}"
+                except Exception as e:
+                    log_error(f"Error reading log files: {e}")
+                    info["recent_logs"] = f"Error reading logs: {e}"
+                    info["vlc_logs"] = f"Error reading logs: {e}"
+            else:
+                # When logging is disabled, don't read or display logs
+                info["recent_logs"] = "Logging disabled for performance"
+                info["vlc_logs"] = "Logging disabled for performance"
+
+            # Generate log sections HTML conditionally
+            if _ENABLE_SYSTEM_LOGGING:
+                info[
+                    "log_sections_html"
+                ] = f"""
+                <div class="log-section">
+                    <h3>Recent System Log (Last 10 entries)</h3>
+                    <div class="log-content">{info["recent_logs"]}</div>
+                </div>
+
+                <div class="log-section">
+                    <h3>Recent VLC Log (Last 10 entries)</h3>
+                    <div class="log-content">{info["vlc_logs"]}</div>
+                </div>
+                """
+            else:
+                info[
+                    "log_sections_html"
+                ] = """
+                <div class="info-section">
+                    <h3>📈 Performance Mode</h3>
+                    <p>Logging disabled for optimal performance. Enable <code>enable_system_logging=true</code> and <code>enable_vlc_logging=true</code> in config to show logs.</p>
+                </div>
+                """
 
             return info
 
