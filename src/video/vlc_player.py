@@ -46,7 +46,7 @@ class VLCVideoPlayer:
         self.video_output: Optional[str] = None  # e.g., "x11", "glx", "xvideo"
         self.use_position_seeking = False  # Use position ratio instead of time seeking
         # VLC HTTP interface for command-line control
-        self.vlc_http_port = 8080
+        self.vlc_http_port = 8088  # Use different port to avoid conflicts
         self.vlc_http_password = "vlcremote"
         # Log environment snapshot once when player is constructed
         snapshot_env()

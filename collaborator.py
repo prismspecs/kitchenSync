@@ -100,6 +100,15 @@ class CollaboratorPi:
         local_time = time.time()
         self.sync_tracker.record_sync(leader_time, local_time)
 
+        # Debug: Log sync reception every few seconds
+        if not hasattr(self, "_last_sync_log"):
+            self._last_sync_log = 0
+        if local_time - self._last_sync_log > 5:
+            log_info(
+                f"Receiving sync: leader_time={leader_time:.3f}s", component="sync"
+            )
+            self._last_sync_log = local_time
+
         # Auto-start playback on first valid sync
         if not self.system_state.is_running:
             self.start_playback()
