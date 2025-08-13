@@ -9,7 +9,19 @@ import re
 import shutil
 from pathlib import Path
 from typing import Dict, Any
-from src.core.logger import log_info, log_error, log_warning
+from src.core.logger import log_info, log_error, log_warning, _ENABLE_SYSTEM_LOGGING
+
+
+def template_log_info(message: str) -> None:
+    """Log info only if system logging is enabled"""
+    if _ENABLE_SYSTEM_LOGGING:
+        log_info(message, component="template")
+
+
+def template_log_warning(message: str) -> None:
+    """Log warning only if system logging is enabled"""
+    if _ENABLE_SYSTEM_LOGGING:
+        log_warning(message, component="template")
 
 
 class TemplateEngine:
@@ -31,7 +43,7 @@ class TemplateEngine:
             try:
                 with open(template_path, "r", encoding="utf-8") as f:
                     self.template_cache[template_name] = f.read()
-                log_info(f"Loaded template: {template_name}", component="template")
+                template_log_info(f"Loaded template: {template_name}")
             except Exception as e:
                 log_error(
                     f"Error loading template {template_name}: {e}", component="template"
@@ -85,7 +97,7 @@ class TemplateEngine:
     def clear_cache(self):
         """Clear template cache (useful for development)"""
         self.template_cache.clear()
-        log_info("Template cache cleared", component="template")
+        template_log_info("Template cache cleared")
 
 
 class DebugTemplateManager:
@@ -112,10 +124,10 @@ class DebugTemplateManager:
 
                 # Copy static files
                 shutil.copytree(static_src, static_dest)
-                log_info(f"Copied static files to {static_dest}", component="template")
+                template_log_info(f"Copied static files to {static_dest}")
 
             except Exception as e:
-                log_warning(f"Failed to copy static files: {e}", component="template")
+                template_log_warning(f"Failed to copy static files: {e}")
 
     def render_debug_overlay(self, pi_id: str, system_info: Dict[str, Any]) -> str:
         """Render the debug overlay and return the output file path"""
@@ -138,7 +150,7 @@ class DebugTemplateManager:
             # Atomically rename the file to avoid race conditions with the browser
             os.rename(tmp_file, html_file)
 
-            log_info(f"Debug overlay rendered: {html_file}", component="template")
+            template_log_info(f"Debug overlay rendered: {html_file}")
             return str(html_file)
 
         except Exception as e:

@@ -470,6 +470,19 @@ The systemd service includes proper environment variables:
 4. **Window positioning**: Logs show wmctrl positioning results
 
 
+## Programming Philosophy & Standards
+
+**CRITICAL DIRECTIVE**: Do not do shallow or superficial edits. Always dive deep and think systemically:
+- What other components are affected by this change?
+- What are the ripple effects and repercussions?
+- Are there hidden dependencies or side effects?
+- Does this fix the root cause or just the symptom?
+- What edge cases or failure modes need to be considered?
+
+**Example**: When implementing configurable logging, don't just add config flags - trace through EVERY component that logs (HTML overlay, VLC args, config loading, startup sequences, etc.) and ensure ALL respect the configuration.
+
+This is the mark of professional programming vs. superficial patching.
+
 ## future necessities
 
 + Remove desktop environment, etc. just have a totally slimmed down OS

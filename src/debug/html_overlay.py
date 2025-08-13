@@ -10,7 +10,32 @@ import threading
 import webbrowser
 from pathlib import Path
 from typing import Optional, Dict, Any
-from src.core.logger import log_info, log_error, log_warning
+from src.core.logger import (
+    debug_log_info,
+    log_error,
+    debug_log_warning,
+    _ENABLE_SYSTEM_LOGGING,
+)
+
+
+def debug_debug_log_info(message: str, component: str = "overlay") -> None:
+    """Log info only if system logging is enabled"""
+    if _ENABLE_SYSTEM_LOGGING:
+        debug_log_info(message, component)
+
+
+def debug_debug_log_warning(message: str, component: str = "overlay") -> None:
+    """Log warning only if system logging is enabled"""
+    if _ENABLE_SYSTEM_LOGGING:
+        debug_log_warning(message, component)
+
+
+# Always log errors regardless of system logging setting
+def debug_log_error(message: str, component: str = "overlay") -> None:
+    """Always log errors"""
+    log_error(message, component)
+
+
 from src.debug.template_engine import DebugTemplateManager
 from src.ui.window_manager import WindowManager
 
@@ -46,7 +71,7 @@ class HTMLDebugOverlay:
 
         # Track Firefox state
         self.firefox_opened = False
-        
+
         # Initialize window manager
         self.window_manager = WindowManager()
 
@@ -74,12 +99,10 @@ class HTMLDebugOverlay:
             if not self.html_file:
                 raise Exception("Template rendering failed")
 
-            log_info(f"HTML debug file created: {self.html_file}", component="overlay")
+            debug_debug_log_info(f"HTML debug file created: {self.html_file}")
 
         except Exception as e:
-            log_error(
-                f"Failed to create HTML file using templates: {e}", component="overlay"
-            )
+            log_error(f"Failed to create HTML file using templates: {e}")
             # Fallback to a simple error page
             self._create_fallback_html()
 
@@ -116,12 +139,10 @@ class HTMLDebugOverlay:
             with open(self.html_file, "w") as f:
                 f.write(fallback_html)
 
-            log_warning(
-                f"Created fallback HTML file: {self.html_file}", component="overlay"
-            )
+            debug_log_warning(f"Created fallback HTML file: {self.html_file}")
 
         except Exception as e:
-            log_error(f"Failed to create fallback HTML: {e}", component="overlay")
+            log_error(f"Failed to create fallback HTML: {e}")
 
     def _setup_debug_environment(self):
         """Creates the debug directory and copies static files once."""
@@ -129,9 +150,9 @@ class HTMLDebugOverlay:
             overlay_dir = Path(self.html_file).parent
             overlay_dir.mkdir(exist_ok=True)
             self.template_manager.copy_static_files(overlay_dir)
-            log_info("Debug environment setup complete.", component="overlay")
+            debug_debug_log_info("Debug environment setup complete.")
         except Exception as e:
-            log_error(f"Failed to set up debug environment: {e}", component="overlay")
+            log_error(f"Failed to set up debug environment: {e}")
 
     def _format_midi_event(self, event):
         """Format MIDI event for display"""
@@ -170,61 +191,63 @@ class HTMLDebugOverlay:
                 self.update_content()
                 time.sleep(10)  # Update every 10 seconds
             except Exception as e:
-                log_error(f"HTML update error: {e}", component="overlay")
+                log_error(f"HTML update error: {e}")
                 time.sleep(5)
 
     def cleanup(self):
         """Clean up resources"""
-        log_info("Cleaning up HTML debug overlay", component="overlay")
-        
+        debug_debug_log_info("Cleaning up HTML debug overlay")
+
         # Stop the main thread first
         self.running = False
-        
+
         # Kill Firefox process
         try:
             subprocess.run(["pkill", "-f", "firefox"], check=False, timeout=3)
-            log_info("Killed Firefox process", component="overlay")
+            debug_log_info("Killed Firefox process")
         except Exception as e:
-            log_warning(f"Could not kill Firefox: {e}", component="overlay")
-        
+            debug_log_warning(f"Could not kill Firefox: {e}")
+
         # Clean up profile directory
         try:
             import shutil
+
             profile_dir = "/tmp/ff-clean-profile"
             if os.path.exists(profile_dir):
                 shutil.rmtree(profile_dir)
-                log_info(f"Removed profile directory: {profile_dir}", component="overlay")
+                debug_log_info(f"Removed profile directory: {profile_dir}")
         except Exception as e:
-            log_warning(f"Could not remove profile directory: {e}", component="overlay")
-        
+            debug_log_warning(f"Could not remove profile directory: {e}")
+
         # Stop the update thread
         if self.update_thread and self.update_thread.is_alive():
             self.stop_update = True
             self.update_thread.join(timeout=5)
             if self.update_thread.is_alive():
-                log_warning("Update thread did not stop gracefully", component="overlay")
-        
+                debug_log_warning("Update thread did not stop gracefully")
+
         # Clean up HTML directory
         try:
             html_dir = Path(self.html_file).parent
             if html_dir.exists():
                 import shutil
+
                 shutil.rmtree(html_dir)
-                log_info(f"Cleaned up HTML directory: {html_dir}", component="overlay")
+                debug_log_info(f"Cleaned up HTML directory: {html_dir}")
         except Exception as e:
-            log_warning(f"Could not remove HTML directory: {e}", component="overlay")
-        
+            debug_log_warning(f"Could not remove HTML directory: {e}")
+
         # Reset Firefox flag
         self.firefox_opened = False
-        
-        log_info("HTML debug overlay cleanup completed", component="overlay")
+
+        debug_log_info("HTML debug overlay cleanup completed")
 
     def open_in_browser(self):
         """Open the HTML file in the default browser"""
         try:
             # Prevent multiple Firefox instances
             if self.firefox_opened:
-                log_info(
+                debug_log_info(
                     "Firefox already opened, skipping duplicate launch",
                     component="overlay",
                 )
@@ -259,7 +282,8 @@ class HTMLDebugOverlay:
             userjs_path = os.path.join(profile_dir, "user.js")
             try:
                 with open(userjs_path, "w") as f:
-                    f.write("""// Firefox user.js to suppress Privacy Notice and welcome screens
+                    f.write(
+                        """// Firefox user.js to suppress Privacy Notice and welcome screens
 // This ensures a completely clean launch without popups or extra tabs
 
 // Disable privacy notice tab
@@ -287,16 +311,18 @@ user_pref("browser.sessionstore.resume_from_crash", false);
 // Disable activity stream and other startup features
 user_pref("browser.newtabpage.activity-stream.enabled", false);
 user_pref("browser.newtabpage.activity-stream.default.sites", "");
-""")
-                log_info("Created user.js to suppress Firefox welcome screens", component="overlay")
+"""
+                    )
+                debug_log_info("Created user.js to suppress Firefox welcome screens")
             except Exception as e:
-                log_warning(f"Could not create user.js: {e}", component="overlay")
+                debug_log_warning(f"Could not create user.js: {e}")
 
             # Also create policies.json for enterprise-level suppression (more effective)
             policies_path = os.path.join(profile_dir, "policies.json")
             try:
                 with open(policies_path, "w") as f:
-                    f.write("""{
+                    f.write(
+                        """{
   "policies": {
     "OverrideFirstRunPage": "",
     "OverridePostUpdatePage": "",
@@ -311,35 +337,42 @@ user_pref("browser.newtabpage.activity-stream.default.sites", "");
     "DisableDeveloperTools": false,
     "DisableFirefoxScreenshots": true
   }
-}""")
-                log_info("Created policies.json for enterprise-level Firefox suppression", component="overlay")
+}"""
+                    )
+                debug_log_info(
+                    "Created policies.json for enterprise-level Firefox suppression"
+                )
             except Exception as e:
-                log_warning(f"Could not create policies.json: {e}", component="overlay")
+                debug_log_warning(f"Could not create policies.json: {e}")
 
             # Get current user for environment setup
             current_user = os.getenv("USER", "kitchensync")
 
             # Force Firefox to use X11 (prevent Wayland fallback)
             firefox_env = os.environ.copy()
-            firefox_env.update({
-                'DISPLAY': ':0',
-                'XAUTHORITY': f'/home/{current_user}/.Xauthority',
-                'XDG_RUNTIME_DIR': f'/run/user/{os.getuid()}',
-                'HOME': f'/home/{current_user}',
-                # CRITICAL: Force X11 mode and disable Wayland
-                'XDG_SESSION_TYPE': 'x11',
-                'GDK_BACKEND': 'x11',
-                'QT_QPA_PLATFORM': 'xcb',
-                'WAYLAND_DISPLAY': '',
-                # Force Firefox to use X11 backend
-                'MOZ_ENABLE_WAYLAND': '0',
-                'MOZ_DISABLE_WAYLAND': '1',
-                'MOZ_ENABLE_X11': '1',
-                'MOZ_X11_EGL': '1',
-            })
-            
-            log_info(f"Launching Firefox with environment: USER={current_user}, DISPLAY={firefox_env.get('DISPLAY')}, XAUTHORITY={firefox_env.get('XAUTHORITY')}", component="overlay")
-            
+            firefox_env.update(
+                {
+                    "DISPLAY": ":0",
+                    "XAUTHORITY": f"/home/{current_user}/.Xauthority",
+                    "XDG_RUNTIME_DIR": f"/run/user/{os.getuid()}",
+                    "HOME": f"/home/{current_user}",
+                    # CRITICAL: Force X11 mode and disable Wayland
+                    "XDG_SESSION_TYPE": "x11",
+                    "GDK_BACKEND": "x11",
+                    "QT_QPA_PLATFORM": "xcb",
+                    "WAYLAND_DISPLAY": "",
+                    # Force Firefox to use X11 backend
+                    "MOZ_ENABLE_WAYLAND": "0",
+                    "MOZ_DISABLE_WAYLAND": "1",
+                    "MOZ_ENABLE_X11": "1",
+                    "MOZ_X11_EGL": "1",
+                }
+            )
+
+            debug_log_info(
+                f"Launching Firefox with environment: USER={current_user}, DISPLAY={firefox_env.get('DISPLAY')}, XAUTHORITY={firefox_env.get('XAUTHORITY')}"
+            )
+
             # Launch Firefox and capture any errors
             try:
                 process = subprocess.Popen(
@@ -355,18 +388,20 @@ user_pref("browser.newtabpage.activity-stream.default.sites", "");
                     stderr=subprocess.PIPE,
                     env=firefox_env,
                 )
-                
+
                 # Check if Firefox started successfully (don't wait for completion)
                 time.sleep(0.5)
                 if process.poll() is not None:
                     # Process exited, capture error
                     stdout, stderr = process.communicate()
-                    log_error(f"Firefox failed to start. Exit code: {process.returncode}", component="overlay")
-                    log_error(f"Firefox stdout: {stdout.decode()}", component="overlay")
-                    log_error(f"Firefox stderr: {stderr.decode()}", component="overlay")
-                    
+                    log_error(
+                        f"Firefox failed to start. Exit code: {process.returncode}"
+                    )
+                    log_error(f"Firefox stdout: {stdout.decode()}")
+                    log_error(f"Firefox stderr: {stderr.decode()}")
+
                     # Try fallback launch without some options
-                    log_info("Trying Firefox fallback launch...", component="overlay")
+                    debug_log_info("Trying Firefox fallback launch...")
                     try:
                         fallback_process = subprocess.Popen(
                             [
@@ -381,76 +416,94 @@ user_pref("browser.newtabpage.activity-stream.default.sites", "");
                             stderr=subprocess.PIPE,
                             env=firefox_env,
                         )
-                        
+
                         time.sleep(0.5)
                         if fallback_process.poll() is not None:
                             stdout, stderr = fallback_process.communicate()
-                            log_error(f"Firefox fallback also failed: {stderr.decode()}", component="overlay")
+                            log_error(
+                                f"Firefox fallback also failed: {stderr.decode()}"
+                            )
                             return
                         else:
                             process = fallback_process
-                            log_info("Firefox fallback launch successful", component="overlay")
+                            debug_log_info("Firefox fallback launch successful")
                     except Exception as fallback_e:
-                        log_error(f"Firefox fallback launch failed: {fallback_e}", component="overlay")
+                        log_error(f"Firefox fallback launch failed: {fallback_e}")
                         return
-                    
+
             except Exception as e:
-                log_error(f"Exception launching Firefox: {e}", component="overlay")
+                log_error(f"Exception launching Firefox: {e}")
                 return
 
             # Mark Firefox as opened
             self.firefox_opened = True
-            log_info("Firefox launched successfully", component="overlay")
+            debug_log_info("Firefox launched successfully")
 
             # Position window after a short delay (in background thread)
             def position_window():
-                log_info("Starting to wait for Firefox window...", component="overlay")
-                
+                debug_log_info("Starting to wait for Firefox window...")
+
                 # Wait for Firefox window to appear
                 firefox_window = self.window_manager.wait_for_window(
                     search_terms=["firefox", "kitchensync debug"],
                     exclude_terms=["vlc", "media player"],
-                    timeout=30
+                    timeout=30,
                 )
 
                 if firefox_window:
-                    log_info(f"Found Firefox window: {firefox_window}", component="overlay")
-                    
+                    debug_log_info(f"Found Firefox window: {firefox_window}")
+
                     # Get display geometry for better positioning
-                    display_width, display_height = self.window_manager.get_display_geometry()
-                    log_info(f"Display geometry: {display_width}x{display_height}", component="overlay")
-                    
+                    display_width, display_height = (
+                        self.window_manager.get_display_geometry()
+                    )
+                    debug_log_info(
+                        f"Display geometry: {display_width}x{display_height}"
+                    )
+
                     # Calculate positioning based on display size
                     # Position Firefox on right side with proper coordinates
                     firefox_x = max(0, display_width - 640)  # Right side, 640px wide
                     firefox_y = 0
                     firefox_width = 640
                     firefox_height = min(1080, display_height)
-                    
-                    log_info(f"Target Firefox position: ({firefox_x}, {firefox_y}) {firefox_width}x{firefox_height}", component="overlay")
-                    
+
+                    debug_log_info(
+                        f"Target Firefox position: ({firefox_x}, {firefox_y}) {firefox_width}x{firefox_height}"
+                    )
+
                     # Log current window positions
                     window_details = self.window_manager.get_window_details()
-                    log_info(f"Current window positions before Firefox positioning:\n{window_details}", component="overlay")
-                    
+                    debug_log_info(
+                        f"Current window positions before Firefox positioning:\n{window_details}"
+                    )
+
                     # Position Firefox window
-                    success = self.window_manager.position_window(firefox_window, firefox_x, firefox_y, firefox_width, firefox_height)
-                    
+                    success = self.window_manager.position_window(
+                        firefox_window,
+                        firefox_x,
+                        firefox_y,
+                        firefox_width,
+                        firefox_height,
+                    )
+
                     if success:
-                        log_info("Positioned Firefox window on right side", component="overlay")
-                        
+                        debug_log_info("Positioned Firefox window on right side")
+
                         # Log positions after positioning
                         time.sleep(0.5)
                         after_details = self.window_manager.get_window_details()
-                        log_info(f"Window positions after Firefox positioning:\n{after_details}", component="overlay")
+                        debug_log_info(
+                            f"Window positions after Firefox positioning:\n{after_details}"
+                        )
                     else:
-                        log_warning("Failed to position Firefox window", component="overlay")
+                        debug_log_warning("Failed to position Firefox window")
                 else:
-                    log_warning("Firefox window not found for positioning", component="overlay")
+                    debug_log_warning("Firefox window not found for positioning")
 
             threading.Thread(target=position_window, daemon=True).start()
 
-            log_info(f"HTML debug overlay opened in browser: {self.html_file}")
+            debug_log_info(f"HTML debug overlay opened in browser: {self.html_file}")
         except Exception as e:
             log_error(f"Failed to open HTML overlay in browser: {e}")
 
@@ -472,30 +525,28 @@ user_pref("browser.newtabpage.activity-stream.default.sites", "");
                         content = f.read()
                         if len(content.strip()) > 100:  # Ensure it's not empty/minimal
                             self.html_file = new_html_file
-                            log_info(
+                            debug_log_info(
                                 f"HTML debug overlay content updated: {self.html_file}",
                                 component="overlay",
                             )
                         else:
-                            log_warning(
+                            debug_log_warning(
                                 f"Generated HTML file too small ({len(content)} chars), keeping previous version",
                                 component="overlay",
                             )
                 except Exception as read_error:
-                    log_warning(
+                    debug_log_warning(
                         f"Could not verify new HTML file: {read_error}",
                         component="overlay",
                     )
             else:
-                log_warning(
+                debug_log_warning(
                     "Template rendering returned empty or missing file path",
                     component="overlay",
                 )
 
         except Exception as e:
-            log_error(
-                f"Failed to update HTML overlay content: {e}", component="overlay"
-            )
+            log_error(f"Failed to update HTML overlay content: {e}")
             # Don't update html_file on error - keep the previous working version
 
     def _get_system_info(self) -> dict:
@@ -584,7 +635,7 @@ user_pref("browser.newtabpage.activity-stream.default.sites", "");
                     timeout=5,
                 )
 
-                log_info(
+                debug_log_info(
                     f"pgrep leader.py result: returncode={main_result.returncode}, stdout='{main_result.stdout.strip()}'",
                     component="overlay",
                 )
@@ -592,7 +643,7 @@ user_pref("browser.newtabpage.activity-stream.default.sites", "");
                 if main_result.returncode == 0:
                     # Main process is running, check if VLC is active within it
                     vlc_pid = main_result.stdout.strip().split("\n")[0]
-                    log_info(
+                    debug_log_info(
                         f"Found leader.py process with PID: {vlc_pid}",
                         component="overlay",
                     )
@@ -609,12 +660,12 @@ user_pref("browser.newtabpage.activity-stream.default.sites", "");
                                 or video_info["current_time"] >= 0
                             ):
                                 vlc_found = True
-                                log_info(
+                                debug_log_info(
                                     "VLC detected as active (video player responsive)",
                                     component="overlay",
                                 )
                             else:
-                                log_info(
+                                debug_log_info(
                                     "VLC player exists but no video info available",
                                     component="overlay",
                                 )
@@ -628,7 +679,7 @@ user_pref("browser.newtabpage.activity-stream.default.sites", "");
                             if os.path.exists(paths["vlc_main"]):
                                 stat = os.stat(paths["vlc_main"])
                                 age_seconds = time.time() - stat.st_mtime
-                                log_info(
+                                debug_log_info(
                                     f"VLC log file exists, age: {age_seconds:.1f} seconds",
                                     component="overlay",
                                 )
@@ -637,26 +688,22 @@ user_pref("browser.newtabpage.activity-stream.default.sites", "");
                                     age_seconds < 300
                                 ):  # Extended to 5 minutes instead of 1 minute
                                     vlc_found = True
-                                    log_info(
+                                    debug_log_info(
                                         "VLC detected as active (log file method)",
                                         component="overlay",
                                     )
                                 else:
-                                    log_info(
+                                    debug_log_info(
                                         "VLC log file too old, considering inactive",
                                         component="overlay",
                                     )
                             else:
-                                log_info(
-                                    "VLC log file does not exist", component="overlay"
-                                )
+                                debug_log_info("VLC log file does not exist")
 
                     except Exception as e:
-                        log_error(
-                            f"Error checking VLC status: {e}", component="overlay"
-                        )
+                        log_error(f"Error checking VLC status: {e}")
                 else:
-                    log_info("leader.py process not found", component="overlay")
+                    debug_log_info("leader.py process not found")
 
                 if vlc_found and vlc_pid:
                     info["vlc_status"] = "Running"
@@ -669,7 +716,7 @@ user_pref("browser.newtabpage.activity-stream.default.sites", "");
                             self.video_player, "get_video_info"
                         ):
                             video_info = self.video_player.get_video_info()
-                            log_info(
+                            debug_log_info(
                                 f"Raw video info from player: {video_info}",
                                 component="overlay",
                             )
@@ -720,7 +767,7 @@ user_pref("browser.newtabpage.activity-stream.default.sites", "");
                                 )
                                 info["video_file"] = "Error getting filename"
 
-                            log_info(
+                            debug_log_info(
                                 f"Video info: {video_info['current_time']:.1f}s / {video_info['total_time']:.1f}s ({video_info['state']}) - {info.get('video_file', 'No file')}",
                                 component="overlay",
                             )
@@ -752,12 +799,12 @@ user_pref("browser.newtabpage.activity-stream.default.sites", "");
                             info["video_total_time"] = 0.0
                             info["video_position"] = 0.0
                             info["video_state"] = "no_player"
-                            log_warning(
+                            debug_log_warning(
                                 "No video player reference available",
                                 component="overlay",
                             )
                     except Exception as e:
-                        log_error(f"Error getting video info: {e}", component="overlay")
+                        log_error(f"Error getting video info: {e}")
                         info["video_current_time"] = 0.0
                         info["video_total_time"] = 0.0
                         info["video_position"] = 0.0
@@ -789,7 +836,7 @@ user_pref("browser.newtabpage.activity-stream.default.sites", "");
                     info["midi_recent"] = []
                     info["midi_upcoming"] = []
             except Exception as e:
-                log_warning(f"Error getting MIDI info: {e}", component="overlay")
+                debug_log_warning(f"Error getting MIDI info: {e}")
                 info["midi_recent"] = []
                 info["midi_upcoming"] = []
 
@@ -798,7 +845,7 @@ user_pref("browser.newtabpage.activity-stream.default.sites", "");
                 from src.core.logger import log_file_paths
 
                 paths = log_file_paths()
-                log_info(f"Log paths: {paths}", component="overlay")
+                debug_log_info(f"Log paths: {paths}")
 
                 # Recent system logs
                 system_path = paths["system"]
@@ -808,15 +855,15 @@ user_pref("browser.newtabpage.activity-stream.default.sites", "");
                             lines = f.readlines()
                             recent = lines[-20:] if len(lines) > 20 else lines
                             info["recent_logs"] = "".join(recent)
-                            log_info(
+                            debug_log_info(
                                 f"Read {len(recent)} lines from system log",
                                 component="overlay",
                             )
                     except Exception as e:
                         info["recent_logs"] = f"Error reading system log: {e}"
-                        log_error(f"Error reading system log: {e}", component="overlay")
+                        log_error(f"Error reading system log: {e}")
                 else:
-                    log_warning(
+                    debug_log_warning(
                         f"System log file not found: {system_path}",
                         component="overlay",
                     )
@@ -830,22 +877,22 @@ user_pref("browser.newtabpage.activity-stream.default.sites", "");
                             lines = f.readlines()
                             recent = lines[-20:] if len(lines) > 20 else lines
                             info["vlc_logs"] = "".join(recent)
-                            log_info(
+                            debug_log_info(
                                 f"Read {len(recent)} lines from VLC log",
                                 component="overlay",
                             )
                     except Exception as e:
                         info["vlc_logs"] = f"Error reading VLC log: {e}"
-                        log_error(f"Error reading VLC log: {e}", component="overlay")
+                        log_error(f"Error reading VLC log: {e}")
                 else:
-                    log_warning(
+                    debug_log_warning(
                         f"VLC log file not found: {vlc_path}",
                         component="overlay",
                     )
                     info["vlc_logs"] = "VLC log file not found"
 
             except Exception as e:
-                log_error(f"Error reading log files: {e}", component="overlay")
+                log_error(f"Error reading log files: {e}")
                 info["recent_logs"] = f"Error reading logs: {e}"
                 info["vlc_logs"] = f"Error reading logs: {e}"
 
@@ -874,13 +921,13 @@ class HTMLDebugManager:
             # Open in browser
             self.overlay.open_in_browser()
 
-            log_info("HTML debug manager started", component="overlay")
+            debug_log_info("HTML debug manager started")
         except Exception as e:
-            log_error(f"Failed to start HTML debug manager: {e}", component="overlay")
+            log_error(f"Failed to start HTML debug manager: {e}")
 
     def stop(self):
         """Stop the HTML debug overlay"""
-        log_info("Stopping HTML debug overlay", component="overlay")
+        debug_log_info("Stopping HTML debug overlay")
         self.cleanup()
 
     def update_debug_info(
@@ -912,13 +959,13 @@ class HTMLDebugManager:
                 looping_enabled=looping_enabled,
             )
 
-            log_info(
+            debug_log_info(
                 f"Debug info updated: {video_file}, {current_time:.1f}s",
                 component="overlay",
             )
 
         except Exception as e:
-            log_error(f"Error updating debug info: {e}", component="overlay")
+            log_error(f"Error updating debug info: {e}")
 
     def cleanup(self):
         """Clean up resources"""
