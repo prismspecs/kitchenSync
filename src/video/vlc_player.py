@@ -249,8 +249,17 @@ class VLCVideoPlayer:
                 # Enable fullscreen when requested even in debug mode
                 try:
                     if (not self.debug_mode) or self.force_fullscreen:
+                        # Wait a moment for VLC to initialize window
+                        time.sleep(0.5)
                         self.vlc_player.set_fullscreen(True)
                         log_info("Enabled fullscreen in Python VLC", component="vlc")
+                        # Double-check fullscreen is enabled
+                        time.sleep(0.2)
+                        if not self.vlc_player.get_fullscreen():
+                            log_warning(
+                                "Fullscreen not active, trying again", component="vlc"
+                            )
+                            self.vlc_player.set_fullscreen(True)
                 except Exception as e:
                     log_warning(
                         f"Failed to set fullscreen in Python VLC: {e}", component="vlc"
