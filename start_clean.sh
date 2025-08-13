@@ -24,24 +24,6 @@ export WAYLAND_DISPLAY=
 # Ensure we're in the right directory
 cd /home/kitchensync/kitchenSync
 
-# Wait for X11 desktop to be ready
-echo "$(date): Waiting for X11 desktop to be ready..." >> /tmp/kitchensync_startup.log
-desktop_wait=20
-desktop_waited=0
-while [ $desktop_waited -lt $desktop_wait ]; do
-    # Simple check: X server running and wmctrl works
-    if pgrep -f "Xorg.*:0" > /dev/null && wmctrl -l > /dev/null 2>&1; then
-        echo "$(date): X11 desktop ready after ${desktop_waited}s" >> /tmp/kitchensync_startup.log
-        break
-    fi
-    sleep 2
-    desktop_waited=$((desktop_waited + 2))
-done
-
-if [ $desktop_waited -ge $desktop_wait ]; then
-    echo "$(date): WARNING: X11 desktop not ready after ${desktop_wait}s, proceeding anyway" >> /tmp/kitchensync_startup.log
-fi
-
 # Log environment and directory
 echo "$(date): Working directory: $(pwd)" >> /tmp/kitchensync_startup.log
 echo "$(date): DISPLAY=$DISPLAY" >> /tmp/kitchensync_startup.log

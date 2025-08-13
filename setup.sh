@@ -49,17 +49,9 @@ sudo pip install python-rtmidi dbus-python python-vlc --break-system-packages
 
 # Configure system for X11 mode (disable Wayland)
 echo "Configuring system for X11 mode..."
-# Set X11 as default session for GDM3
+# Set X11 as default session
 if [ -f /etc/gdm3/daemon.conf ]; then
     sudo sed -i 's/#WaylandEnable=false/WaylandEnable=false/' /etc/gdm3/daemon.conf 2>/dev/null || true
-fi
-
-# Configure LightDM to use Wayland session (labwc) - better for window management
-if [ -f /etc/lightdm/lightdm.conf ]; then
-    echo "Configuring LightDM for Wayland mode..."
-    sudo sed -i 's/user-session=LXDE-pi-x/user-session=LXDE-pi-labwc/' /etc/lightdm/lightdm.conf
-    sudo sed -i 's/autologin-session=LXDE-pi-x/autologin-session=LXDE-pi-labwc/' /etc/lightdm/lightdm.conf
-    echo "✓ LightDM configured to use Wayland session (LXDE-pi-labwc) for both user and autologin"
 fi
 
 # Add X11 environment variables to user profile

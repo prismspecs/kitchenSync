@@ -56,12 +56,17 @@ class VLCVideoPlayer:
         if not self.video_path:
             raise VLCPlayerError("No video loaded")
 
-        # Always use command-line VLC - Python bindings are too slow on Pi
-        log_info(
-            "Using command-line VLC for reliable startup",
-            component="vlc",
-        )
-        return self._start_with_command_vlc()
+        # Force command-line VLC for fullscreen in production mode
+        if not self.debug_mode:
+            log_info(
+                "Production mode: using command-line VLC for fullscreen",
+                component="vlc",
+            )
+            return self._start_with_command_vlc()
+        elif VLC_PYTHON_AVAILABLE:
+            return self._start_with_python_vlc()
+        else:
+            return self._start_with_command_vlc()
 
     def stop_playback(self) -> None:
         """Stop video playback"""
@@ -164,18 +169,11 @@ class VLCVideoPlayer:
                     except Exception as e:
                         log_error(f"Error in video loop callback: {e}", component="vlc")
 
-                # Reset to beginning and restart - use a small delay to ensure VLC is ready
-                import threading
-                def restart_video():
-                    time.sleep(0.1)  # Small delay to let VLC finish cleanup
-                    if self.vlc_player:
-                        self.vlc_player.set_position(0.0)
-                        time.sleep(0.05)  # Brief pause before restarting
-                        self.vlc_player.play()
-                        log_info(f"Video loop #{self.loop_count} started", component="vlc")
-                
-                threading.Thread(target=restart_video, daemon=True).start()
+                # Reset to beginning and restart
+                self.vlc_player.set_position(0.0)
+                self.vlc_player.play()
 
+                log_info(f"Video loop #{self.loop_count} started", component="vlc")
             except Exception as e:
                 log_error(f"Error restarting video loop: {e}", component="vlc")
 
@@ -288,7 +286,7 @@ class VLCVideoPlayer:
 
             # Add looping if enabled
             if self.enable_looping:
-                cmd.extend(["--repeat", "--loop"])  # Loop indefinitely
+                cmd.append("--repeat")  # Loop indefinitely
                 log_info("Command-line VLC looping enabled", component="vlc")
 
             # Window configuration based on debug mode
@@ -298,7 +296,7 @@ class VLCVideoPlayer:
                     [
                         "--no-fullscreen",
                         "--width=1280",
-                        "--height=720",
+                        "--height=1080",
                         "--video-x=0",  # Left side of screen
                         "--video-y=0",  # Top of screen
                         "--no-video-deco",
@@ -354,7 +352,7 @@ class VLCVideoPlayer:
 
             # Add looping if enabled
             if self.enable_looping:
-                cmd.extend(["--repeat", "--loop"])  # Loop indefinitely
+                cmd.append("--repeat")  # Loop indefinitely
                 log_info("Command-line VLC looping enabled (no audio)", component="vlc")
 
             # Window configuration based on debug mode
@@ -364,7 +362,7 @@ class VLCVideoPlayer:
                     [
                         "--no-fullscreen",
                         "--width=1280",
-                        "--height=720",
+                        "--height=1080",
                         "--video-x=0",  # Left side of screen
                         "--video-y=0",  # Top of screen
                         "--no-video-deco",
