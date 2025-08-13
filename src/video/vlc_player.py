@@ -303,7 +303,7 @@ class VLCVideoPlayer:
                     [
                         "--no-fullscreen",
                         "--width=1280",
-                        "--height=1080",
+                        "--height=720",
                         "--video-x=0",  # Left side of screen
                         "--video-y=0",  # Top of screen
                         "--no-video-deco",
@@ -369,7 +369,7 @@ class VLCVideoPlayer:
                     [
                         "--no-fullscreen",
                         "--width=1280",
-                        "--height=1080",
+                        "--height=720",
                         "--video-x=0",  # Left side of screen
                         "--video-y=0",  # Top of screen
                         "--no-video-deco",
