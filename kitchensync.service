@@ -1,7 +1,7 @@
 [Unit]
 Description=KitchenSync Auto-Start Service
-After=graphical-session.target
-Wants=graphical-session.target
+After=graphical.target network.target
+Wants=graphical.target
 
 [Service]
 Type=simple
@@ -22,4 +22,4 @@ Environment=SDL_VIDEODRIVER=x11
 ExecStartPre=/bin/sleep 30
 
 [Install]
-WantedBy=default.target
+WantedBy=graphical.target

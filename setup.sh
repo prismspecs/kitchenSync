@@ -65,45 +65,35 @@ if ! grep -q "GDK_BACKEND=x11" start_clean.sh; then
     sed -i '/export SDL_VIDEODRIVER=x11/a\\n# Force X11 mode (disable Wayland)\nexport GDK_BACKEND=x11\nexport QT_QPA_PLATFORM=xcb\nexport WAYLAND_DISPLAY=' start_clean.sh
 fi
 
-# Setup auto-start service
-echo "Setting up auto-start service..."
-mkdir -p ~/.config/systemd/user
-cp kitchensync.service ~/.config/systemd/user/
-sed -i "s/kitchensync/$USER/g" ~/.config/systemd/user/kitchensync.service
-sed -i "s|/home/kitchensync/kitchenSync|$(pwd)|g" ~/.config/systemd/user/kitchensync.service
+# Setup auto-start service as SYSTEM service
+echo "Setting up auto-start SYSTEM service..."
+# Create a temporary service file with correct paths
+cp kitchensync.service /tmp/kitchensync.service.tmp
+sed -i "s/kitchensync/$USER/g" /tmp/kitchensync.service.tmp
+sed -i "s|/home/kitchensync/kitchenSync|$(pwd)|g" /tmp/kitchensync.service.tmp
 
-# Fix user service compatibility - remove User/Group directives
-sed -i '/^User=/d' ~/.config/systemd/user/kitchensync.service
-sed -i '/^Group=/d' ~/.config/systemd/user/kitchensync.service
+# Update start_clean.sh with correct user paths
+sed -i "s|/home/kitchensync/|/home/$USER/|g" start_clean.sh
+sed -i "s|kitchensync|$USER|g" start_clean.sh
 
-# Change target to default.target for better headless compatibility
-sed -i 's/graphical-session.target/default.target/g' ~/.config/systemd/user/kitchensync.service
+# Install as system service
+sudo cp /tmp/kitchensync.service.tmp /etc/systemd/system/kitchensync.service
+rm /tmp/kitchensync.service.tmp
 
-# Optimize startup delay for X11 mode (reduced from 45 to 30 seconds)
-sed -i 's/ExecStartPre=\/bin\/sleep 45/ExecStartPre=\/bin\/sleep 30/' ~/.config/systemd/user/kitchensync.service
-sed -i 's/ExecStartPre=\/bin\/sleep 30/ExecStartPre=\/bin\/sleep 30/' ~/.config/systemd/user/kitchensync.service
-
-# Force X11 mode for reliable window management (disable Wayland)
-sed -i '/Environment=SDL_VIDEODRIVER=x11/a Environment=GDK_BACKEND=x11' ~/.config/systemd/user/kitchensync.service
-sed -i '/Environment=GDK_BACKEND=x11/a Environment=QT_QPA_PLATFORM=xcb' ~/.config/systemd/user/kitchensync.service
-sed -i '/Environment=QT_QPA_PLATFORM=xcb/a Environment=WAYLAND_DISPLAY=' ~/.config/systemd/user/kitchensync.service
-
-# Enable lingering so user services start on boot without login
-echo "Enabling user service lingering for boot startup..."
-sudo loginctl enable-linger $USER
-
-# Reload and enable the service
-systemctl --user daemon-reload
-systemctl --user enable kitchensync.service
+# Reload systemd and enable the service
+sudo systemctl daemon-reload
+sudo systemctl enable kitchensync.service
 
 # Verify the service is properly enabled
-if systemctl --user is-enabled kitchensync.service >/dev/null 2>&1; then
-    echo "✅ Auto-start service enabled successfully"
-    echo "🔄 Service will start automatically on boot"
+if sudo systemctl is-enabled kitchensync.service >/dev/null 2>&1; then
+    echo "✅ Auto-start SYSTEM service enabled successfully"
+    echo "🔄 Service will start automatically on boot with proper display access"
 else
-    echo "❌ Failed to enable auto-start service"
+    echo "❌ Failed to enable auto-start system service"
     echo "⚠️  Manual intervention may be required"
 fi
+
+# Note: No need for loginctl enable-linger with system services
 
 # Test networking imports after cleanup
 echo ""
@@ -147,7 +137,7 @@ echo ""
 echo "🔧 MANUAL TESTING (Optional):"
 echo "- Test auto-detection: python3 kitchensync.py"
 echo "- Test with display (SSH): DISPLAY=:0 PULSE_SERVER=unix:/run/user/1000/pulse/native python3 kitchensync.py"
-echo "- Test service: systemctl --user start kitchensync"
+echo "- Test service: sudo systemctl start kitchensync"
 echo "- Manual leader: python3 leader.py"
 echo "- Manual collaborator: python3 collaborator.py"
 echo ""
@@ -161,10 +151,11 @@ echo "1. Connect USB MIDI interface to collaborator Pis"
 echo "2. Test connection: aconnect -l or amidi -l"
 echo ""
 echo "🔧 Service Management:"
-echo "- Check status: systemctl --user status kitchensync"
-echo "- View logs: journalctl --user -u kitchensync -f"
-echo "- Disable auto-start: systemctl --user disable kitchensync"
-echo "- Stop service: systemctl --user stop kitchensync"
+echo "- Check status: sudo systemctl status kitchensync"
+echo "- View logs: sudo journalctl -u kitchensync -f"
+echo "- Restart service: sudo systemctl restart kitchensync"
+echo "- Disable auto-start: sudo systemctl disable kitchensync"
+echo "- Stop service: sudo systemctl stop kitchensync"
 echo ""
 echo "💡 READY FOR DEPLOYMENT! Just plug in USB drive and power on!"
 echo ""
