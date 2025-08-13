@@ -186,6 +186,8 @@ class DebugTemplateManager:
             "vlc_logs": self._escape_html(
                 system_info.get("vlc_logs", "No VLC logs available")
             ),
+            # Log sections HTML (pre-generated conditional HTML)
+            "log_sections_html": system_info.get("log_sections_html", ""),
         }
 
         return context

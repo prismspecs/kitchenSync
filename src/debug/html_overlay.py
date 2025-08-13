@@ -5,12 +5,18 @@ Opens a browser window with live-updating debug information
 """
 
 import os
+import shutil
 import subprocess
 import time
 import threading
-import webbrowser
+from datetime import datetime
 from pathlib import Path
 from typing import Optional, Dict, Any
+
+try:
+    import psutil
+except ImportError:
+    psutil = None
 from src.core.logger import (
     debug_log_info,
     log_error,
@@ -230,7 +236,7 @@ class HTMLDebugOverlay:
         while self.running:
             try:
                 self.update_content()
-                time.sleep(5)  # Update every 5 seconds (max frequency)
+                time.sleep(5)  # Update every 5 seconds
             except Exception as e:
                 log_error(f"HTML update error: {e}")
                 time.sleep(5)
@@ -266,8 +272,6 @@ class HTMLDebugOverlay:
 
         # Clean up profile directory
         try:
-            import shutil
-
             profile_dir = "/tmp/ff-clean-profile"
             if os.path.exists(profile_dir):
                 shutil.rmtree(profile_dir)
@@ -286,8 +290,6 @@ class HTMLDebugOverlay:
         try:
             html_dir = Path(self.html_file).parent
             if html_dir.exists():
-                import shutil
-
                 shutil.rmtree(html_dir)
                 debug_log_info(f"Cleaned up HTML directory: {html_dir}")
         except Exception as e:
@@ -308,13 +310,8 @@ class HTMLDebugOverlay:
                 return
 
             # Simple browser open without blocking
-            import subprocess
-            import threading
-
             # Simple clean profile approach
             profile_dir = "/tmp/ff-clean-profile"
-            import os
-            import shutil
 
             # Remove existing profile directory if it exists
             if os.path.exists(profile_dir):
@@ -597,9 +594,6 @@ user_pref("browser.newtabpage.activity-stream.default.sites", "");
     def _get_system_info(self) -> dict:
         """Get current system information for the overlay"""
         try:
-            import subprocess
-            import psutil
-            from datetime import datetime
 
             info = {
                 "pi_id": self.pi_id,
@@ -717,7 +711,6 @@ user_pref("browser.newtabpage.activity-stream.default.sites", "");
                         else:
                             # Fallback to log file check (old method)
                             from src.core.logger import log_file_paths
-                            import time
 
                             paths = log_file_paths()
 
