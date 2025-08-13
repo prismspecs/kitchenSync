@@ -56,17 +56,12 @@ class VLCVideoPlayer:
         if not self.video_path:
             raise VLCPlayerError("No video loaded")
 
-        # Force command-line VLC for fullscreen in production mode
-        if not self.debug_mode:
-            log_info(
-                "Production mode: using command-line VLC for fullscreen",
-                component="vlc",
-            )
-            return self._start_with_command_vlc()
-        elif VLC_PYTHON_AVAILABLE:
-            return self._start_with_python_vlc()
-        else:
-            return self._start_with_command_vlc()
+        # Always use command-line VLC - Python bindings are too slow on Pi
+        log_info(
+            "Using command-line VLC for reliable startup",
+            component="vlc",
+        )
+        return self._start_with_command_vlc()
 
     def stop_playback(self) -> None:
         """Stop video playback"""
