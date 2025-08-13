@@ -187,20 +187,15 @@ class HTMLDebugOverlay:
         except Exception as e:
             log_warning(f"Could not kill Firefox: {e}", component="overlay")
         
-        # Clean up profile directories
+        # Clean up profile directory
         try:
             import shutil
-            import glob
-            
-            # Remove all firefox debug profile directories
-            for profile_dir in glob.glob("/tmp/firefox-debug-profile*"):
-                try:
-                    shutil.rmtree(profile_dir)
-                    log_info(f"Removed profile directory: {profile_dir}", component="overlay")
-                except Exception as e:
-                    log_warning(f"Could not remove profile directory {profile_dir}: {e}", component="overlay")
+            profile_dir = "/tmp/ff-clean-profile"
+            if os.path.exists(profile_dir):
+                shutil.rmtree(profile_dir)
+                log_info(f"Removed profile directory: {profile_dir}", component="overlay")
         except Exception as e:
-            log_warning(f"Could not clean up profile directories: {e}", component="overlay")
+            log_warning(f"Could not remove profile directory: {e}", component="overlay")
         
         # Stop the update thread
         if self.update_thread and self.update_thread.is_alive():
@@ -248,69 +243,17 @@ class HTMLDebugOverlay:
             except:
                 pass
 
-            # Create a completely clean Firefox profile directory
-            profile_dir = f"/tmp/firefox-debug-profile-{int(time.time())}"
+            # Simple clean profile approach
+            profile_dir = "/tmp/ff-clean-profile"
             import os
             import shutil
 
-            # Remove any existing profile directories
-            for old_profile in ["/tmp/firefox-debug-profile", "/tmp/firefox-debug-profile-*"]:
-                try:
-                    if os.path.exists(old_profile):
-                        shutil.rmtree(old_profile)
-                except:
-                    pass
+            # Remove existing profile directory if it exists
+            if os.path.exists(profile_dir):
+                shutil.rmtree(profile_dir)
 
             # Create fresh profile directory
             os.makedirs(profile_dir, exist_ok=True)
-
-            # Create Firefox configuration to force X11 mode and ensure clean startup
-            config_dir = os.path.join(profile_dir, "prefs.js")
-            try:
-                with open(config_dir, "w") as f:
-                    f.write("""// Firefox configuration to force X11 mode and clean startup
-pref("widget.wayland.enabled", false);
-pref("widget.wayland.force-disabled", true);
-pref("layers.acceleration.disabled", true);
-pref("webgl.disabled", true);
-pref("security.sandbox.content.level", 0);
-pref("browser.startup.page", 0);
-pref("browser.newtabpage.enabled", false);
-
-// Force clean startup - no previous session
-pref("browser.startup.homepage", "about:blank");
-pref("browser.startup.homepage_welcome_url", "");
-pref("browser.startup.homepage_welcome_url.additional", "");
-pref("browser.startup.page", 0);
-pref("browser.sessionstore.enabled", false);
-pref("browser.sessionstore.resume_from_crash", false);
-pref("browser.sessionstore.max_tabs_undo", 0);
-pref("browser.sessionstore.max_concurrent_tabs", 1);
-
-// Disable all startup features
-pref("browser.newtabpage.activity-stream.enabled", false);
-pref("browser.newtabpage.activity-stream.default.sites", "");
-pref("browser.newtabpage.activity-stream.telemetry", false);
-pref("browser.newtabpage.activity-stream.feeds.section.topstories", false);
-pref("browser.newtabpage.activity-stream.feeds.section.highlights", false);
-pref("browser.newtabpage.activity-stream.feeds.section.topstories", false);
-pref("browser.newtabpage.activity-stream.feeds.section.highlights", false);
-
-// Disable extensions and add-ons
-pref("extensions.autoDisableScopes", 0);
-pref("extensions.shownSelectionUI", true);
-pref("extensions.legacy.enabled", false);
-
-// Disable telemetry and background processes
-pref("toolkit.telemetry.enabled", false);
-pref("toolkit.telemetry.unified", false);
-pref("browser.ping-centre.telemetry", false);
-pref("dom.ipc.plugins.reportCrashURL", false);
-pref("browser.crashReports.unsubmittedCheck.enabled", false);
-""")
-                log_info("Created Firefox config to force X11 mode and clean startup", component="overlay")
-            except Exception as e:
-                log_warning(f"Could not create Firefox config: {e}", component="overlay")
 
             # Get current user for environment setup
             current_user = os.getenv("USER", "kitchensync")
@@ -331,13 +274,7 @@ pref("browser.crashReports.unsubmittedCheck.enabled", false);
                 'MOZ_ENABLE_WAYLAND': '0',
                 'MOZ_DISABLE_WAYLAND': '1',
                 'MOZ_ENABLE_X11': '1',
-                'MOZ_DISABLE_RDD_SANDBOX': '1',
-                'MOZ_DISABLE_GMP_SANDBOX': '1',
                 'MOZ_X11_EGL': '1',
-                'MOZ_ACCELERATED': '1',
-                # Additional Firefox optimizations
-                'MOZ_DISABLE_GPU_SANDBOX': '1',
-                'MOZ_DISABLE_CONTENT_SANDBOX': '1',
             })
             
             log_info(f"Launching Firefox with environment: USER={current_user}, DISPLAY={firefox_env.get('DISPLAY')}, XAUTHORITY={firefox_env.get('XAUTHORITY')}", component="overlay")
@@ -347,35 +284,10 @@ pref("browser.crashReports.unsubmittedCheck.enabled", false);
                 process = subprocess.Popen(
                     [
                         "firefox",
-                        "--new-instance",
-                        "--new-window",
+                        "--no-remote",
                         "--profile",
                         profile_dir,
-                        # Force X11 mode and disable Wayland
-                        "--no-remote",
-                        "--disable-wayland",
-                        "--disable-gpu",
-                        "--disable-software-rasterizer",
-                        "--disable-dev-shm-usage",
-                        # Force clean startup - no previous session
-                        "--no-first-run",
-                        "--disable-default-apps",
-                        "--disable-extensions",
-                        "--disable-plugins",
-                        "--disable-java",
-                        "--disable-images",
-                        "--disable-background-timer-throttling",
-                        "--disable-backgrounding-occluded-windows",
-                        "--disable-renderer-backgrounding",
-                        "--disable-ipc-flooding-protection",
-                        "--disable-features=VizDisplayCompositor",
-                        "--disable-features=TranslateUI",
-                        "--disable-features=MediaRouter",
-                        "--disable-features=MediaRouterDeprecationCheck",
-                        "--disable-features=OptimizationHints",
-                        "--disable-features=OptimizationHintsFetching",
-                        "--disable-features=OptimizationHintsFetchingForTesting",
-                        "--disable-features=OptimizationHintsFetchingForTesting",
+                        "--new-instance",
                         f"file://{self.html_file}",
                     ],
                     stdout=subprocess.PIPE,

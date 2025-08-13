@@ -203,21 +203,15 @@ The issue occurs because:
 
 **3. Firefox Launch Updates (`src/debug/html_overlay.py`)**
 - Force X11 mode with command line arguments (`--disable-wayland`)
-- Custom Firefox profile configuration to disable Wayland
+- **SIMPLIFIED: Clean profile approach**
+  - Simple profile directory (`/tmp/ff-clean-profile`)
+  - Remove profile before each launch for guaranteed clean state
+  - Basic Firefox arguments: `--no-remote --profile /tmp/ff-clean-profile --new-instance`
+  - No complex configuration files or preferences
 - Fallback launch mechanism if primary launch fails
 - Enhanced error handling and logging
-- **NEW: Completely clean Firefox launch every time**
-  - Unique timestamped profile directories prevent tab accumulation
-  - Aggressive cleanup of old profile directories
-  - Comprehensive Firefox preferences to disable all startup features
-  - Enhanced command line options to force clean startup
 
-**4. Firefox Configuration (`src/debug/firefox_config.js`)**
-- Custom preferences file to force X11 backend
-- Disable GPU acceleration and sandboxing that can cause delays
-- Optimize for fast startup
-
-**5. Cleanup and Process Management**
+**4. Cleanup and Process Management**
 - **NEW: Comprehensive cleanup system**
   - Signal handlers for graceful shutdown (SIGTERM, SIGINT)
   - Automatic Firefox process termination on service stop

@@ -1,9 +1,8 @@
 #!/bin/bash
 # KitchenSync Firefox Cleanup Script
-# This script cleans up any leftover Firefox processes and profile directories
-# Run this if you notice Firefox tabs accumulating or if the service doesn't start cleanly
+# This script cleans up Firefox processes and the clean profile directory
 
-echo "🧹 Cleaning up Firefox processes and profiles..."
+echo "🧹 Cleaning up Firefox processes and profile..."
 
 # Kill any running Firefox processes
 echo "Killing Firefox processes..."
@@ -12,19 +11,14 @@ pkill -f firefox 2>/dev/null || echo "No Firefox processes found"
 # Wait a moment for processes to close
 sleep 2
 
-# Clean up profile directories
-echo "Cleaning up profile directories..."
-for profile_dir in /tmp/firefox-debug-profile*; do
-    if [ -d "$profile_dir" ]; then
-        echo "Removing: $profile_dir"
-        rm -rf "$profile_dir"
-    fi
-done
-
-# Clean up any other temporary Firefox files
-echo "Cleaning up temporary Firefox files..."
-find /tmp -name "*firefox*" -type d -exec rm -rf {} + 2>/dev/null || true
-find /tmp -name "*firefox*" -type f -delete 2>/dev/null || true
+# Clean up the clean profile directory
+echo "Cleaning up profile directory..."
+if [ -d "/tmp/ff-clean-profile" ]; then
+    echo "Removing: /tmp/ff-clean-profile"
+    rm -rf "/tmp/ff-clean-profile"
+else
+    echo "No profile directory found"
+fi
 
 # Check if cleanup was successful
 if pgrep -f firefox >/dev/null; then
