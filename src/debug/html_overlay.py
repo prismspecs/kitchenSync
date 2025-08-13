@@ -309,9 +309,9 @@ class HTMLDebugOverlay:
                 log_info("=== END DEBUG ===", component="overlay")
                 
                 # Wait for Chromium window to appear (reduced timeout)
-                # Use more flexible search terms for Wayland
+                # Use more flexible search terms for Wayland - the actual window name is "KitchenSync Debug"
                 chromium_window = self.window_manager.wait_for_window(
-                    search_terms=["chromium", "kitchensync", "debug", "index.html"],
+                    search_terms=["kitchensync debug", "kitchensync", "debug", "chromium"],
                     exclude_terms=["vlc", "media player"],
                     timeout=5  # Reduced from 10s to 5s
                 )

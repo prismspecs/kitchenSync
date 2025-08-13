@@ -93,32 +93,56 @@ class WindowManager:
             exclude_terms = []
             
         windows = self.list_windows()
+        log_info(f"Searching for windows with terms: {search_terms}", component="window_manager")
+        log_info(f"Excluding terms: {exclude_terms}", component="window_manager")
+        log_info(f"Total windows found: {len(windows)}", component="window_manager")
         
         for line in windows:
             if not line.strip():
                 continue
                 
             line_lower = line.lower()
+            log_info(f"Checking window: '{line}'", component="window_manager")
             
-            # Check if any search term matches
-            term_found = any(term.lower() in line_lower for term in search_terms)
+            # Check if any search term matches (case-insensitive)
+            term_found = False
+            matched_term = None
+            for term in search_terms:
+                if term.lower() in line_lower:
+                    term_found = True
+                    matched_term = term
+                    break
             
-            # Check if any exclude term matches
+            # Check if any exclude term matches (case-insensitive)
             exclude_found = any(term.lower() in line_lower for term in exclude_terms)
             
+            log_info(f"  Search match: {term_found} (term: {matched_term})", component="window_manager")
+            log_info(f"  Exclude match: {exclude_found}", component="window_manager")
+            
             if term_found and not exclude_found:
+                log_info(f"✅ Window matched: '{line}'", component="window_manager")
                 if self.is_wayland:
                     # wlrctl format: app_id window_title
                     # For Chromium, we might get something like "chromium" or "kitchensync debug"
                     parts = line.strip().split(None, 1)
                     if len(parts) >= 1:
-                        return parts[0]  # Return app_id
+                        window_id = parts[0]  # Return app_id
+                        log_info(f"Returning Wayland window ID: {window_id}", component="window_manager")
+                        return window_id
                 else:
                     # wmctrl format: window_id desktop class hostname window_title
                     parts = line.split(None, 4)
                     if len(parts) >= 1:
-                        return parts[0]  # Return window ID
+                        window_id = parts[0]  # Return window ID
+                        log_info(f"Returning X11 window ID: {window_id}", component="window_manager")
+                        return window_id
+            else:
+                if term_found and exclude_found:
+                    log_info(f"  ❌ Window excluded by exclude terms", component="window_manager")
+                elif not term_found:
+                    log_info(f"  ❌ No search terms matched", component="window_manager")
         
+        log_info("No matching windows found", component="window_manager")
         return None
 
     def _detect_coordinate_offset(self, window_identifier: str, target_x: int, target_y: int) -> Tuple[int, int]:
