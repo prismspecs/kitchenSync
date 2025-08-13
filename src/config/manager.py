@@ -10,7 +10,7 @@ import subprocess
 from pathlib import Path
 from typing import Optional, Dict, Any
 
-from core.logger import log_info, log_warning, log_error
+from src.core.logger import log_info, log_warning, log_error
 
 
 class ConfigurationError(Exception):
@@ -76,7 +76,7 @@ class ConfigManager:
         self.config = configparser.ConfigParser()
         self.config_file = config_file
         self.usb_config_path = None
-        self.usb_mount_point = None  # Add this line
+        self._usb_mount_point = None  # Use a private attribute
         self.load_configuration()
 
     def load_configuration(self) -> None:
@@ -85,7 +85,7 @@ class ConfigManager:
         self.usb_config_path = USBConfigLoader.find_config_on_usb()
         if self.usb_config_path:
             self.config.read(self.usb_config_path)
-            self.usb_mount_point = os.path.dirname(self.usb_config_path)
+            self._usb_mount_point = os.path.dirname(self.usb_config_path)
             log_info(
                 f"Loaded config from USB: {self.usb_config_path}", component="config"
             )
@@ -105,7 +105,7 @@ class ConfigManager:
             self._create_default_config(
                 is_leader=False, video_file=usb_video_info["video_file"]
             )
-            self.usb_mount_point = usb_video_info["mount_point"]
+            self._usb_mount_point = usb_video_info["mount_point"]
             return
 
         # Try specified config file
@@ -238,4 +238,4 @@ class ConfigManager:
     @property
     def usb_mount_point(self) -> Optional[str]:
         """Get USB mount point if available"""
-        return self.usb_mount_point
+        return self._usb_mount_point
