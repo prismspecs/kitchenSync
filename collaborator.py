@@ -101,15 +101,11 @@ class CollaboratorPi:
         # Auto-start playback on first valid sync
         if not self.system_state.is_running:
             self.start_playback()
-
-            # Immediately jump to leader time if possible
-            try:
-                duration = self.video_player.get_duration()
-                if duration and duration > 0:
-                    target = leader_time % duration
-                    self.video_player.set_position(target)
-            except Exception:
-                pass
+            # Don't attempt immediate seeking - let video stabilize first
+            log_info(
+                f"Auto-started from sync, leader time: {leader_time:.3f}s",
+                component="collaborator",
+            )
 
         # Update system time and maintain sync
         self.system_state.current_time = leader_time
@@ -117,8 +113,11 @@ class CollaboratorPi:
         # Process MIDI cues (safe no-op if no schedule)
         self.midi_scheduler.process_cues(leader_time)
 
-        # Check video sync
-        self._check_video_sync(leader_time)
+        # Check video sync (only if we've been running for a bit)
+        if self.system_state.is_running and self.video_start_time:
+            time_since_start = time.time() - self.video_start_time
+            if time_since_start > 2.0:  # Wait 2 seconds before sync corrections
+                self._check_video_sync(leader_time)
 
     def _handle_start_command(self, msg: dict, addr: tuple) -> None:
         """Handle start command from leader"""
@@ -219,6 +218,7 @@ class CollaboratorPi:
         # Get current video position
         video_position = self.video_player.get_position()
         if video_position is None:
+            log_warning("Could not get video position for sync check", component="sync")
             return
 
         # Calculate expected position (wrap to video duration if known)
@@ -240,21 +240,38 @@ class CollaboratorPi:
         sorted_deviations = sorted(self.deviation_samples)
         median_deviation = sorted_deviations[len(sorted_deviations) // 2]
 
-        # Check if correction is needed
-        if abs(median_deviation) > self.deviation_threshold:
+        # Check if correction is needed - use larger threshold for stability
+        correction_threshold = max(self.deviation_threshold, 1.0)  # At least 1 second
+        if abs(median_deviation) > correction_threshold:
             current_time = time.time()
 
             # Avoid corrections too close together
             if current_time - self.last_correction_time < self.sync_check_interval:
                 return
 
+            log_info(
+                f"Sync correction needed: {median_deviation:.3f}s deviation",
+                component="sync",
+            )
             print(f"🔄 Sync correction: {median_deviation:.3f}s deviation")
 
             # Apply correction (respect duration wrap)
             target_position = expected_position
-            if self.video_player.set_position(target_position):
-                self.last_correction_time = current_time
-                self.deviation_samples.clear()
+
+            # Apply correction with time-based seeking (better for hardware decoding)
+            try:
+                if self.video_player.set_position(target_position):
+                    self.last_correction_time = current_time
+                    self.deviation_samples.clear()
+                    log_info(
+                        f"Seek successful to {target_position:.3f}s", component="sync"
+                    )
+                else:
+                    log_warning(
+                        "Seek failed - will retry on next sync", component="sync"
+                    )
+            except Exception as e:
+                log_error(f"Seek failed: {e}", component="sync")
 
     def run(self) -> None:
         """Main run loop"""
