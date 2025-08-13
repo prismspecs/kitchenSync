@@ -288,7 +288,7 @@ class HTMLDebugOverlay:
                 if firefox_window_id:
                     try:
                         # Position using window ID - simplified, no verbose logging
-                        pos_cmd = ["wmctrl", "-i", "-r", firefox_window_id, "-e", "0,1280,24,640,696"]
+                        pos_cmd = ["wmctrl", "-i", "-r", firefox_window_id, "-e", "0,1280,0,640,1080"]
                         log_info(f"Positioning Firefox window: {firefox_window_id}", component="overlay")
                         
                         pos_result = subprocess.run(

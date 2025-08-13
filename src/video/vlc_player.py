@@ -264,14 +264,14 @@ class VLCVideoPlayer:
                         parts = line.split()
                         if len(parts) >= 2:
                             window_id = parts[0]
-                            # Force VLC to left side: x=0, y=24, width=1280, height=696
+                            # Force VLC to left side: x=0, y=0, width=1280, height=720
                             subprocess.run(
-                                ["wmctrl", "-ir", window_id, "-e", "0,0,24,1280,696"],
+                                ["wmctrl", "-ir", window_id, "-e", "0,0,0,1280,720"],
                                 check=False,
                                 timeout=5,
                             )
                             log_info(
-                                f"Forced VLC window {window_id} to left side (0,24,1280,696)"
+                                f"Forced VLC window {window_id} to left side (0,0,1280,720)"
                             )
 
                             # Bring to front
@@ -303,9 +303,9 @@ class VLCVideoPlayer:
                     [
                         "--no-fullscreen",
                         "--width=1280",
-                        "--height=696",  # Reduced height to account for LXDE panel
+                        "--height=720",
                         "--video-x=0",  # Left side of screen
-                        "--video-y=24",  # Below LXDE panel (typically 24px high)
+                        "--video-y=0",  # Top of screen
                         "--no-video-deco",
                     ]
                 )
@@ -369,9 +369,9 @@ class VLCVideoPlayer:
                     [
                         "--no-fullscreen",
                         "--width=1280",
-                        "--height=696",  # Reduced height to account for LXDE panel
+                        "--height=720",
                         "--video-x=0",  # Left side of screen
-                        "--video-y=24",  # Below LXDE panel (typically 24px high)
+                        "--video-y=0",  # Top of screen
                         "--no-video-deco",
                     ]
                 )
