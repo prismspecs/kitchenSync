@@ -240,17 +240,20 @@ class HTMLDebugOverlay:
 
             # Position window after a short delay (in background thread)
             def position_window():
-                max_wait_seconds = 10
+                max_wait_seconds = 5  # Reduced from 10 to 5 seconds
                 start_time = time.time()
                 firefox_window_id = None
+                attempts = 0
+                max_attempts = 3  # Limit total attempts
 
                 log_info("Starting to poll for Firefox window...", component="overlay")
 
-                while time.time() - start_time < max_wait_seconds:
+                while time.time() - start_time < max_wait_seconds and attempts < max_attempts:
+                    attempts += 1
                     try:
-                        # Get list of all windows and find Firefox
+                        # Get list of all windows and find Firefox - reduced timeout
                         result = subprocess.run(
-                            ["wmctrl", "-l"], capture_output=True, text=True, timeout=5
+                            ["wmctrl", "-l"], capture_output=True, text=True, timeout=2
                         )
 
                         if result.returncode == 0:
@@ -276,39 +279,25 @@ class HTMLDebugOverlay:
 
                     except Exception as e:
                         log_warning(
-                            f"Error while polling for window: {e}", component="overlay"
+                            f"Error while polling for window (attempt {attempts}): {e}", component="overlay"
                         )
 
-                    time.sleep(1)  # Wait 1 second before polling again
+                    if not firefox_window_id:
+                        time.sleep(1.5)  # Slightly longer sleep between attempts
 
                 if firefox_window_id:
                     try:
-                        # Log current window position before positioning
-                        current_pos = subprocess.run(
-                            ["wmctrl", "-lG"], capture_output=True, text=True, timeout=5
-                        )
-                        log_info(f"Current window positions before Firefox positioning:\n{current_pos.stdout}", component="overlay")
-                        
-                        # Position using window ID instead of title
+                        # Position using window ID - simplified, no verbose logging
                         pos_cmd = ["wmctrl", "-i", "-r", firefox_window_id, "-e", "0,1280,0,640,1080"]
-                        log_info(f"Executing positioning command: {' '.join(pos_cmd)}", component="overlay")
+                        log_info(f"Positioning Firefox window: {firefox_window_id}", component="overlay")
                         
                         pos_result = subprocess.run(
                             pos_cmd,
                             check=False,
-                            timeout=5,
+                            timeout=3,  # Reduced timeout
                             capture_output=True,
                             text=True,
                         )
-                        
-                        log_info(f"Positioning command result: return_code={pos_result.returncode}, stdout='{pos_result.stdout}', stderr='{pos_result.stderr}'", component="overlay")
-                        
-                        # Wait a moment and check the result
-                        time.sleep(0.5)
-                        after_pos = subprocess.run(
-                            ["wmctrl", "-lG"], capture_output=True, text=True, timeout=5
-                        )
-                        log_info(f"Window positions after Firefox positioning:\n{after_pos.stdout}", component="overlay")
                         
                         if pos_result.returncode == 0:
                             log_info(
@@ -327,9 +316,10 @@ class HTMLDebugOverlay:
                         )
                 else:
                     log_warning(
-                        f"Could not find Firefox window after {max_wait_seconds} seconds.",
+                        f"Could not find Firefox window after {attempts} attempts in {max_wait_seconds} seconds - continuing without positioning",
                         component="overlay",
                     )
+                    # Don't block the main application - Firefox will still work, just not positioned
 
             threading.Thread(target=position_window, daemon=True).start()
 
