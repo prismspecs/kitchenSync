@@ -38,12 +38,9 @@ class CollaboratorPi:
             self.config.video_file, self.config.usb_mount_point
         )
         self.video_player = VLCVideoPlayer(self.config.debug_mode)
-        # Force Python VLC for precise timecode control and fullscreen output
-        self.video_player.debug_mode = True
-        self.video_player.force_python = True
-        self.video_player.force_fullscreen = True
-        # Use position-based seeking (ratio method)
-        self.video_player.use_position_seeking = True
+        # Use command-line VLC for better seeking with hardware decoders
+        self.video_player.debug_mode = False  # Forces CLI VLC
+        self.video_player.force_python = False
         # Ensure GUI output on local display and avoid terminal ASCII fallback
         try:
             from src.video.vlc_player import VLCVideoPlayer as _V
@@ -111,24 +108,6 @@ class CollaboratorPi:
                 f"Auto-started from sync, leader time: {leader_time:.3f}s",
                 component="collaborator",
             )
-
-            # TEST: Restart video at 2 minutes to test start-time option (better for hardware decoders)
-            def test_start_time():
-                time.sleep(3)  # Wait for video to fully load
-                log_info(
-                    "TEST: Restarting video at 2 minutes (120s) using start-time",
-                    component="test",
-                )
-                self.video_player.stop_playback()
-                time.sleep(0.5)
-                if self.video_player.start_playback_at_time(120.0):
-                    log_info("TEST: Start at 2 minutes SUCCESS", component="test")
-                else:
-                    log_warning("TEST: Start at 2 minutes FAILED", component="test")
-
-            import threading
-
-            threading.Thread(target=test_start_time, daemon=True).start()
 
         # Update system time and maintain sync
         self.system_state.current_time = leader_time

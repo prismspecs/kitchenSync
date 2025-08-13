@@ -45,6 +45,9 @@ class VLCVideoPlayer:
         self.force_fullscreen = False  # Force fullscreen even in debug
         self.video_output: Optional[str] = None  # e.g., "x11", "glx", "xvideo"
         self.use_position_seeking = False  # Use position ratio instead of time seeking
+        # VLC HTTP interface for command-line control
+        self.vlc_http_port = 8080
+        self.vlc_http_password = "vlcremote"
         # Log environment snapshot once when player is constructed
         snapshot_env()
 
@@ -125,9 +128,9 @@ class VLCVideoPlayer:
         """Set playback position"""
         try:
             if self.vlc_player and VLC_PYTHON_AVAILABLE:
+                # Python VLC seeking (for when we use Python VLC)
                 import vlc
 
-                # Wait for media to be in a seekable state
                 state = self.vlc_player.get_state()
                 if state not in [vlc.State.Playing, vlc.State.Paused]:
                     log_warning(
@@ -135,7 +138,6 @@ class VLCVideoPlayer:
                     )
                     return False
 
-                # Ensure we have valid duration before seeking
                 length_ms = self.vlc_player.get_length()
                 if length_ms <= 0:
                     log_warning(
@@ -144,7 +146,6 @@ class VLCVideoPlayer:
                     return False
 
                 if self.use_position_seeking:
-                    # Position-based seeking (ratio 0.0-1.0)
                     position_ratio = (seconds * 1000.0) / length_ms
                     position_ratio = max(0.0, min(1.0, position_ratio))
                     result = self.vlc_player.set_position(position_ratio)
@@ -154,7 +155,6 @@ class VLCVideoPlayer:
                     )
                     return result == 0
                 else:
-                    # Time-based seeking (milliseconds)
                     time_ms = int(seconds * 1000)
                     result = self.vlc_player.set_time(time_ms)
                     log_info(
@@ -162,9 +162,47 @@ class VLCVideoPlayer:
                         component="vlc",
                     )
                     return result == 0
+            elif self.command_process and self.command_process.poll() is None:
+                # Command-line VLC seeking via HTTP interface
+                return self._seek_via_http(seconds)
             return False
         except Exception as e:
             log_error(f"Error setting position: {e}", component="vlc")
+            return False
+
+    def _seek_via_http(self, seconds: float) -> bool:
+        """Seek using VLC's HTTP interface"""
+        try:
+            import urllib.request
+            import urllib.parse
+            import base64
+
+            # VLC HTTP interface URL
+            url = f"http://localhost:{self.vlc_http_port}/requests/status.xml"
+
+            # Create authentication header
+            auth_string = f":{self.vlc_http_password}"
+            auth_bytes = auth_string.encode("ascii")
+            auth_b64 = base64.b64encode(auth_bytes).decode("ascii")
+
+            # Seek command
+            seek_url = f"{url}?command=seek&val={int(seconds)}"
+
+            request = urllib.request.Request(seek_url)
+            request.add_header("Authorization", f"Basic {auth_b64}")
+
+            with urllib.request.urlopen(request, timeout=1) as response:
+                if response.code == 200:
+                    log_info(f"HTTP seek to {seconds:.3f}s successful", component="vlc")
+                    return True
+                else:
+                    log_warning(
+                        f"HTTP seek failed with code {response.code}", component="vlc"
+                    )
+                    return False
+
+        except Exception as e:
+            log_error(f"HTTP seek failed: {e}", component="vlc")
             return False
 
     def get_duration(self) -> Optional[float]:
@@ -363,8 +401,18 @@ class VLCVideoPlayer:
             except Exception:
                 pass
 
-            # Try with audio first
-            cmd = ["vlc", "--intf", "dummy"]  # No interface
+            # Try with audio first - add HTTP interface for remote control
+            cmd = [
+                "vlc",
+                "--intf",
+                "dummy",
+                "--extraintf",
+                "http",
+                f"--http-password",
+                self.vlc_http_password,
+                f"--http-port",
+                str(self.vlc_http_port),
+            ]
             cmd.extend(self._get_vlc_args())
 
             # Add looping if enabled
