@@ -84,6 +84,23 @@ def enable_system_logging(enabled: bool = True) -> None:
     _ENABLE_SYSTEM_LOGGING = enabled
 
 
+def debug_log_info(message: str, component: str = "debug") -> None:
+    """Log info only if system logging is enabled (for debug components)"""
+    if _ENABLE_SYSTEM_LOGGING:
+        log_info(message, component)
+
+
+def debug_log_warning(message: str, component: str = "debug") -> None:
+    """Log warning only if system logging is enabled (for debug components)"""
+    if _ENABLE_SYSTEM_LOGGING:
+        log_warning(message, component)
+
+
+def debug_log_error(message: str, component: str = "debug") -> None:
+    """Always log errors regardless of system logging setting"""
+    log_error(message, component)
+
+
 def snapshot_env() -> Dict[str, str]:
     """Capture relevant environment variables for diagnostics and log them."""
     keys = [

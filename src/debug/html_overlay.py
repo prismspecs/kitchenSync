@@ -5,6 +5,7 @@ Opens a browser window with live-updating debug information
 """
 
 import os
+import subprocess
 import time
 import threading
 import webbrowser
@@ -14,26 +15,8 @@ from src.core.logger import (
     debug_log_info,
     log_error,
     debug_log_warning,
-    _ENABLE_SYSTEM_LOGGING,
+    debug_log_error,
 )
-
-
-def debug_debug_log_info(message: str, component: str = "overlay") -> None:
-    """Log info only if system logging is enabled"""
-    if _ENABLE_SYSTEM_LOGGING:
-        debug_log_info(message, component)
-
-
-def debug_debug_log_warning(message: str, component: str = "overlay") -> None:
-    """Log warning only if system logging is enabled"""
-    if _ENABLE_SYSTEM_LOGGING:
-        debug_log_warning(message, component)
-
-
-# Always log errors regardless of system logging setting
-def debug_log_error(message: str, component: str = "overlay") -> None:
-    """Always log errors"""
-    log_error(message, component)
 
 
 from src.debug.template_engine import DebugTemplateManager
@@ -99,7 +82,7 @@ class HTMLDebugOverlay:
             if not self.html_file:
                 raise Exception("Template rendering failed")
 
-            debug_debug_log_info(f"HTML debug file created: {self.html_file}")
+            debug_log_info(f"HTML debug file created: {self.html_file}")
 
         except Exception as e:
             log_error(f"Failed to create HTML file using templates: {e}")
@@ -150,7 +133,7 @@ class HTMLDebugOverlay:
             overlay_dir = Path(self.html_file).parent
             overlay_dir.mkdir(exist_ok=True)
             self.template_manager.copy_static_files(overlay_dir)
-            debug_debug_log_info("Debug environment setup complete.")
+            debug_log_info("Debug environment setup complete.")
         except Exception as e:
             log_error(f"Failed to set up debug environment: {e}")
 
@@ -196,7 +179,7 @@ class HTMLDebugOverlay:
 
     def cleanup(self):
         """Clean up resources"""
-        debug_debug_log_info("Cleaning up HTML debug overlay")
+        debug_log_info("Cleaning up HTML debug overlay")
 
         # Stop the main thread first
         self.running = False
