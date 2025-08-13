@@ -322,7 +322,7 @@ class WindowManager:
             window = self.find_window(search_terms, exclude_terms)
             if window:
                 return window
-            time.sleep(0.5)
+            time.sleep(0.2)  # Reduced from 0.5s to 0.2s for faster detection
         
         log_warning(f"Window with terms {search_terms} not found within {timeout} seconds")
         return None

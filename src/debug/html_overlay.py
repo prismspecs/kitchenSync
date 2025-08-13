@@ -44,8 +44,8 @@ class HTMLDebugOverlay:
             "looping_enabled": True,
         }
 
-        # Track Firefox state
-        self.firefox_opened = False
+        # Track Chromium state
+        self.chromium_opened = False
         
         # Initialize window manager
         self.window_manager = WindowManager()
@@ -190,17 +190,17 @@ class HTMLDebugOverlay:
         except Exception as e:
             log_warning(f"Could not remove HTML directory: {e}", component="overlay")
 
-        # Reset Firefox flag
-        self.firefox_opened = False
+        # Reset Chromium flag
+        self.chromium_opened = False
         log_info("HTML overlay cleaned up", component="overlay")
 
     def open_in_browser(self):
-        """Open the HTML file in the default browser"""
+        """Open the HTML file in Chromium browser (much lighter than Firefox)"""
         try:
-            # Prevent multiple Firefox instances
-            if self.firefox_opened:
+            # Prevent multiple Chromium instances
+            if self.chromium_opened:
                 log_info(
-                    "Firefox already opened, skipping duplicate launch",
+                    "Chromium already opened, skipping duplicate launch",
                     component="overlay",
                 )
                 return
@@ -210,118 +210,152 @@ class HTMLDebugOverlay:
             import threading
             import time
 
-            # Kill any existing Firefox processes first to avoid tab accumulation
+            # Kill any existing Chromium processes first to avoid tab accumulation
             try:
-                subprocess.run(["pkill", "-f", "firefox"], check=False, timeout=3)
-                time.sleep(0.5)  # Give it time to close
-                self.firefox_opened = False  # Reset flag after killing
+                subprocess.run(["pkill", "-f", "chromium"], check=False, timeout=3)
+                time.sleep(0.2)  # Reduced wait time
+                self.chromium_opened = False  # Reset flag after killing
             except:
                 pass
 
-            # Create a temporary Firefox profile directory
-            profile_dir = "/tmp/firefox-debug-profile"
+            # Create a temporary Chromium profile directory
+            profile_dir = "/tmp/chromium-debug-profile"
             import os
 
             os.makedirs(profile_dir, exist_ok=True)
 
-            # Open Firefox with the profile (non-blocking)
-            # Set up environment for Firefox in system service context
+            # Open Chromium with the profile (non-blocking)
+            # Set up environment for Chromium in system service context
             current_user = os.getenv("USER", "kitchensync")
             
-            firefox_env = os.environ.copy()
-            firefox_env.update({
+            chromium_env = os.environ.copy()
+            chromium_env.update({
                 'DISPLAY': ':0',
                 'XAUTHORITY': f'/home/{current_user}/.Xauthority',
                 'XDG_RUNTIME_DIR': f'/run/user/{os.getuid()}',
                 'HOME': f'/home/{current_user}',
-                # Additional environment variables for Firefox
+                # Additional environment variables for Chromium
                 'XDG_SESSION_TYPE': 'x11',
                 'GDK_BACKEND': 'x11',
                 'QT_QPA_PLATFORM': 'xcb',
                 'WAYLAND_DISPLAY': '',
+                # Chromium-specific optimizations
+                'CHROMIUM_FLAGS': '--disable-extensions --disable-plugins --disable-background-tabs --disable-background-mode --disable-background-networking --disable-default-apps --disable-sync --disable-translate --disable-web-security --no-first-run --no-default-browser-check --disable-features=VizDisplayCompositor',
             })
             
-            log_info(f"Launching Firefox with environment: USER={current_user}, DISPLAY={firefox_env.get('DISPLAY')}, XAUTHORITY={firefox_env.get('XAUTHORITY')}", component="overlay")
+            log_info(f"Launching Chromium with environment: USER={current_user}, DISPLAY={chromium_env.get('DISPLAY')}, XAUTHORITY={chromium_env.get('XAUTHORITY')}", component="overlay")
             
-            # Launch Firefox and capture any errors
+            # Launch Chromium with optimized flags for speed
             try:
                 process = subprocess.Popen(
                     [
-                        "firefox",
-                        "--new-instance",
+                        "chromium-browser",
                         "--new-window",
-                        "--profile",
-                        profile_dir,
+                        "--user-data-dir=" + profile_dir,
+                        "--no-first-run",
+                        "--disable-extensions",
+                        "--disable-plugins",
+                        "--disable-background-tabs",
+                        "--disable-background-mode",
+                        "--disable-background-networking",
+                        "--disable-default-apps",
+                        "--disable-sync",
+                        "--disable-translate",
+                        "--disable-web-security",
+                        "--no-default-browser-check",
+                        "--disable-features=VizDisplayCompositor",
+                        "--disable-gpu-sandbox",
+                        "--disable-software-rasterizer",
+                        "--disable-dev-shm-usage",
+                        "--disable-ipc-flooding-protection",
+                        "--disable-renderer-backgrounding",
+                        "--disable-backgrounding-occluded-windows",
+                        "--disable-background-timer-throttling",
+                        "--disable-features=TranslateUI",
+                        "--disable-ipc-flooding-protection",
+                        "--disable-renderer-backgrounding",
+                        "--disable-backgrounding-occluded-windows",
+                        "--disable-background-timer-throttling",
+                        "--disable-features=TranslateUI",
+                        "--disable-features=VizDisplayCompositor",
+                        "--disable-features=NetworkService",
+                        "--disable-features=NetworkServiceLogging",
+                        "--disable-features=VizDisplayCompositor",
+                        "--disable-features=NetworkService",
+                        "--disable-features=NetworkServiceLogging",
+                        "--disable-features=VizDisplayCompositor",
+                        "--disable-features=NetworkService",
+                        "--disable-features=NetworkServiceLogging",
                         f"file://{self.html_file}",
                     ],
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
-                    env=firefox_env,
+                    env=chromium_env,
                 )
                 
-                # Check if Firefox started successfully (don't wait for completion)
-                time.sleep(0.5)
+                # Check if Chromium started successfully (don't wait for completion)
+                time.sleep(0.3)  # Reduced wait time
                 if process.poll() is not None:
                     # Process exited, capture error
                     stdout, stderr = process.communicate()
-                    log_error(f"Firefox failed to start. Exit code: {process.returncode}", component="overlay")
-                    log_error(f"Firefox stdout: {stdout.decode()}", component="overlay")
-                    log_error(f"Firefox stderr: {stderr.decode()}", component="overlay")
+                    log_error(f"Chromium failed to start. Exit code: {process.returncode}", component="overlay")
+                    log_error(f"Chromium stdout: {stdout.decode()}", component="overlay")
+                    log_error(f"Chromium stderr: {stderr.decode()}", component="overlay")
                     return
                     
             except Exception as e:
-                log_error(f"Exception launching Firefox: {e}", component="overlay")
+                log_error(f"Exception launching Chromium: {e}", component="overlay")
                 return
 
-            # Mark Firefox as opened
-            self.firefox_opened = True
-            log_info("Firefox launched successfully", component="overlay")
+            # Mark Chromium as opened
+            self.chromium_opened = True
+            log_info("Chromium launched successfully", component="overlay")
 
             # Position window after a short delay (in background thread)
             def position_window():
-                log_info("Starting to wait for Firefox window...", component="overlay")
+                log_info("Starting to wait for Chromium window...", component="overlay")
                 
-                # Wait for Firefox window to appear
-                firefox_window = self.window_manager.wait_for_window(
-                    search_terms=["firefox", "kitchensync debug"],
+                # Wait for Chromium window to appear (reduced timeout)
+                chromium_window = self.window_manager.wait_for_window(
+                    search_terms=["chromium", "kitchensync debug", "debug"],
                     exclude_terms=["vlc", "media player"],
-                    timeout=10
+                    timeout=5  # Reduced from 10s to 5s
                 )
 
-                if firefox_window:
-                    log_info(f"Found Firefox window: {firefox_window}", component="overlay")
+                if chromium_window:
+                    log_info(f"Found Chromium window: {chromium_window}", component="overlay")
                     
                     # Get display geometry for better positioning
                     display_width, display_height = self.window_manager.get_display_geometry()
                     log_info(f"Display geometry: {display_width}x{display_height}", component="overlay")
                     
                     # Calculate positioning based on display size
-                    # Position Firefox on right side with proper coordinates
-                    firefox_x = max(0, display_width - 640)  # Right side, 640px wide
-                    firefox_y = 0
-                    firefox_width = 640
-                    firefox_height = min(1080, display_height)
+                    # Position Chromium on right side with proper coordinates
+                    chromium_x = max(0, display_width - 640)  # Right side, 640px wide
+                    chromium_y = 0
+                    chromium_width = 640
+                    chromium_height = min(1080, display_height)
                     
-                    log_info(f"Target Firefox position: ({firefox_x}, {firefox_y}) {firefox_width}x{firefox_height}", component="overlay")
+                    log_info(f"Target Chromium position: ({chromium_x}, {chromium_y}) {chromium_width}x{chromium_height}", component="overlay")
                     
                     # Log current window positions
                     window_details = self.window_manager.get_window_details()
-                    log_info(f"Current window positions before Firefox positioning:\n{window_details}", component="overlay")
+                    log_info(f"Current window positions before Chromium positioning:\n{window_details}", component="overlay")
                     
-                    # Position Firefox window
-                    success = self.window_manager.position_window(firefox_window, firefox_x, firefox_y, firefox_width, firefox_height)
+                    # Position Chromium window
+                    success = self.window_manager.position_window(chromium_window, chromium_x, chromium_y, chromium_width, chromium_height)
                     
                     if success:
-                        log_info("Positioned Firefox window on right side", component="overlay")
+                        log_info("Positioned Chromium window on right side", component="overlay")
                         
                         # Log positions after positioning
                         time.sleep(0.5)
                         after_details = self.window_manager.get_window_details()
-                        log_info(f"Window positions after Firefox positioning:\n{after_details}", component="overlay")
+                        log_info(f"Window positions after Chromium positioning:\n{after_details}", component="overlay")
                     else:
-                        log_warning("Failed to position Firefox window", component="overlay")
+                        log_warning("Failed to position Chromium window", component="overlay")
                 else:
-                    log_warning("Firefox window not found for positioning", component="overlay")
+                    log_warning("Chromium window not found for positioning", component="overlay")
 
             threading.Thread(target=position_window, daemon=True).start()
 
