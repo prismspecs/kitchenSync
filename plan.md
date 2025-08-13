@@ -350,7 +350,7 @@ The systemd service includes proper environment variables:
 
 1. **Monitor system logs**: `tail -f /tmp/kitchensync_system.log`
 2. **Check VLC errors**: `tail -f /tmp/kitchensync_vlc_stderr.log`  
-3. **Service status**: `systemctl status kitchensync.service`
+3. **Service status**: `systemctl --user status kitchensync.service`
 4. **Window positioning**: Logs show wmctrl positioning results
 
 

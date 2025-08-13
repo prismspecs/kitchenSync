@@ -7,14 +7,14 @@ A modern, plug-and-play system for synchronized video playback and MIDI output a
 **� IMPORTANT: Every Pi runs the same installation and service!**
 
 ### **Single Service, Multiple Roles**
-1. **Identical Setup**: All Pis have the same installation with `kitchensync.service` enabled
+1. **Identical Setup**: All Pis have the same installation with user `kitchensync.service` enabled
 2. **USB-Drive Configuration**: Each Pi gets its role from a USB drive configuration file
 3. **Automatic Detection**: `kitchensync.py` scans for USB drives and reads `kitchensync.ini`
 4. **Role Execution**: Based on the config, it automatically starts as leader or collaborator
 
 ```bash
 # Same systemd service runs on ALL Pis:
-sudo systemctl start kitchensync.service
+systemctl --user start kitchensync.service
 # → Runs: python3 kitchensync.py
 
 # USB drive contains kitchensync.ini:
@@ -122,12 +122,13 @@ sudo pip install python-rtmidi python-vlc --break-system-packages
 
 ```bash
 # Copy service file to systemd
-sudo cp kitchensync.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable kitchensync.service
+# Service is now installed as user service via setup.sh
+# Service is now managed as user service via setup.sh
+# systemctl --user daemon-reload
+systemctl --user enable kitchensync.service
 
 # Start immediately (optional)
-sudo systemctl start kitchensync.service
+systemctl --user start kitchensync.service
 ```
 
 ## 🚀 Complete Deployment Workflow
@@ -145,9 +146,10 @@ sudo apt install -y vlc libvlc-dev python3-vlc python3-pip python3-dev libasound
 sudo pip install python-rtmidi python-vlc pygame --break-system-packages
 
 # Enable service on ALL Pis
-sudo cp kitchensync.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable kitchensync.service
+# Service is now installed as user service via setup.sh
+# Service is now managed as user service via setup.sh
+# systemctl --user daemon-reload
+systemctl --user enable kitchensync.service
 ```
 
 #### **2. Prepare USB Drives (Different Configs)**
@@ -377,7 +379,7 @@ For production deployment:
 python3 leader.py --auto
 
 # Or use systemd service
-sudo systemctl start kitchensync.service
+systemctl --user start kitchensync.service
 ```
 
 ## 🔄 Advanced Synchronization
@@ -443,7 +445,7 @@ aconnect -l
 python3 kitchensync.py --test-usb
 
 # Monitor systemd service
-sudo systemctl status kitchensync.service
+systemctl --user status kitchensync.service
 ```
 
 ### Video Playback Testing
@@ -463,8 +465,8 @@ DISPLAY=:0 python3 leader.py --auto
 **System Won't Start:**
 ```bash
 # Check systemd service status
-sudo systemctl status kitchensync.service
-sudo journalctl -u kitchensync.service -f
+systemctl --user status kitchensync.service
+journalctl --user -u kitchensync.service -f
 
 # Run manually for debugging
 cd /home/kitchensync/workbench/kitchenSync
@@ -540,13 +542,13 @@ amidi -p hw:1,0 --send-hex="90 60 7F"
 
 ```bash
 # Enable auto-start on all Pis
-sudo systemctl enable kitchensync.service
+systemctl --user enable kitchensync.service
 
 # Start system immediately
-sudo systemctl start kitchensync.service
+systemctl --user start kitchensync.service
 
 # Monitor system status
-sudo systemctl status kitchensync.service
+systemctl --user status kitchensync.service
 ```
 
 ## 🔧 Advanced Features
