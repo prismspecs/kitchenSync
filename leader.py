@@ -125,7 +125,7 @@ class LeaderPi:
                         import threading
 
                         def position_vlc_window():
-                            time.sleep(1)  # Wait for VLC window to appear first
+                            time.sleep(0.5)  # Reduced from 1s for faster positioning
                             try:
                                 import subprocess
 
@@ -138,7 +138,7 @@ class LeaderPi:
                                         "0,0,0,1280,1080",
                                     ],
                                     check=False,
-                                    timeout=5,
+                                    timeout=3,  # Reduced timeout
                                     stdout=subprocess.DEVNULL,
                                     stderr=subprocess.DEVNULL,
                                 )
@@ -158,9 +158,14 @@ class LeaderPi:
                                     component="leader",
                                 )
 
-                        threading.Thread(
-                            target=position_vlc_window, daemon=True
-                        ).start()
+                        # Use non-daemon thread and wait for completion with timeout
+                        vlc_position_thread = threading.Thread(target=position_vlc_window)
+                        vlc_position_thread.start()
+                        
+                        # Wait for VLC positioning to complete with timeout
+                        vlc_position_thread.join(timeout=5)  # Wait up to 5 seconds
+                        if vlc_position_thread.is_alive():
+                            log_warning("VLC positioning thread did not complete within timeout", component="leader")
                     else:
                         log_info(
                             "Production mode - no window positioning",

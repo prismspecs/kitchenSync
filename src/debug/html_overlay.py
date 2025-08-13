@@ -210,11 +210,16 @@ class HTMLDebugOverlay:
             import threading
             import time
 
-            # Kill any existing Firefox processes first to avoid tab accumulation
+            # Don't kill existing Firefox - this causes startup delays and process pollution
+            # Instead, just check if it's already running
             try:
-                subprocess.run(["pkill", "-f", "firefox"], check=False, timeout=3)
-                time.sleep(0.5)  # Give it time to close
-                self.firefox_opened = False  # Reset flag after killing
+                result = subprocess.run(["pgrep", "firefox"], capture_output=True, timeout=1)
+                if result.returncode == 0:
+                    log_info("Firefox already running, will position existing window", component="overlay")
+                    self.firefox_opened = True
+                    # Position existing Firefox window instead of launching new one
+                    threading.Thread(target=self._position_existing_firefox, daemon=True).start()
+                    return
             except:
                 pass
 
@@ -224,7 +229,7 @@ class HTMLDebugOverlay:
 
             os.makedirs(profile_dir, exist_ok=True)
 
-            # Open Firefox with the profile (non-blocking)
+            # Open Firefox with simplified arguments for faster startup
             # Set up environment for Firefox in system service context
             current_user = os.getenv("USER", "kitchensync")
             
@@ -243,30 +248,24 @@ class HTMLDebugOverlay:
             
             log_info(f"Launching Firefox with environment: USER={current_user}, DISPLAY={firefox_env.get('DISPLAY')}, XAUTHORITY={firefox_env.get('XAUTHORITY')}", component="overlay")
             
-            # Launch Firefox and capture any errors
+            # Launch Firefox with minimal arguments for faster startup
             try:
                 process = subprocess.Popen(
                     [
                         "firefox",
-                        "--new-instance",
-                        "--new-window",
                         "--profile",
                         profile_dir,
                         f"file://{self.html_file}",
                     ],
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
+                    stdout=subprocess.DEVNULL,  # Don't capture output to avoid blocking
+                    stderr=subprocess.DEVNULL,
                     env=firefox_env,
                 )
                 
-                # Check if Firefox started successfully (don't wait for completion)
-                time.sleep(0.5)
+                # Quick check if Firefox started successfully
+                time.sleep(0.2)  # Reduced from 0.5s
                 if process.poll() is not None:
-                    # Process exited, capture error
-                    stdout, stderr = process.communicate()
                     log_error(f"Firefox failed to start. Exit code: {process.returncode}", component="overlay")
-                    log_error(f"Firefox stdout: {stdout.decode()}", component="overlay")
-                    log_error(f"Firefox stderr: {stderr.decode()}", component="overlay")
                     return
                     
             except Exception as e:
@@ -281,11 +280,11 @@ class HTMLDebugOverlay:
             def position_window():
                 log_info("Starting to wait for Firefox window...", component="overlay")
                 
-                # Wait for Firefox window to appear
+                # Wait for Firefox window to appear with shorter timeout
                 firefox_window = self.window_manager.wait_for_window(
                     search_terms=["firefox", "kitchensync debug"],
                     exclude_terms=["vlc", "media player"],
-                    timeout=10
+                    timeout=5  # Reduced from 10s
                 )
 
                 if firefox_window:
@@ -304,30 +303,60 @@ class HTMLDebugOverlay:
                     
                     log_info(f"Target Firefox position: ({firefox_x}, {firefox_y}) {firefox_width}x{firefox_height}", component="overlay")
                     
-                    # Log current window positions
-                    window_details = self.window_manager.get_window_details()
-                    log_info(f"Current window positions before Firefox positioning:\n{window_details}", component="overlay")
-                    
-                    # Position Firefox window
+                    # Position Firefox window with timeout to prevent hanging
                     success = self.window_manager.position_window(firefox_window, firefox_x, firefox_y, firefox_width, firefox_height)
                     
                     if success:
                         log_info("Positioned Firefox window on right side", component="overlay")
-                        
-                        # Log positions after positioning
-                        time.sleep(0.5)
-                        after_details = self.window_manager.get_window_details()
-                        log_info(f"Window positions after Firefox positioning:\n{after_details}", component="overlay")
                     else:
                         log_warning("Failed to position Firefox window", component="overlay")
                 else:
-                    log_warning("Firefox window not found for positioning", component="overlay")
+                    log_warning("Firefox window not found for positioning within timeout", component="overlay")
 
-            threading.Thread(target=position_window, daemon=True).start()
+            # Use a non-daemon thread to ensure it completes
+            position_thread = threading.Thread(target=position_window)
+            position_thread.start()
+            
+            # Wait for positioning to complete with timeout to prevent hanging
+            position_thread.join(timeout=8)  # Wait up to 8 seconds for positioning
+            if position_thread.is_alive():
+                log_warning("Firefox positioning thread did not complete within timeout", component="overlay")
 
             log_info(f"HTML debug overlay opened in browser: {self.html_file}")
         except Exception as e:
             log_error(f"Failed to open HTML overlay in browser: {e}")
+
+    def _position_existing_firefox(self):
+        """Position an existing Firefox window instead of launching new one"""
+        try:
+            log_info("Positioning existing Firefox window...", component="overlay")
+            
+            # Find existing Firefox window
+            firefox_window = self.window_manager.find_window(
+                search_terms=["firefox", "kitchensync debug"],
+                exclude_terms=["vlc", "media player"]
+            )
+            
+            if firefox_window:
+                # Get display geometry
+                display_width, display_height = self.window_manager.get_display_geometry()
+                
+                # Position on right side
+                firefox_x = max(0, display_width - 640)
+                firefox_y = 0
+                firefox_width = 640
+                firefox_height = min(1080, display_height)
+                
+                success = self.window_manager.position_window(firefox_window, firefox_x, firefox_y, firefox_width, firefox_height)
+                if success:
+                    log_info("Positioned existing Firefox window", component="overlay")
+                else:
+                    log_warning("Failed to position existing Firefox window", component="overlay")
+            else:
+                log_warning("Could not find existing Firefox window for positioning", component="overlay")
+                
+        except Exception as e:
+            log_error(f"Error positioning existing Firefox: {e}", component="overlay")
 
     def update_content(self, system_info: dict = None):
         """Update the HTML content with current system information using templates"""
