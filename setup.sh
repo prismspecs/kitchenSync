@@ -58,7 +58,8 @@ fi
 if [ -f /etc/lightdm/lightdm.conf ]; then
     echo "Configuring LightDM for X11 mode..."
     sudo sed -i 's/user-session=LXDE-pi-labwc/user-session=LXDE-pi-x/' /etc/lightdm/lightdm.conf
-    echo "✓ LightDM configured to use X11 session (LXDE-pi-x)"
+    sudo sed -i 's/autologin-session=LXDE-pi-labwc/autologin-session=LXDE-pi-x/' /etc/lightdm/lightdm.conf
+    echo "✓ LightDM configured to use X11 session (LXDE-pi-x) for both user and autologin"
 fi
 
 # Add X11 environment variables to user profile
