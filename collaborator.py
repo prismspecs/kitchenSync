@@ -42,6 +42,8 @@ class CollaboratorPi:
         self.video_player.debug_mode = True
         self.video_player.force_python = True
         self.video_player.force_fullscreen = True
+        # Try position-based seeking if time-based doesn't work with this video
+        self.video_player.use_position_seeking = True
         # Ensure GUI output on local display and avoid terminal ASCII fallback
         try:
             from src.video.vlc_player import VLCVideoPlayer as _V

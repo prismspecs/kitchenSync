@@ -43,6 +43,7 @@ class VLCVideoPlayer:
         self.force_python = False  # Force Python VLC engine regardless of debug mode
         self.force_fullscreen = False  # Force fullscreen even in debug
         self.video_output: Optional[str] = None  # e.g., "x11", "glx", "xvideo"
+        self.use_position_seeking = False  # Use position ratio instead of time seeking
         # Log environment snapshot once when player is constructed
         snapshot_env()
 
@@ -116,25 +117,18 @@ class VLCVideoPlayer:
         """Set playback position"""
         try:
             if self.vlc_player and VLC_PYTHON_AVAILABLE:
-                # Method 1: Try time-based seeking (works better with hardware decoding)
-                time_ms = int(seconds * 1000)
-                if time_ms >= 0:
+                if self.use_position_seeking:
+                    # Position-based seeking (ratio 0.0-1.0)
+                    length_ms = self.vlc_player.get_length()
+                    if length_ms > 0:
+                        position_ratio = (seconds * 1000.0) / length_ms
+                        position_ratio = max(0.0, min(1.0, position_ratio))
+                        self.vlc_player.set_position(position_ratio)
+                        return True
+                else:
+                    # Time-based seeking (milliseconds)
+                    time_ms = int(seconds * 1000)
                     self.vlc_player.set_time(time_ms)
-                    log_info(
-                        f"Set time to {time_ms}ms ({seconds:.3f}s)", component="vlc"
-                    )
-                    return True
-
-                # Method 2: Fallback to position-based seeking
-                length_ms = self.vlc_player.get_length()
-                if length_ms > 0:
-                    position_ratio = (seconds * 1000.0) / length_ms
-                    position_ratio = max(0.0, min(1.0, position_ratio))
-                    self.vlc_player.set_position(position_ratio)
-                    log_info(
-                        f"Set position to {position_ratio:.3f} ({seconds:.3f}s)",
-                        component="vlc",
-                    )
                     return True
             return False
         except Exception as e:
