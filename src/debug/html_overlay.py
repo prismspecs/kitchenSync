@@ -24,64 +24,6 @@ from src.debug.template_engine import DebugTemplateManager
 from src.ui.window_manager import WindowManager
 
 
-class SystemInfoCache:
-    """Smart caching system to avoid expensive subprocess calls every update"""
-    
-    def __init__(self, cache_duration: int = 30):
-        self.cache_duration = cache_duration  # Cache for 30 seconds
-        self.cache = {}
-        self.last_updated = {}
-    
-    def get_cached_or_run(self, cache_key: str, subprocess_cmd: list, timeout: int = 5):
-        """Get cached result or run subprocess if cache is stale"""
-        current_time = time.time()
-        
-        # Check if we have fresh cached data
-        if (cache_key in self.cache and 
-            cache_key in self.last_updated and
-            current_time - self.last_updated[cache_key] < self.cache_duration):
-            return self.cache[cache_key]
-        
-        # Cache is stale or missing, run the command
-        try:
-            result = subprocess.run(
-                subprocess_cmd,
-                capture_output=True,
-                text=True,
-                timeout=timeout,
-            )
-            
-            # Cache the result
-            self.cache[cache_key] = result
-            self.last_updated[cache_key] = current_time
-            
-            return result
-            
-        except Exception as e:
-            # Return cached result if available, otherwise create error result
-            if cache_key in self.cache:
-                debug_log_warning(f"Subprocess failed, using cached result for {cache_key}: {e}")
-                return self.cache[cache_key]
-            else:
-                # Create error result object that matches subprocess.run return
-                class ErrorResult:
-                    def __init__(self, error_msg):
-                        self.returncode = 1
-                        self.stdout = ""
-                        self.stderr = str(error_msg)
-                
-                return ErrorResult(e)
-    
-    def invalidate(self, cache_key: str = None):
-        """Invalidate specific cache key or all cache"""
-        if cache_key:
-            self.cache.pop(cache_key, None)
-            self.last_updated.pop(cache_key, None)
-        else:
-            self.cache.clear()
-            self.last_updated.clear()
-
-
 def _tail_log_file(file_path: str, max_lines: int = 10) -> list:
     """Efficiently read only the last N lines from a log file without loading entire file"""
     try:
@@ -151,9 +93,6 @@ class HTMLDebugOverlay:
         template_dir = Path(__file__).parent / "templates"
         self.template_manager = DebugTemplateManager(str(template_dir))
         self.html_file = f"/tmp/kitchensync_debug_{pi_id}/index.html"
-        
-        # Smart caching system to avoid expensive subprocess calls every update
-        self.system_cache = SystemInfoCache(cache_duration=30)  # 30-second cache
 
         # Initialize state
         self.state = {
@@ -172,6 +111,7 @@ class HTMLDebugOverlay:
 
         # Track Firefox state
         self.firefox_opened = False
+        self.firefox_process = None
 
         # Initialize window manager
         self.window_manager = WindowManager()
@@ -290,7 +230,7 @@ class HTMLDebugOverlay:
         while self.running:
             try:
                 self.update_content()
-                time.sleep(10)  # Update every 10 seconds
+                time.sleep(5)  # Update every 5 seconds (max frequency)
             except Exception as e:
                 log_error(f"HTML update error: {e}")
                 time.sleep(5)
@@ -302,17 +242,27 @@ class HTMLDebugOverlay:
         # Stop the main thread first
         self.running = False
 
-        # Kill Firefox process (OPTIMIZED - rate limited)
-        try:
-            current_time = time.time()
-            if not hasattr(self, '_last_cleanup_kill') or current_time - self._last_cleanup_kill > 10:
-                subprocess.run(["pkill", "-f", "firefox"], check=False, timeout=3)
-                self._last_cleanup_kill = current_time
-                debug_log_info("Killed Firefox process (cleanup)")
-            else:
-                debug_log_info("Firefox kill skipped (rate-limited)")
-        except Exception as e:
-            debug_log_warning(f"Could not kill Firefox: {e}")
+        # Gracefully terminate Firefox process if we launched it
+        if self.firefox_process:
+            try:
+                debug_log_info("Terminating Firefox process gracefully")
+                self.firefox_process.terminate()
+
+                # Wait up to 3 seconds for graceful shutdown
+                try:
+                    self.firefox_process.wait(timeout=3)
+                    debug_log_info("Firefox process terminated gracefully")
+                except subprocess.TimeoutExpired:
+                    debug_log_warning(
+                        "Firefox didn't exit gracefully, forcing termination"
+                    )
+                    self.firefox_process.kill()
+                    self.firefox_process.wait()
+
+            except Exception as e:
+                debug_log_warning(f"Error terminating Firefox process: {e}")
+            finally:
+                self.firefox_process = None
 
         # Clean up profile directory
         try:
@@ -343,8 +293,9 @@ class HTMLDebugOverlay:
         except Exception as e:
             debug_log_warning(f"Could not remove HTML directory: {e}")
 
-        # Reset Firefox flag
+        # Reset Firefox state
         self.firefox_opened = False
+        self.firefox_process = None
 
         debug_log_info("HTML debug overlay cleanup completed")
 
@@ -353,29 +304,12 @@ class HTMLDebugOverlay:
         try:
             # Prevent multiple Firefox instances
             if self.firefox_opened:
-                debug_log_info(
-                    "Firefox already opened, skipping duplicate launch",
-                    component="overlay",
-                )
+                debug_log_info("Firefox already opened, skipping duplicate launch")
                 return
 
             # Simple browser open without blocking
             import subprocess
             import threading
-            import time
-
-            # Kill any existing Firefox processes first to avoid tab accumulation (OPTIMIZED)
-            # Only kill if we haven't done it recently to avoid excessive pkill calls
-            try:
-                current_time = time.time()
-                if not hasattr(self, '_last_firefox_kill') or current_time - self._last_firefox_kill > 30:
-                    subprocess.run(["pkill", "-f", "firefox"], check=False, timeout=3)
-                    self._last_firefox_kill = current_time
-                    time.sleep(0.5)  # Give it time to close
-                    debug_log_info("Killed Firefox processes (rate-limited)")
-                self.firefox_opened = False  # Reset flag after killing
-            except:
-                pass
 
             # Simple clean profile approach
             profile_dir = "/tmp/ff-clean-profile"
@@ -486,7 +420,7 @@ user_pref("browser.newtabpage.activity-stream.default.sites", "");
 
             # Launch Firefox and capture any errors
             try:
-                process = subprocess.Popen(
+                self.firefox_process = subprocess.Popen(
                     [
                         "firefox",
                         "--no-remote",
@@ -502,11 +436,11 @@ user_pref("browser.newtabpage.activity-stream.default.sites", "");
 
                 # Check if Firefox started successfully (don't wait for completion)
                 time.sleep(0.5)
-                if process.poll() is not None:
+                if self.firefox_process.poll() is not None:
                     # Process exited, capture error
-                    stdout, stderr = process.communicate()
+                    stdout, stderr = self.firefox_process.communicate()
                     log_error(
-                        f"Firefox failed to start. Exit code: {process.returncode}"
+                        f"Firefox failed to start. Exit code: {self.firefox_process.returncode}"
                     )
                     log_error(f"Firefox stdout: {stdout.decode()}")
                     log_error(f"Firefox stderr: {stderr.decode()}")
@@ -514,7 +448,7 @@ user_pref("browser.newtabpage.activity-stream.default.sites", "");
                     # Try fallback launch without some options
                     debug_log_info("Trying Firefox fallback launch...")
                     try:
-                        fallback_process = subprocess.Popen(
+                        self.firefox_process = subprocess.Popen(
                             [
                                 "firefox",
                                 "--new-instance",
@@ -682,11 +616,12 @@ user_pref("browser.newtabpage.activity-stream.default.sites", "");
                 "vlc_logs": "No VLC logs available",
             }
 
-            # Check service status (user service, not system service) - CACHED
+            # Check service status (user service, not system service)
             try:
-                result = self.system_cache.get_cached_or_run(
-                    "service_status",
+                result = subprocess.run(
                     ["systemctl", "is-active", "kitchensync.service"],
+                    capture_output=True,
+                    text=True,
                     timeout=5,
                 )
                 if result.returncode == 0:
@@ -699,17 +634,18 @@ user_pref("browser.newtabpage.activity-stream.default.sites", "");
                 info["service_status"] = "Check failed"
                 info["service_status_class"] = "error"
 
-            # Get service PID and uptime (user service) - CACHED  
+            # Get service PID and uptime (user service)
             try:
-                result = self.system_cache.get_cached_or_run(
-                    "service_details",
+                result = subprocess.run(
                     [
                         "systemctl",
-                        "--user", 
+                        "--user",
                         "show",
                         "kitchensync.service",
                         "--property=MainPID,ActiveEnterTimestamp",
                     ],
+                    capture_output=True,
+                    text=True,
                     timeout=5,
                 )
                 if result.returncode == 0:
@@ -736,10 +672,11 @@ user_pref("browser.newtabpage.activity-stream.default.sites", "");
                 vlc_found = False
                 vlc_pid = None
 
-                # Check if our main process (which contains VLC) is running - CACHED
-                main_result = self.system_cache.get_cached_or_run(
-                    "leader_process",
+                # Check if our main process (which contains VLC) is running
+                main_result = subprocess.run(
                     ["pgrep", "-f", "leader.py"],
+                    capture_output=True,
+                    text=True,
                     timeout=5,
                 )
 
