@@ -169,11 +169,18 @@ class VLCVideoPlayer:
                     except Exception as e:
                         log_error(f"Error in video loop callback: {e}", component="vlc")
 
-                # Reset to beginning and restart
-                self.vlc_player.set_position(0.0)
-                self.vlc_player.play()
+                # Reset to beginning and restart - use a small delay to ensure VLC is ready
+                import threading
+                def restart_video():
+                    time.sleep(0.1)  # Small delay to let VLC finish cleanup
+                    if self.vlc_player:
+                        self.vlc_player.set_position(0.0)
+                        time.sleep(0.05)  # Brief pause before restarting
+                        self.vlc_player.play()
+                        log_info(f"Video loop #{self.loop_count} started", component="vlc")
+                
+                threading.Thread(target=restart_video, daemon=True).start()
 
-                log_info(f"Video loop #{self.loop_count} started", component="vlc")
             except Exception as e:
                 log_error(f"Error restarting video loop: {e}", component="vlc")
 
@@ -286,7 +293,7 @@ class VLCVideoPlayer:
 
             # Add looping if enabled
             if self.enable_looping:
-                cmd.append("--repeat")  # Loop indefinitely
+                cmd.extend(["--repeat", "--loop"])  # Loop indefinitely
                 log_info("Command-line VLC looping enabled", component="vlc")
 
             # Window configuration based on debug mode
@@ -352,7 +359,7 @@ class VLCVideoPlayer:
 
             # Add looping if enabled
             if self.enable_looping:
-                cmd.append("--repeat")  # Loop indefinitely
+                cmd.extend(["--repeat", "--loop"])  # Loop indefinitely
                 log_info("Command-line VLC looping enabled (no audio)", component="vlc")
 
             # Window configuration based on debug mode
