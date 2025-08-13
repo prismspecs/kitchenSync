@@ -8,6 +8,7 @@ import argparse
 import sys
 import threading
 import time
+import signal
 from pathlib import Path
 import os  # Added for os.path.basename
 import subprocess
@@ -417,10 +418,28 @@ def main():
     )
     args = parser.parse_args()
 
+    # Global variable to hold the leader instance for signal handlers
+    global leader_instance
+    leader_instance = None
+
+    def signal_handler(signum, frame):
+        """Handle shutdown signals gracefully"""
+        print(f"\n🛑 Received signal {signum}, shutting down gracefully...")
+        if leader_instance:
+            try:
+                leader_instance.cleanup()
+            except Exception as e:
+                print(f"Error during cleanup: {e}")
+        sys.exit(0)
+
+    # Set up signal handlers for graceful shutdown
+    signal.signal(signal.SIGTERM, signal_handler)
+    signal.signal(signal.SIGINT, signal_handler)
+
     try:
         log_info("Starting main() function", component="autostart")
         try:
-            leader = LeaderPi()
+            leader_instance = LeaderPi()
             log_info("LeaderPi initialized successfully", component="autostart")
         except Exception as e:
             log_error(
@@ -433,7 +452,7 @@ def main():
 
         # Override debug mode if specified via command line
         if args.debug:
-            leader.config.config["KITCHENSYNC"]["debug"] = "true"
+            leader_instance.config.config["KITCHENSYNC"]["debug"] = "true"
             print("✓ Debug mode: ENABLED (via command line)")
             log_info("Debug mode enabled", component="autostart")
 
@@ -445,7 +464,7 @@ def main():
             log_info("About to call start_system() in auto mode", component="autostart")
 
             # Auto-start the system
-            leader.start_system()
+            leader_instance.start_system()
             log_info("start_system() call completed", component="autostart")
 
             # Keep running until interrupted
@@ -454,13 +473,13 @@ def main():
                     time.sleep(1)
             except KeyboardInterrupt:
                 print("\n🛑 Stopping system...")
-                leader.stop_system()
+                leader_instance.stop_system()
         else:
             # Interactive mode
-            interface = create_command_interface(leader)
+            interface = create_command_interface(leader_instance)
             interface.run()
 
-        leader.cleanup()
+        leader_instance.cleanup()
 
     except KeyboardInterrupt:
         print("\nExiting...")
