@@ -265,6 +265,24 @@ class MidiScheduler:
             return current_time % self.video_duration
         return current_time
 
+    def notify_video_loop(self, video_loop_count: int) -> None:
+        """Notify MIDI scheduler of video loop event for sync verification"""
+        if self.enable_looping and self.is_running:
+            # Check if MIDI and video loop counts are in sync
+            if abs(video_loop_count - self.loop_count) > 1:
+                log_warning(
+                    f"MIDI/Video loop desync detected: MIDI={self.loop_count}, Video={video_loop_count}",
+                    component="midi"
+                )
+                # Optionally reset MIDI loop count to match video
+                # self.loop_count = video_loop_count
+                # self.triggered_cues.clear()
+            else:
+                log_info(
+                    f"MIDI/Video loops in sync: both at loop #{video_loop_count}",
+                    component="midi"
+                )
+
     def get_stats(self) -> Dict[str, int]:
         """Get scheduler statistics"""
         return {
