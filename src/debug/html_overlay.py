@@ -221,13 +221,6 @@ class HTMLDebugOverlay:
             os.makedirs(profile_dir, exist_ok=True)
 
             # Open Firefox with the profile (non-blocking)
-            # Add extra delay on boot to let desktop settle
-            import os
-            if os.path.exists("/tmp/kitchensync_startup.log"):
-                # We're likely running from boot, add extra delay
-                time.sleep(3)
-                log_info("Boot environment detected, added Firefox startup delay", component="overlay")
-            
             subprocess.Popen(
                 [
                     "firefox",
