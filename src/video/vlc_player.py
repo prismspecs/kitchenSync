@@ -201,7 +201,7 @@ class VLCVideoPlayer:
                 pass
 
             # Create VLC instance with appropriate args
-            vlc_args = self._get_vlc_args()
+            vlc_args = self._get_python_vlc_args()
             log_info(f"VLC python args: {' '.join(vlc_args)}", component="vlc")
 
             # Check if VLC Python bindings are available
@@ -465,6 +465,31 @@ class VLCVideoPlayer:
             log_error(f"Error with VLC command (no audio): {e}", component="vlc")
             return False
 
+    def _get_python_vlc_args(self) -> list[str]:
+        """Get VLC arguments for Python VLC instance"""
+        paths = log_file_paths()
+        args = [
+            # Basic logging
+            "--file-logging",
+            f"--logfile={paths['vlc_main']}",
+            "--verbose=2",
+            "--no-video-title-show",
+        ]
+
+        # Prefer explicit video output plugin if provided
+        if self.video_output:
+            args.extend(["--vout", self.video_output])
+
+        # For seeking compatibility, use software decoding
+        if self.force_python:
+            args.extend(
+                [
+                    "--avcodec-hw=none",  # Disable hardware decoding for seeking reliability
+                ]
+            )
+
+        return args
+
     def _get_vlc_args(self) -> list[str]:
         """Get VLC command line arguments"""
         paths = log_file_paths()
@@ -480,14 +505,7 @@ class VLCVideoPlayer:
         if self.video_output:
             args.extend(["--vout", self.video_output])
 
-        # If using Python VLC for seeking, disable hardware acceleration for compatibility
-        if self.force_python:
-            args.extend(
-                [
-                    "--avcodec-hw=none",  # Disable hardware decoding
-                    "--no-video-filters",  # Disable video filters
-                ]
-            )
+        # Command line VLC doesn't need special Python VLC options
 
         # Add fullscreen for production mode
         if not self.debug_mode:
