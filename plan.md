@@ -54,6 +54,20 @@ I am developing this on a separate computer than the one on which it will run. C
 - Heartbeat status reporting
 - Simplified mode (current): no start/stop commands; auto-starts playback on first timecode packet and continuously maintains sync from leader broadcasts
 
+**start_clean.sh** - System startup script with log archiving
+
+- Auto-archives existing logs before starting (max 1000 lines per archive)
+- X11 environment setup and validation
+- Firefox/display configuration  
+- Smart log rotation prevents runaway disk usage
+
+**cleanup_logs.sh** - Manual log management utility
+
+- Archives current logs and starts fresh
+- Maintains rolling 1000-line history per log type
+- User-friendly output showing file sizes and operations
+- Can be run anytime for manual cleanup
+
 **kitchensync.service** - Systemd service
 
 - Automatic startup on boot

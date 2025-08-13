@@ -5,8 +5,43 @@
 
 set -e  # Exit on any error
 
-# Log startup attempt
-echo "$(date): KitchenSync startup initiated" >> /tmp/kitchensync_startup.log
+# Function to archive logs with rotation (max 1000 lines per archive)
+archive_log() {
+    local current_log="$1"
+    local archive_log="$2"
+    local max_lines=1000
+    
+    if [[ -f "$current_log" ]]; then
+        echo "$(date): Archiving $current_log -> $archive_log" >> /tmp/kitchensync_startup.log
+        
+        # If archive exists, combine current + archive, keep only last 1000 lines
+        if [[ -f "$archive_log" ]]; then
+            # Append current log to archive, then keep only last 1000 lines
+            cat "$current_log" >> "$archive_log"
+            tail -n "$max_lines" "$archive_log" > "${archive_log}.tmp"
+            mv "${archive_log}.tmp" "$archive_log"
+        else
+            # First time: just move current to archive (but limit to 1000 lines)
+            tail -n "$max_lines" "$current_log" > "$archive_log"
+        fi
+        
+        # Remove current log to start fresh
+        rm "$current_log"
+        echo "$(date): Archived $(wc -l < "$archive_log" 2>/dev/null || echo "0") lines to $archive_log" >> /tmp/kitchensync_startup.log
+    fi
+}
+
+# Archive existing logs before starting
+echo "$(date): KitchenSync startup initiated - archiving old logs" >> /tmp/kitchensync_startup.log
+
+# Archive each log type (system, VLC, debug, stderr/stdout)
+archive_log "/tmp/kitchensync_system.log" "/tmp/kitchensync_system_archive.log"
+archive_log "/tmp/kitchensync_vlc.log" "/tmp/kitchensync_vlc_archive.log"
+archive_log "/tmp/kitchensync_leader_debug.txt" "/tmp/kitchensync_debug_archive.log"
+archive_log "/tmp/kitchensync_vlc_stderr.log" "/tmp/kitchensync_vlc_stderr_archive.log"
+archive_log "/tmp/kitchensync_vlc_stdout.log" "/tmp/kitchensync_vlc_stdout_archive.log"
+
+echo "$(date): Log archiving complete, starting fresh logs" >> /tmp/kitchensync_startup.log
 
 # Set up X11 display environment variables
 export DISPLAY=:0
