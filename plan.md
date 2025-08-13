@@ -497,6 +497,12 @@ The systemd service includes proper environment variables:
 
 This is the mark of professional programming vs. superficial patching.
 
+### Display and UX invariants
+- Do not change display modes without explicit instruction. Defaults:
+  - Collaborators: always launch video fullscreen in production (debug=false).
+  - Leader: fullscreen unless explicitly running in debug mode.
+- Do not switch video outputs (e.g., `--vout`) or windowing backends unless requested and documented.
+
 ## future necessities
 
 + Remove desktop environment, etc. just have a totally slimmed down OS
