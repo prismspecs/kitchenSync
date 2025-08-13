@@ -70,9 +70,12 @@ class CollaboratorPi:
             log_warning("No video file found at startup", component="collaborator")
 
         # Sync settings
+        # sync_tolerance: general upper bound for considering system "in sync" (seconds)
+        # sync_check_interval: minimum time between corrective seeks (seconds)
+        # deviation_threshold: absolute median error (seconds) that triggers a correction
         self.sync_tolerance = self.config.getfloat("sync_tolerance", 1.0)
         self.sync_check_interval = self.config.getfloat("sync_check_interval", 5.0)
-        self.deviation_threshold = self.config.getfloat("deviation_threshold", 0.5)
+        self.deviation_threshold = self.config.getfloat("deviation_threshold", 0.2)
 
         # Video sync state
         self.deviation_samples = deque(maxlen=10)
@@ -238,8 +241,9 @@ class CollaboratorPi:
         sorted_deviations = sorted(self.deviation_samples)
         median_deviation = sorted_deviations[len(sorted_deviations) // 2]
 
-        # Check if correction is needed - use larger threshold for stability
-        correction_threshold = max(self.deviation_threshold, 1.0)  # At least 1 second
+        # Check if correction is needed
+        # Use configured deviation_threshold directly (no hard 1.0s floor)
+        correction_threshold = self.deviation_threshold
         if abs(median_deviation) > correction_threshold:
             current_time = time.time()
 
