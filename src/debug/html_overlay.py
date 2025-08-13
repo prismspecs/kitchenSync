@@ -224,21 +224,49 @@ class HTMLDebugOverlay:
 
             os.makedirs(profile_dir, exist_ok=True)
 
-            # Open Firefox with the profile (non-blocking)
-            # Set up environment for Firefox in system service context
+            # Create Firefox configuration to force X11 mode
+            config_dir = os.path.join(profile_dir, "prefs.js")
+            try:
+                with open(config_dir, "w") as f:
+                    f.write("""// Firefox configuration to force X11 mode
+pref("widget.wayland.enabled", false);
+pref("widget.wayland.force-disabled", true);
+pref("layers.acceleration.disabled", true);
+pref("webgl.disabled", true);
+pref("security.sandbox.content.level", 0);
+pref("browser.startup.page", 0);
+pref("browser.newtabpage.enabled", false);
+""")
+                log_info("Created Firefox config to force X11 mode", component="overlay")
+            except Exception as e:
+                log_warning(f"Could not create Firefox config: {e}", component="overlay")
+
+            # Get current user for environment setup
             current_user = os.getenv("USER", "kitchensync")
-            
+
+            # Force Firefox to use X11 (prevent Wayland fallback)
             firefox_env = os.environ.copy()
             firefox_env.update({
                 'DISPLAY': ':0',
                 'XAUTHORITY': f'/home/{current_user}/.Xauthority',
                 'XDG_RUNTIME_DIR': f'/run/user/{os.getuid()}',
                 'HOME': f'/home/{current_user}',
-                # Additional environment variables for Firefox
+                # CRITICAL: Force X11 mode and disable Wayland
                 'XDG_SESSION_TYPE': 'x11',
                 'GDK_BACKEND': 'x11',
                 'QT_QPA_PLATFORM': 'xcb',
                 'WAYLAND_DISPLAY': '',
+                # Force Firefox to use X11 backend
+                'MOZ_ENABLE_WAYLAND': '0',
+                'MOZ_DISABLE_WAYLAND': '1',
+                'MOZ_ENABLE_X11': '1',
+                'MOZ_DISABLE_RDD_SANDBOX': '1',
+                'MOZ_DISABLE_GMP_SANDBOX': '1',
+                'MOZ_X11_EGL': '1',
+                'MOZ_ACCELERATED': '1',
+                # Additional Firefox optimizations
+                'MOZ_DISABLE_GPU_SANDBOX': '1',
+                'MOZ_DISABLE_CONTENT_SANDBOX': '1',
             })
             
             log_info(f"Launching Firefox with environment: USER={current_user}, DISPLAY={firefox_env.get('DISPLAY')}, XAUTHORITY={firefox_env.get('XAUTHORITY')}", component="overlay")
@@ -252,6 +280,12 @@ class HTMLDebugOverlay:
                         "--new-window",
                         "--profile",
                         profile_dir,
+                        # Force X11 mode and disable Wayland
+                        "--no-remote",
+                        "--disable-wayland",
+                        "--disable-gpu",
+                        "--disable-software-rasterizer",
+                        "--disable-dev-shm-usage",
                         f"file://{self.html_file}",
                     ],
                     stdout=subprocess.PIPE,
@@ -267,7 +301,35 @@ class HTMLDebugOverlay:
                     log_error(f"Firefox failed to start. Exit code: {process.returncode}", component="overlay")
                     log_error(f"Firefox stdout: {stdout.decode()}", component="overlay")
                     log_error(f"Firefox stderr: {stderr.decode()}", component="overlay")
-                    return
+                    
+                    # Try fallback launch without some options
+                    log_info("Trying Firefox fallback launch...", component="overlay")
+                    try:
+                        fallback_process = subprocess.Popen(
+                            [
+                                "firefox",
+                                "--new-instance",
+                                "--new-window",
+                                "--profile",
+                                profile_dir,
+                                f"file://{self.html_file}",
+                            ],
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE,
+                            env=firefox_env,
+                        )
+                        
+                        time.sleep(0.5)
+                        if fallback_process.poll() is not None:
+                            stdout, stderr = fallback_process.communicate()
+                            log_error(f"Firefox fallback also failed: {stderr.decode()}", component="overlay")
+                            return
+                        else:
+                            process = fallback_process
+                            log_info("Firefox fallback launch successful", component="overlay")
+                    except Exception as fallback_e:
+                        log_error(f"Firefox fallback launch failed: {fallback_e}", component="overlay")
+                        return
                     
             except Exception as e:
                 log_error(f"Exception launching Firefox: {e}", component="overlay")

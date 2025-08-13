@@ -2,6 +2,8 @@
 Description=KitchenSync Auto-Start Service
 After=graphical.target network.target
 Wants=graphical.target
+# Add explicit dependency on display manager
+Requires=display-manager.service
 
 [Service]
 Type=simple
@@ -12,7 +14,7 @@ ExecStart=/home/kitchensync/kitchenSync/start_clean.sh
 Restart=always
 RestartSec=10
 
-# Environment variables for X11 display access
+# Environment variables for X11 display access - FORCE X11 mode
 Environment=DISPLAY=:0
 Environment=XAUTHORITY=/home/kitchensync/.Xauthority
 Environment=XDG_RUNTIME_DIR=/run/user/1000
@@ -20,10 +22,21 @@ Environment=SDL_VIDEODRIVER=x11
 Environment=XDG_SESSION_TYPE=x11
 Environment=GDK_BACKEND=x11
 Environment=QT_QPA_PLATFORM=xcb
+# CRITICAL: Force Wayland off and ensure X11
 Environment=WAYLAND_DISPLAY=
+Environment=MOZ_ENABLE_WAYLAND=0
+Environment=MOZ_DISABLE_WAYLAND=1
+Environment=MOZ_ENABLE_X11=1
+Environment=MOZ_DISABLE_RDD_SANDBOX=1
+Environment=MOZ_DISABLE_GMP_SANDBOX=1
+# Force Firefox to use X11 backend
+Environment=MOZ_X11_EGL=1
+Environment=MOZ_ACCELERATED=1
 
-# Wait for desktop to be ready (reduced from 30s to 15s)
-ExecStartPre=/bin/sleep 5
+# Wait for desktop to be ready (increased to ensure full initialization)
+ExecStartPre=/bin/sleep 10
+# Additional wait for X11 display to be fully ready
+ExecStartPre=/bin/bash -c 'until xset q >/dev/null 2>&1; do sleep 1; done'
 
 [Install]
 WantedBy=graphical.target
