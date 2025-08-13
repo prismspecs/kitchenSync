@@ -39,6 +39,10 @@ class VLCVideoPlayer:
         self.loop_count = 0  # Track number of loops completed
         self.enable_looping = True  # Enable continuous looping
         self.loop_callback = None  # Callback function when video loops
+        # Engine/behavior overrides
+        self.force_python = False  # Force Python VLC engine regardless of debug mode
+        self.force_fullscreen = False  # Force fullscreen even in debug
+        self.video_output: Optional[str] = None  # e.g., "x11", "glx", "xvideo"
         # Log environment snapshot once when player is constructed
         snapshot_env()
 
@@ -56,16 +60,20 @@ class VLCVideoPlayer:
         if not self.video_path:
             raise VLCPlayerError("No video loaded")
 
-        # Force command-line VLC for fullscreen in production mode
+        # Engine selection
+        if self.force_python and VLC_PYTHON_AVAILABLE:
+            return self._start_with_python_vlc()
+
+        # Default behavior: CLI in production, Python in debug (if available)
         if not self.debug_mode:
             log_info(
                 "Production mode: using command-line VLC for fullscreen",
                 component="vlc",
             )
             return self._start_with_command_vlc()
-        elif VLC_PYTHON_AVAILABLE:
-            return self._start_with_python_vlc()
         else:
+            if VLC_PYTHON_AVAILABLE:
+                return self._start_with_python_vlc()
             return self._start_with_command_vlc()
 
     def stop_playback(self) -> None:
@@ -182,6 +190,16 @@ class VLCVideoPlayer:
         try:
             log_info("Starting VLC with Python bindings", component="vlc")
 
+            # Ensure a GUI display exists when launched via SSH
+            try:
+                if not os.environ.get("DISPLAY"):
+                    os.environ["DISPLAY"] = ":0"
+                    log_info(
+                        "DISPLAY not set; forcing DISPLAY=:0 for VLC", component="vlc"
+                    )
+            except Exception:
+                pass
+
             # Create VLC instance with appropriate args
             vlc_args = self._get_vlc_args()
             log_info(f"VLC python args: {' '.join(vlc_args)}", component="vlc")
@@ -228,6 +246,15 @@ class VLCVideoPlayer:
             if result == 0:
                 log_info("VLC playback started successfully", component="vlc")
                 self.is_playing = True
+                # Enable fullscreen when requested even in debug mode
+                try:
+                    if (not self.debug_mode) or self.force_fullscreen:
+                        self.vlc_player.set_fullscreen(True)
+                        log_info("Enabled fullscreen in Python VLC", component="vlc")
+                except Exception as e:
+                    log_warning(
+                        f"Failed to set fullscreen in Python VLC: {e}", component="vlc"
+                    )
                 return True
             else:
                 log_error(f"VLC play() failed with code: {result}", component="vlc")
@@ -279,6 +306,16 @@ class VLCVideoPlayer:
         """Start video using VLC command line"""
         try:
             log_info("Starting VLC with command line", component="vlc")
+            # Ensure DISPLAY for GUI output when invoked via SSH
+            try:
+                if not os.environ.get("DISPLAY"):
+                    os.environ["DISPLAY"] = ":0"
+                    log_info(
+                        "DISPLAY not set; forcing DISPLAY=:0 for CLI VLC",
+                        component="vlc",
+                    )
+            except Exception:
+                pass
 
             # Try with audio first
             cmd = ["vlc", "--intf", "dummy"]  # No interface
@@ -346,6 +383,16 @@ class VLCVideoPlayer:
         """Start video using VLC command line without audio (fallback)"""
         try:
             log_info("Starting VLC without audio (fallback)", component="vlc")
+            # Ensure DISPLAY for GUI output when invoked via SSH
+            try:
+                if not os.environ.get("DISPLAY"):
+                    os.environ["DISPLAY"] = ":0"
+                    log_info(
+                        "DISPLAY not set; forcing DISPLAY=:0 for CLI VLC (no audio)",
+                        component="vlc",
+                    )
+            except Exception:
+                pass
 
             cmd = ["vlc", "--intf", "dummy"]  # No interface
             cmd.extend(self._get_vlc_args_no_audio())
@@ -417,7 +464,12 @@ class VLCVideoPlayer:
             "--file-logging",
             f"--logfile={paths['vlc_main']}",
             "--verbose=2",
+            "--no-video-title-show",
         ]
+
+        # Prefer explicit video output plugin if provided
+        if self.video_output:
+            args.extend(["--vout", self.video_output])
 
         # Add fullscreen for production mode
         if not self.debug_mode:
@@ -440,7 +492,12 @@ class VLCVideoPlayer:
             "--file-logging",
             f"--logfile={paths['vlc_main']}",
             "--verbose=2",
+            "--no-video-title-show",
         ]
+
+        # Prefer explicit video output plugin if provided
+        if self.video_output:
+            args.extend(["--vout", self.video_output])
 
         # Add fullscreen for production mode
         if not self.debug_mode:

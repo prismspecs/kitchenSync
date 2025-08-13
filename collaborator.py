@@ -38,10 +38,19 @@ class CollaboratorPi:
             self.config.video_file, self.config.usb_mount_point
         )
         self.video_player = VLCVideoPlayer(self.config.debug_mode)
-        # Force Python VLC path for precise timecode sync control
+        # Force Python VLC for precise timecode control and fullscreen output
         self.video_player.debug_mode = True
+        self.video_player.force_python = True
+        self.video_player.force_fullscreen = True
+        # Ensure GUI output on local display and avoid terminal ASCII fallback
+        try:
+            from src.video.vlc_player import VLCVideoPlayer as _V
+
+            self.video_player.video_output = "x11"
+        except Exception:
+            pass
         log_info(
-            "Collaborator forcing Python VLC mode for sync control",
+            "Collaborator forcing Python VLC (fullscreen) for sync control",
             component="collaborator",
         )
 
