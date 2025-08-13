@@ -14,7 +14,7 @@ A modern, plug-and-play system for synchronized video playback and MIDI output a
 
 ```bash
 # Same systemd service runs on ALL Pis:
-systemctl --user start kitchensync.service
+sudo systemctl start kitchensync.service
 # → Runs: python3 kitchensync.py
 
 # USB drive contains kitchensync.ini:
@@ -124,11 +124,11 @@ sudo pip install python-rtmidi python-vlc --break-system-packages
 # Copy service file to systemd
 # Service is now installed as user service via setup.sh
 # Service is now managed as user service via setup.sh
-# systemctl --user daemon-reload
-systemctl --user enable kitchensync.service
+# sudo systemctl daemon-reload
+sudo systemctl enable kitchensync.service
 
 # Start immediately (optional)
-systemctl --user start kitchensync.service
+sudo systemctl start kitchensync.service
 ```
 
 ## 🚀 Complete Deployment Workflow
@@ -148,8 +148,8 @@ sudo pip install python-rtmidi python-vlc pygame --break-system-packages
 # Enable service on ALL Pis
 # Service is now installed as user service via setup.sh
 # Service is now managed as user service via setup.sh
-# systemctl --user daemon-reload
-systemctl --user enable kitchensync.service
+# sudo systemctl daemon-reload
+sudo systemctl enable kitchensync.service
 ```
 
 #### **2. Prepare USB Drives (Different Configs)**
@@ -379,7 +379,7 @@ For production deployment:
 python3 leader.py --auto
 
 # Or use systemd service
-systemctl --user start kitchensync.service
+sudo systemctl start kitchensync.service
 ```
 
 ## 🔄 Advanced Synchronization
@@ -445,7 +445,7 @@ aconnect -l
 python3 kitchensync.py --test-usb
 
 # Monitor systemd service
-systemctl --user status kitchensync.service
+sudo systemctl status kitchensync.service
 ```
 
 ### Video Playback Testing
@@ -465,11 +465,11 @@ DISPLAY=:0 python3 leader.py --auto
 **System Won't Start:**
 ```bash
 # Check systemd service status
-systemctl --user status kitchensync.service
-journalctl --user -u kitchensync.service -f
+sudo systemctl status kitchensync.service
+sudo journalctl -u kitchensync.service -f
 
 # Run manually for debugging
-cd /home/kitchensync/workbench/kitchenSync
+cd /home/kitchensync/kitchenSync
 python3 kitchensync.py
 ```
 
@@ -542,13 +542,13 @@ amidi -p hw:1,0 --send-hex="90 60 7F"
 
 ```bash
 # Enable auto-start on all Pis
-systemctl --user enable kitchensync.service
+sudo systemctl enable kitchensync.service
 
 # Start system immediately
-systemctl --user start kitchensync.service
+sudo systemctl start kitchensync.service
 
 # Monitor system status
-systemctl --user status kitchensync.service
+sudo systemctl status kitchensync.service
 ```
 
 ## 🔧 Advanced Features

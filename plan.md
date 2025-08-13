@@ -342,7 +342,7 @@ The KitchenSync leader system is fully operational with:
 
 The systemd service includes proper environment variables:
 - `DISPLAY=:0` - X11 display access
-- `XAUTHORITY=/home/kitchensync/.Xauthority` - X11 authentication
+- `XAUTHORITY=/home/$USER/.Xauthority` - X11 authentication (dynamic per user)
 - `XDG_RUNTIME_DIR=/run/user/1000` - Runtime directory
 - User `kitchensync` with proper permissions
 
