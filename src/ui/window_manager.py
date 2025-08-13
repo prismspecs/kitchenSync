@@ -39,6 +39,20 @@ class WindowManager:
         except (FileNotFoundError, subprocess.TimeoutExpired):
             pass
         
+        # Additional check: look for Wayland processes
+        try:
+            result = subprocess.run(
+                ["ps", "aux"], 
+                capture_output=True, 
+                text=True, 
+                timeout=2
+            )
+            if result.returncode == 0:
+                if "wayfire" in result.stdout.lower() or "wlrctl" in result.stdout.lower():
+                    return True
+        except:
+            pass
+        
         return False
 
     def list_windows(self) -> List[str]:
@@ -60,7 +74,11 @@ class WindowManager:
                 )
             
             if result.returncode == 0:
-                return result.stdout.strip().split("\n")
+                windows = result.stdout.strip().split("\n")
+                # Filter out empty lines and add debug info
+                filtered_windows = [w for w in windows if w.strip()]
+                log_info(f"Found {len(filtered_windows)} windows using {self.window_tool}", component="window_manager")
+                return filtered_windows
             else:
                 log_warning(f"Failed to list windows: {result.stderr}")
                 return []
@@ -91,33 +109,15 @@ class WindowManager:
             if term_found and not exclude_found:
                 if self.is_wayland:
                     # wlrctl format: app_id window_title
-                    return line.strip()
+                    # For Chromium, we might get something like "chromium" or "kitchensync debug"
+                    parts = line.strip().split(None, 1)
+                    if len(parts) >= 1:
+                        return parts[0]  # Return app_id
                 else:
                     # wmctrl format: window_id desktop class hostname window_title
                     parts = line.split(None, 4)
                     if len(parts) >= 1:
                         return parts[0]  # Return window ID
-        
-        # If no exact match, try partial matches for window titles
-        for line in windows:
-            if not line.strip():
-                continue
-                
-            line_lower = line.lower()
-            
-            # Check for partial matches in window titles (more flexible)
-            for term in search_terms:
-                term_lower = term.lower()
-                if term_lower in line_lower:
-                    # Check if any exclude term matches
-                    exclude_found = any(exclude.lower() in line_lower for exclude in exclude_terms)
-                    if not exclude_found:
-                        if self.is_wayland:
-                            return line.strip()
-                        else:
-                            parts = line.split(None, 4)
-                            if len(parts) >= 1:
-                                return parts[0]
         
         return None
 
@@ -186,18 +186,67 @@ class WindowManager:
             return 1920, 1080  # Default fallback
 
     def position_window(self, window_identifier: str, x: int, y: int, width: int, height: int) -> bool:
-        """Position a window at the specified coordinates"""
+        """Position a window at specific coordinates"""
         try:
+            log_info(f"Positioning window {window_identifier} to ({x},{y}) {width}x{height}", component="window_manager")
+            
             if self.is_wayland:
-                # Note: wlrctl may have limited positioning support
-                # Try to focus first
-                subprocess.run(
-                    ["wlrctl", "toplevel", "focus", window_identifier],
-                    check=False,
-                    timeout=5
-                )
-                log_info(f"Focused Wayland window: {window_identifier}")
-                return True
+                # Wayland with wlrctl - try to move and resize the window
+                try:
+                    # First try to move the window
+                    move_result = subprocess.run(
+                        ["wlrctl", "toplevel", "move", window_identifier, str(x), str(y)],
+                        check=False,
+                        timeout=5,
+                        capture_output=True,
+                        text=True
+                    )
+                    
+                    if move_result.returncode == 0:
+                        log_info(f"Moved Wayland window {window_identifier} to ({x},{y})")
+                        
+                        # Now try to resize it
+                        resize_result = subprocess.run(
+                            ["wlrctl", "toplevel", "resize", window_identifier, str(width), str(height)],
+                            check=False,
+                            timeout=5,
+                            capture_output=True,
+                            text=True
+                        )
+                        
+                        if resize_result.returncode == 0:
+                            log_info(f"Resized Wayland window {window_identifier} to {width}x{height}")
+                            return True
+                        else:
+                            log_warning(f"Failed to resize Wayland window: {resize_result.stderr}")
+                            # Move was successful, resize failed
+                            return True
+                    else:
+                        log_warning(f"Failed to move Wayland window: {move_result.stderr}")
+                        
+                        # Try alternative approach: use wlrctl toplevel set
+                        try:
+                            set_result = subprocess.run(
+                                ["wlrctl", "toplevel", "set", window_identifier, str(x), str(y), str(width), str(height)],
+                                check=False,
+                                timeout=5,
+                                capture_output=True,
+                                text=True
+                            )
+                            
+                            if set_result.returncode == 0:
+                                log_info(f"Set Wayland window {window_identifier} to ({x},{y}) {width}x{height}")
+                                return True
+                            else:
+                                log_warning(f"Alternative Wayland positioning failed: {set_result.stderr}")
+                        except Exception as e:
+                            log_warning(f"Alternative Wayland positioning exception: {e}")
+                        
+                        return False
+                        
+                except Exception as e:
+                    log_error(f"Exception positioning Wayland window: {e}")
+                    return False
             else:
                 # X11 with wmctrl - try multiple approaches
                 # First, try to move the window

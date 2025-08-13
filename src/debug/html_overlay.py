@@ -231,19 +231,16 @@ class HTMLDebugOverlay:
             chromium_env = os.environ.copy()
             chromium_env.update({
                 'DISPLAY': ':0',
-                'XAUTHORITY': f'/home/{current_user}/.Xauthority',
                 'XDG_RUNTIME_DIR': f'/run/user/{os.getuid()}',
                 'HOME': f'/home/{current_user}',
-                # Additional environment variables for Chromium
-                'XDG_SESSION_TYPE': 'x11',
-                'GDK_BACKEND': 'x11',
-                'QT_QPA_PLATFORM': 'xcb',
-                'WAYLAND_DISPLAY': '',
+                # Let Chromium use Wayland naturally
+                'WAYLAND_DISPLAY': os.environ.get('WAYLAND_DISPLAY', ''),
+                'XDG_SESSION_TYPE': os.environ.get('XDG_SESSION_TYPE', 'wayland'),
                 # Chromium-specific optimizations
                 'CHROMIUM_FLAGS': '--disable-extensions --disable-plugins --disable-background-tabs --disable-background-mode --disable-background-networking --disable-default-apps --disable-sync --disable-translate --disable-web-security --no-first-run --no-default-browser-check --disable-features=VizDisplayCompositor',
             })
             
-            log_info(f"Launching Chromium with environment: USER={current_user}, DISPLAY={chromium_env.get('DISPLAY')}, XAUTHORITY={chromium_env.get('XAUTHORITY')}", component="overlay")
+            log_info(f"Launching Chromium with environment: USER={current_user}, WAYLAND_DISPLAY={chromium_env.get('WAYLAND_DISPLAY')}, XDG_SESSION_TYPE={chromium_env.get('XDG_SESSION_TYPE')}", component="overlay")
             
             # Launch Chromium with optimized flags for speed
             try:
@@ -272,18 +269,6 @@ class HTMLDebugOverlay:
                         "--disable-backgrounding-occluded-windows",
                         "--disable-background-timer-throttling",
                         "--disable-features=TranslateUI",
-                        "--disable-ipc-flooding-protection",
-                        "--disable-renderer-backgrounding",
-                        "--disable-backgrounding-occluded-windows",
-                        "--disable-background-timer-throttling",
-                        "--disable-features=TranslateUI",
-                        "--disable-features=VizDisplayCompositor",
-                        "--disable-features=NetworkService",
-                        "--disable-features=NetworkServiceLogging",
-                        "--disable-features=VizDisplayCompositor",
-                        "--disable-features=NetworkService",
-                        "--disable-features=NetworkServiceLogging",
-                        "--disable-features=VizDisplayCompositor",
                         "--disable-features=NetworkService",
                         "--disable-features=NetworkServiceLogging",
                         f"file://{self.html_file}",
@@ -324,8 +309,9 @@ class HTMLDebugOverlay:
                 log_info("=== END DEBUG ===", component="overlay")
                 
                 # Wait for Chromium window to appear (reduced timeout)
+                # Use more flexible search terms for Wayland
                 chromium_window = self.window_manager.wait_for_window(
-                    search_terms=["chromium", "kitchensync debug", "debug"],
+                    search_terms=["chromium", "kitchensync", "debug", "index.html"],
                     exclude_terms=["vlc", "media player"],
                     timeout=5  # Reduced from 10s to 5s
                 )
