@@ -2,6 +2,12 @@
 
 A modern, plug-and-play system for synchronized video playback and MIDI output across multiple Raspberry Pis. Features automatic USB drive detection, VLC-based video playback with drift correction, and seamless deployment.
 
+## Download a test video
+```sh
+wget https://download.blender.org/demo/movies/BBB/bbb_sunflower_1080p_30fps_normal.mp4.zip
+unzip bbb_sunflower_1080p_30fps_normal.mp4.zip 
+```
+
 ## 🔄 How It Works - Unified Startup System
 
 **� IMPORTANT: Every Pi runs the same installation and service!**
