@@ -298,7 +298,12 @@ class CollaboratorPi:
         print(f"Starting KitchenSync Collaborator '{self.config.device_id}'")
 
         # Start networking
-        self.sync_receiver.start_listening()
+        log_info("Starting sync receiver on port 5005", component="networking")
+        try:
+            self.sync_receiver.start_listening()
+            log_info("Sync receiver started successfully", component="networking")
+        except Exception as e:
+            log_error(f"Failed to start sync receiver: {e}", component="networking")
         # No command listening needed; we only follow timecode
 
         # Register with leader
@@ -328,6 +333,23 @@ class CollaboratorPi:
 
         print("Collaborator ready. Waiting for time sync from leader...")
         print("Press Ctrl+C to exit")
+
+        # Debug: Test if we're receiving ANY UDP traffic on port 5005
+        def debug_udp():
+            import socket
+
+            try:
+                test_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                test_sock.bind(("", 5006))  # Try different port to test
+                test_sock.settimeout(1.0)
+                log_info("UDP test socket created on port 5006", component="debug")
+                test_sock.close()
+            except Exception as e:
+                log_error(f"UDP test failed: {e}", component="debug")
+
+        import threading
+
+        threading.Thread(target=debug_udp, daemon=True).start()
 
         try:
             while True:
