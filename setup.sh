@@ -53,10 +53,23 @@ mkdir -p ~/.config/systemd/user
 cp kitchensync.service ~/.config/systemd/user/
 sed -i "s/kitchensync/$USER/g" ~/.config/systemd/user/kitchensync.service
 sed -i "s|/home/kitchensync/kitchenSync|$(pwd)|g" ~/.config/systemd/user/kitchensync.service
+
+# Enable lingering so user services start on boot without login
+echo "Enabling user service lingering for boot startup..."
+sudo loginctl enable-linger $USER
+
+# Reload and enable the service
 systemctl --user daemon-reload
 systemctl --user enable kitchensync.service
 
-echo "Auto-start service installed. KitchenSync will start automatically on boot."
+# Verify the service is properly enabled
+if systemctl --user is-enabled kitchensync.service >/dev/null 2>&1; then
+    echo "✅ Auto-start service enabled successfully"
+    echo "🔄 Service will start automatically on boot"
+else
+    echo "❌ Failed to enable auto-start service"
+    echo "⚠️  Manual intervention may be required"
+fi
 
 # Test networking imports after cleanup
 echo ""
@@ -100,7 +113,7 @@ echo ""
 echo "🔧 MANUAL TESTING (Optional):"
 echo "- Test auto-detection: python3 kitchensync.py"
 echo "- Test with display (SSH): DISPLAY=:0 PULSE_SERVER=unix:/run/user/1000/pulse/native python3 kitchensync.py"
-echo "- Test service: sudo systemctl start kitchensync"
+echo "- Test service: systemctl --user start kitchensync"
 echo "- Manual leader: python3 leader.py"
 echo "- Manual collaborator: python3 collaborator.py"
 echo ""
@@ -108,10 +121,11 @@ echo "🎵 MIDI Setup:"
 echo "1. Connect USB MIDI interface to collaborator Pis"
 echo "2. Test connection: aconnect -l or amidi -l"
 echo ""
-echo "� Service Management:"
-echo "- Check status: sudo systemctl status kitchensync"
-echo "- View logs: sudo journalctl -u kitchensync -f"
-echo "- Disable auto-start: sudo systemctl disable kitchensync"
+echo "🔧 Service Management:"
+echo "- Check status: systemctl --user status kitchensync"
+echo "- View logs: journalctl --user -u kitchensync -f"
+echo "- Disable auto-start: systemctl --user disable kitchensync"
+echo "- Stop service: systemctl --user stop kitchensync"
 echo ""
 echo "💡 READY FOR DEPLOYMENT! Just plug in USB drive and power on!"
 echo ""
