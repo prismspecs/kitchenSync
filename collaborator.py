@@ -71,8 +71,12 @@ class CollaboratorPi:
 
         # Sync settings
         # sync_tolerance: general upper bound for considering system "in sync" (seconds)
+        # Currently not used in the correction logic
         # sync_check_interval: minimum time between corrective seeks (seconds)
+        # Example: 5.0 means once we correct, we won’t correct again for at least 5 seconds.
         # deviation_threshold: absolute median error (seconds) that triggers a correction
+        # Example: 0.2 means only if we’re ≳200 ms off (consistently) we’ll correct.
+
         self.sync_tolerance = self.config.getfloat("sync_tolerance", 1.0)
         self.sync_check_interval = self.config.getfloat("sync_check_interval", 5.0)
         self.deviation_threshold = self.config.getfloat("deviation_threshold", 0.2)
