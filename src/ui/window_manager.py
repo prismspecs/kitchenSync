@@ -121,6 +121,44 @@ class WindowManager:
         
         return None
 
+    def get_display_geometry(self) -> Tuple[int, int]:
+        """Get the current display geometry (width, height)"""
+        try:
+            if self.is_wayland:
+                # For Wayland, try to get from environment or use defaults
+                width = int(os.environ.get("WLR_HEADLESS_WIDTH", "1920"))
+                height = int(os.environ.get("WLR_HEADLESS_HEIGHT", "1080"))
+                return width, height
+            else:
+                # For X11, try to get from xrandr or use defaults
+                try:
+                    result = subprocess.run(
+                        ["xrandr", "--current"], 
+                        capture_output=True, 
+                        text=True, 
+                        timeout=5
+                    )
+                    if result.returncode == 0:
+                        for line in result.stdout.split("\n"):
+                            if "*" in line:  # Current mode
+                                parts = line.split()
+                                if len(parts) >= 2:
+                                    resolution = parts[1]
+                                    if "x" in resolution:
+                                        w, h = resolution.split("x")
+                                        return int(w), int(h)
+                except:
+                    pass
+                
+                # Fallback to environment variables or defaults
+                width = int(os.environ.get("DISPLAY_WIDTH", "1920"))
+                height = int(os.environ.get("DISPLAY_HEIGHT", "1080"))
+                return width, height
+                
+        except Exception as e:
+            log_warning(f"Failed to get display geometry: {e}")
+            return 1920, 1080  # Default fallback
+
     def position_window(self, window_identifier: str, x: int, y: int, width: int, height: int) -> bool:
         """Position a window at the specified coordinates"""
         try:
@@ -135,8 +173,9 @@ class WindowManager:
                 log_info(f"Focused Wayland window: {window_identifier}")
                 return True
             else:
-                # X11 with wmctrl
-                result = subprocess.run(
+                # X11 with wmctrl - try multiple approaches
+                # First, try to move the window
+                move_result = subprocess.run(
                     ["wmctrl", "-ir", window_identifier, "-e", f"0,{x},{y},{width},{height}"],
                     check=False,
                     timeout=5,
@@ -144,11 +183,57 @@ class WindowManager:
                     text=True
                 )
                 
-                if result.returncode == 0:
+                if move_result.returncode == 0:
                     log_info(f"Positioned X11 window {window_identifier} to ({x},{y},{width},{height})")
+                    
+                    # Verify the positioning worked by checking window position
+                    time.sleep(0.2)  # Give it time to move
+                    verify_result = subprocess.run(
+                        ["wmctrl", "-lG"], capture_output=True, text=True, timeout=5
+                    )
+                    
+                    if verify_result.returncode == 0:
+                        for line in verify_result.stdout.strip().split("\n"):
+                            if window_identifier in line:
+                                log_info(f"Window position verified: {line.strip()}")
+                                break
+                    
                     return True
                 else:
-                    log_warning(f"Failed to position X11 window: {result.stderr}")
+                    log_warning(f"Failed to position X11 window: {move_result.stderr}")
+                    
+                    # Try alternative approach - move and resize separately
+                    log_info("Trying alternative positioning approach...")
+                    
+                    # First move the window
+                    move_only = subprocess.run(
+                        ["wmctrl", "-ir", window_identifier, "-e", f"0,{x},{y},-1,-1"],
+                        check=False,
+                        timeout=5,
+                        capture_output=True,
+                        text=True
+                    )
+                    
+                    if move_only.returncode == 0:
+                        log_info(f"Moved window to ({x},{y})")
+                        
+                        # Then resize it
+                        resize_only = subprocess.run(
+                            ["wmctrl", "-ir", window_identifier, "-e", f"0,-1,-1,{width},{height}"],
+                            check=False,
+                            timeout=5,
+                            capture_output=True,
+                            text=True
+                        )
+                        
+                        if resize_only.returncode == 0:
+                            log_info(f"Resized window to {width}x{height}")
+                            return True
+                        else:
+                            log_warning(f"Resize failed: {resize_only.stderr}")
+                    else:
+                        log_warning(f"Move failed: {move_only.stderr}")
+                    
                     return False
                     
         except Exception as e:

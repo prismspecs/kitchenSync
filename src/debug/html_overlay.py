@@ -291,12 +291,25 @@ class HTMLDebugOverlay:
                 if firefox_window:
                     log_info(f"Found Firefox window: {firefox_window}", component="overlay")
                     
+                    # Get display geometry for better positioning
+                    display_width, display_height = self.window_manager.get_display_geometry()
+                    log_info(f"Display geometry: {display_width}x{display_height}", component="overlay")
+                    
+                    # Calculate positioning based on display size
+                    # Position Firefox on right side with proper coordinates
+                    firefox_x = max(0, display_width - 640)  # Right side, 640px wide
+                    firefox_y = 0
+                    firefox_width = 640
+                    firefox_height = min(1080, display_height)
+                    
+                    log_info(f"Target Firefox position: ({firefox_x}, {firefox_y}) {firefox_width}x{firefox_height}", component="overlay")
+                    
                     # Log current window positions
                     window_details = self.window_manager.get_window_details()
                     log_info(f"Current window positions before Firefox positioning:\n{window_details}", component="overlay")
                     
-                    # Position Firefox on right side: x=1280, y=0, width=640, height=1080
-                    success = self.window_manager.position_window(firefox_window, 1280, 0, 640, 1080)
+                    # Position Firefox window
+                    success = self.window_manager.position_window(firefox_window, firefox_x, firefox_y, firefox_width, firefox_height)
                     
                     if success:
                         log_info("Positioned Firefox window on right side", component="overlay")
