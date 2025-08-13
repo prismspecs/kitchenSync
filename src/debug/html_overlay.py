@@ -222,27 +222,52 @@ class HTMLDebugOverlay:
 
             # Open Firefox with the profile (non-blocking)
             # Set up environment for Firefox in system service context
+            current_user = os.getenv("USER", "kitchensync")
+            
             firefox_env = os.environ.copy()
             firefox_env.update({
                 'DISPLAY': ':0',
-                'XAUTHORITY': f'/home/{os.getenv("USER", "kitchensync")}/.Xauthority',
+                'XAUTHORITY': f'/home/{current_user}/.Xauthority',
                 'XDG_RUNTIME_DIR': f'/run/user/{os.getuid()}',
-                'HOME': f'/home/{os.getenv("USER", "kitchensync")}',
+                'HOME': f'/home/{current_user}',
+                # Additional environment variables for Firefox
+                'XDG_SESSION_TYPE': 'x11',
+                'GDK_BACKEND': 'x11',
+                'QT_QPA_PLATFORM': 'xcb',
+                'WAYLAND_DISPLAY': '',
             })
             
-            subprocess.Popen(
-                [
-                    "firefox",
-                    "--new-instance",
-                    "--new-window",
-                    "--profile",
-                    profile_dir,
-                    f"file://{self.html_file}",
-                ],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                env=firefox_env,
-            )
+            log_info(f"Launching Firefox with environment: USER={current_user}, DISPLAY={firefox_env.get('DISPLAY')}, XAUTHORITY={firefox_env.get('XAUTHORITY')}", component="overlay")
+            
+            # Launch Firefox and capture any errors
+            try:
+                process = subprocess.Popen(
+                    [
+                        "firefox",
+                        "--new-instance",
+                        "--new-window",
+                        "--profile",
+                        profile_dir,
+                        f"file://{self.html_file}",
+                    ],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    env=firefox_env,
+                )
+                
+                # Check if Firefox started successfully (don't wait for completion)
+                time.sleep(0.5)
+                if process.poll() is not None:
+                    # Process exited, capture error
+                    stdout, stderr = process.communicate()
+                    log_error(f"Firefox failed to start. Exit code: {process.returncode}", component="overlay")
+                    log_error(f"Firefox stdout: {stdout.decode()}", component="overlay")
+                    log_error(f"Firefox stderr: {stderr.decode()}", component="overlay")
+                    return
+                    
+            except Exception as e:
+                log_error(f"Exception launching Firefox: {e}", component="overlay")
+                return
 
             # Mark Firefox as opened
             self.firefox_opened = True
