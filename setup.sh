@@ -32,7 +32,8 @@ sudo apt install -y libdbus-1-dev libglib2.0-dev
 # Install required packages
 sudo apt-get update
 sudo apt-get install -y python3-pip python3-vlc vlc
-sudo apt-get install -y wmctrl  # For window management
+sudo apt-get install -y wmctrl  # For X11 window management
+sudo apt-get install -y wlrctl  # For Wayland window management
 
 # Create media directories for USB mounting
 echo "Setting up USB mount points..."

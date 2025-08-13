@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Optional, Dict, Any
 from src.core.logger import log_info, log_error, log_warning
 from src.debug.template_engine import DebugTemplateManager
+from src.ui.window_manager import WindowManager
 
 
 class HTMLDebugOverlay:
@@ -45,6 +46,9 @@ class HTMLDebugOverlay:
 
         # Track Firefox state
         self.firefox_opened = False
+        
+        # Initialize window manager
+        self.window_manager = WindowManager()
 
         # Create the debug directory and copy static files once
         self._setup_debug_environment()
@@ -275,96 +279,36 @@ class HTMLDebugOverlay:
 
             # Position window after a short delay (in background thread)
             def position_window():
-                max_wait_seconds = 10
-                start_time = time.time()
-                firefox_window_id = None
+                log_info("Starting to wait for Firefox window...", component="overlay")
+                
+                # Wait for Firefox window to appear
+                firefox_window = self.window_manager.wait_for_window(
+                    search_terms=["firefox", "kitchensync debug"],
+                    exclude_terms=["vlc", "media player"],
+                    timeout=10
+                )
 
-                log_info("Starting to poll for Firefox window...", component="overlay")
-
-                while time.time() - start_time < max_wait_seconds:
-                    try:
-                        # Get list of all windows and find Firefox
-                        result = subprocess.run(
-                            ["wmctrl", "-l"], capture_output=True, text=True, timeout=5
-                        )
-
-                        if result.returncode == 0:
-                            for line in result.stdout.strip().split("\n"):
-                                if line and (
-                                    "firefox" in line.lower()
-                                    or "kitchensync" in line.lower()
-                                ):
-                                    if (
-                                        "vlc" not in line.lower()
-                                        and "media player" not in line.lower()
-                                    ):
-                                        window_id = line.split()[0]
-                                        firefox_window_id = window_id
-                                        log_info(
-                                            f"Found Firefox window: {line.strip()}",
-                                            component="overlay",
-                                        )
-                                        break  # Exit the for loop
-
-                        if firefox_window_id:
-                            break  # Exit the while loop
-
-                    except Exception as e:
-                        log_warning(
-                            f"Error while polling for window: {e}", component="overlay"
-                        )
-
-                    time.sleep(1)  # Wait 1 second before polling again
-
-                if firefox_window_id:
-                    try:
-                        # Log current window position before positioning
-                        current_pos = subprocess.run(
-                            ["wmctrl", "-lG"], capture_output=True, text=True, timeout=5
-                        )
-                        log_info(f"Current window positions before Firefox positioning:\n{current_pos.stdout}", component="overlay")
+                if firefox_window:
+                    log_info(f"Found Firefox window: {firefox_window}", component="overlay")
+                    
+                    # Log current window positions
+                    window_details = self.window_manager.get_window_details()
+                    log_info(f"Current window positions before Firefox positioning:\n{window_details}", component="overlay")
+                    
+                    # Position Firefox on right side: x=1280, y=0, width=640, height=1080
+                    success = self.window_manager.position_window(firefox_window, 1280, 0, 640, 1080)
+                    
+                    if success:
+                        log_info("Positioned Firefox window on right side", component="overlay")
                         
-                        # Position using window ID instead of title
-                        pos_cmd = ["wmctrl", "-i", "-r", firefox_window_id, "-e", "0,1280,0,640,1080"]
-                        log_info(f"Executing positioning command: {' '.join(pos_cmd)}", component="overlay")
-                        
-                        pos_result = subprocess.run(
-                            pos_cmd,
-                            check=False,
-                            timeout=5,
-                            capture_output=True,
-                            text=True,
-                        )
-                        
-                        log_info(f"Positioning command result: return_code={pos_result.returncode}, stdout='{pos_result.stdout}', stderr='{pos_result.stderr}'", component="overlay")
-                        
-                        # Wait a moment and check the result
+                        # Log positions after positioning
                         time.sleep(0.5)
-                        after_pos = subprocess.run(
-                            ["wmctrl", "-lG"], capture_output=True, text=True, timeout=5
-                        )
-                        log_info(f"Window positions after Firefox positioning:\n{after_pos.stdout}", component="overlay")
-                        
-                        if pos_result.returncode == 0:
-                            log_info(
-                                f"Positioned Firefox window on right side using window ID: {firefox_window_id}",
-                                component="overlay",
-                            )
-                        else:
-                            log_warning(
-                                f"Failed to position Firefox window with ID: {firefox_window_id}, return_code: {pos_result.returncode}",
-                                component="overlay",
-                            )
-                    except Exception as e:
-                        log_warning(
-                            f"Exception while positioning Firefox window: {e}",
-                            component="overlay",
-                        )
+                        after_details = self.window_manager.get_window_details()
+                        log_info(f"Window positions after Firefox positioning:\n{after_details}", component="overlay")
+                    else:
+                        log_warning("Failed to position Firefox window", component="overlay")
                 else:
-                    log_warning(
-                        f"Could not find Firefox window after {max_wait_seconds} seconds.",
-                        component="overlay",
-                    )
+                    log_warning("Firefox window not found for positioning", component="overlay")
 
             threading.Thread(target=position_window, daemon=True).start()
 
