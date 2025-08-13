@@ -38,6 +38,12 @@ class CollaboratorPi:
             self.config.video_file, self.config.usb_mount_point
         )
         self.video_player = VLCVideoPlayer(self.config.debug_mode)
+        # Force Python VLC path for precise timecode sync control
+        self.video_player.debug_mode = True
+        log_info(
+            "Collaborator forcing Python VLC mode for sync control",
+            component="collaborator",
+        )
 
         # Initialize MIDI
         midi_port = self.config.getint("midi_port", 0)
@@ -75,27 +81,35 @@ class CollaboratorPi:
         )
 
     def _setup_command_handlers(self) -> None:
-        """Setup command handlers"""
-        self.command_listener.register_handler("start", self._handle_start_command)
-        self.command_listener.register_handler("stop", self._handle_stop_command)
-        self.command_listener.register_handler(
-            "update_schedule", self._handle_schedule_update
-        )
+        """No-op: collaborator now auto-starts on timecode; no commands handled"""
+        return
 
     def _handle_sync(self, leader_time: float) -> None:
         """Handle time sync from leader"""
         local_time = time.time()
         self.sync_tracker.record_sync(leader_time, local_time)
 
-        # Update system time if running
-        if self.system_state.is_running:
-            self.system_state.current_time = leader_time
+        # Auto-start playback on first valid sync
+        if not self.system_state.is_running:
+            self.start_playback()
 
-            # Process MIDI cues
-            self.midi_scheduler.process_cues(leader_time)
+            # Immediately jump to leader time if possible
+            try:
+                duration = self.video_player.get_duration()
+                if duration and duration > 0:
+                    target = leader_time % duration
+                    self.video_player.set_position(target)
+            except Exception:
+                pass
 
-            # Check video sync
-            self._check_video_sync(leader_time)
+        # Update system time and maintain sync
+        self.system_state.current_time = leader_time
+
+        # Process MIDI cues (safe no-op if no schedule)
+        self.midi_scheduler.process_cues(leader_time)
+
+        # Check video sync
+        self._check_video_sync(leader_time)
 
     def _handle_start_command(self, msg: dict, addr: tuple) -> None:
         """Handle start command from leader"""
@@ -198,9 +212,13 @@ class CollaboratorPi:
         if video_position is None:
             return
 
-        # Calculate expected position
-        time_since_start = leader_time
-        deviation = video_position - time_since_start
+        # Calculate expected position (wrap to video duration if known)
+        duration = self.video_player.get_duration()
+        expected_position = leader_time
+        if duration and duration > 0:
+            expected_position = leader_time % duration
+
+        deviation = video_position - expected_position
 
         # Add to samples for median filtering
         self.deviation_samples.append(deviation)
@@ -223,8 +241,8 @@ class CollaboratorPi:
 
             print(f"🔄 Sync correction: {median_deviation:.3f}s deviation")
 
-            # Apply correction
-            target_position = time_since_start
+            # Apply correction (respect duration wrap)
+            target_position = expected_position
             if self.video_player.set_position(target_position):
                 self.last_correction_time = current_time
                 self.deviation_samples.clear()
@@ -235,7 +253,7 @@ class CollaboratorPi:
 
         # Start networking
         self.sync_receiver.start_listening()
-        self.command_listener.start_listening()
+        # No command listening needed; we only follow timecode
 
         # Register with leader
         self.command_listener.send_registration(
@@ -244,9 +262,17 @@ class CollaboratorPi:
 
         # Start heartbeat
         def heartbeat_loop():
+            last_registration = time.time()
             while True:
                 status = "running" if self.system_state.is_running else "ready"
                 self.command_listener.send_heartbeat(self.config.device_id, status)
+                # Periodic re-registration (every 60s)
+                now = time.time()
+                if now - last_registration >= 60:
+                    self.command_listener.send_registration(
+                        self.config.device_id, self.config.video_file
+                    )
+                    last_registration = now
                 time.sleep(2)
 
         heartbeat_thread = threading.Thread(target=heartbeat_loop, daemon=True)
@@ -254,7 +280,7 @@ class CollaboratorPi:
 
         print(f"✅ Collaborator {self.config.device_id} started successfully!")
 
-        print("Collaborator ready. Waiting for commands from leader...")
+        print("Collaborator ready. Waiting for time sync from leader...")
         print("Press Ctrl+C to exit")
 
         try:

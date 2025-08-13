@@ -84,7 +84,7 @@ class LeaderPi:
 
     def _handle_registration(self, msg: dict, addr: tuple) -> None:
         """Handle collaborator registration"""
-        pi_id = msg.get("pi_id")
+        pi_id = msg.get("device_id")  # Changed from pi_id
         if pi_id:
             self.collaborators.register_collaborator(
                 pi_id, addr[0], msg.get("status", "ready"), msg.get("video_file", "")
@@ -92,7 +92,7 @@ class LeaderPi:
 
     def _handle_heartbeat(self, msg: dict, addr: tuple) -> None:
         """Handle collaborator heartbeat"""
-        pi_id = msg.get("pi_id")
+        pi_id = msg.get("device_id")  # Changed from pi_id
         if pi_id:
             self.collaborators.update_heartbeat(pi_id, msg.get("status", "ready"))
 

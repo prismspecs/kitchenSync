@@ -52,6 +52,7 @@ I am developing this on a separate computer than the one on which it will run. C
 - Advanced median filtering for sync accuracy
 - Automatic leader discovery and registration
 - Heartbeat status reporting
+ - Simplified mode (current): no start/stop commands; auto-starts playback on first timecode packet and continuously maintains sync from leader broadcasts
 
 **kitchensync.service** - Systemd service
 
@@ -82,7 +83,7 @@ I am developing this on a separate computer than the one on which it will run. C
 - UDP broadcast for low-latency time sync
 - Automatic Pi discovery and registration
 - Heartbeat monitoring for connection status
-- Command distribution for system control
+- Command distribution for system control (deprecated for collaborator in simplified mode; collaborator ignores start/stop and follows timecode only)
 - Robust error handling for network interruptions
 
 **Configuration Management**
