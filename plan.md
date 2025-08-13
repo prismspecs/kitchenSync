@@ -181,15 +181,6 @@ The project has successfully achieved its core objectives and is ready for produ
 ### Problem Description
 After system reboot, Firefox takes a very long time to start and the debug overlay window does not get repositioned properly. Manual service restart works fine.
 
-### Startup Sequence Optimization (Jan 2025)
-**NEW: Firefox launches BEFORE VLC for faster perceived startup**
-- **Previous**: VLC started first → Firefox launched after VLC window appeared (slow)
-- **Current**: Firefox launches immediately → VLC starts in background (fast)
-- **Benefit**: Debug overlay appears within 2-5 seconds instead of waiting for VLC
-- **Implementation**: Modified `leader.py` startup sequence to prioritize Firefox launch
-- **Window Positioning**: Firefox window appears first, VLC window positioned after it starts
-- **Timeout Optimization**: Reduced Firefox window detection timeout from 30s to 10s for faster startup
-
 ### Root Cause Analysis
 The issue occurs because:
 1. **Wayland Fallback**: Firefox tries to use Wayland first, fails, then falls back to X11 (causing delays)
