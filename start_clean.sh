@@ -10,8 +10,8 @@ echo "$(date): KitchenSync startup initiated" >> /tmp/kitchensync_startup.log
 
 # Set up X11 display environment variables
 export DISPLAY=:0
-export XAUTHORITY=/home/kitchensync/.Xauthority
-export XDG_RUNTIME_DIR=/run/user/1000
+export XAUTHORITY=/home/$USER/.Xauthority
+export XDG_RUNTIME_DIR=/run/user/$(id -u)
 
 # SDL video driver settings for pygame/overlay
 export SDL_VIDEODRIVER=x11
@@ -22,7 +22,7 @@ export QT_QPA_PLATFORM=xcb
 export WAYLAND_DISPLAY=
 
 # Ensure we're in the right directory
-cd /home/kitchensync/kitchenSync
+cd /home/$USER/kitchenSync
 
 # Log environment and directory
 echo "$(date): Working directory: $(pwd)" >> /tmp/kitchensync_startup.log

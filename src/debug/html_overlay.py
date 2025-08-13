@@ -221,6 +221,15 @@ class HTMLDebugOverlay:
             os.makedirs(profile_dir, exist_ok=True)
 
             # Open Firefox with the profile (non-blocking)
+            # Set up environment for Firefox in system service context
+            firefox_env = os.environ.copy()
+            firefox_env.update({
+                'DISPLAY': ':0',
+                'XAUTHORITY': f'/home/{os.getenv("USER", "kitchensync")}/.Xauthority',
+                'XDG_RUNTIME_DIR': f'/run/user/{os.getuid()}',
+                'HOME': f'/home/{os.getenv("USER", "kitchensync")}',
+            })
+            
             subprocess.Popen(
                 [
                     "firefox",
@@ -232,6 +241,7 @@ class HTMLDebugOverlay:
                 ],
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
+                env=firefox_env,
             )
 
             # Mark Firefox as opened
@@ -406,7 +416,7 @@ class HTMLDebugOverlay:
             # Check service status (user service, not system service)
             try:
                 result = subprocess.run(
-                    ["systemctl", "--user", "is-active", "kitchensync.service"],
+                    ["systemctl", "is-active", "kitchensync.service"],
                     capture_output=True,
                     text=True,
                     timeout=5,
