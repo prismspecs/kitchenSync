@@ -42,7 +42,7 @@ class CollaboratorPi:
         self.video_player.debug_mode = True
         self.video_player.force_python = True
         self.video_player.force_fullscreen = True
-        # Try position-based seeking if time-based doesn't work with this video
+        # Use position-based seeking (ratio method)
         self.video_player.use_position_seeking = True
         # Ensure GUI output on local display and avoid terminal ASCII fallback
         try:
@@ -260,8 +260,12 @@ class CollaboratorPi:
             # Apply correction (respect duration wrap)
             target_position = expected_position
 
-            # Apply correction with time-based seeking (better for hardware decoding)
+            # Apply seeking correction with proper state checking
             try:
+                log_info(
+                    f"Seeking to {target_position:.3f}s for sync", component="sync"
+                )
+
                 if self.video_player.set_position(target_position):
                     self.last_correction_time = current_time
                     self.deviation_samples.clear()
@@ -270,7 +274,8 @@ class CollaboratorPi:
                     )
                 else:
                     log_warning(
-                        "Seek failed - will retry on next sync", component="sync"
+                        "Seek failed - VLC not ready or invalid position",
+                        component="sync",
                     )
             except Exception as e:
                 log_error(f"Seek failed: {e}", component="sync")

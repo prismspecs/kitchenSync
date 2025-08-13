@@ -39,6 +39,7 @@ class VLCVideoPlayer:
         self.loop_count = 0  # Track number of loops completed
         self.enable_looping = True  # Enable continuous looping
         self.loop_callback = None  # Callback function when video loops
+        self.start_time_offset = 0.0  # Start time offset in seconds
         # Engine/behavior overrides
         self.force_python = False  # Force Python VLC engine regardless of debug mode
         self.force_fullscreen = False  # Force fullscreen even in debug
@@ -58,8 +59,15 @@ class VLCVideoPlayer:
 
     def start_playback(self) -> bool:
         """Start video playback"""
+        return self.start_playback_at_time(0.0)
+
+    def start_playback_at_time(self, start_seconds: float = 0.0) -> bool:
+        """Start video playback at specific time offset"""
         if not self.video_path:
             raise VLCPlayerError("No video loaded")
+
+        # Store start time for command-line VLC
+        self.start_time_offset = start_seconds
 
         # Engine selection
         if self.force_python and VLC_PYTHON_AVAILABLE:
@@ -117,19 +125,43 @@ class VLCVideoPlayer:
         """Set playback position"""
         try:
             if self.vlc_player and VLC_PYTHON_AVAILABLE:
+                import vlc
+
+                # Wait for media to be in a seekable state
+                state = self.vlc_player.get_state()
+                if state not in [vlc.State.Playing, vlc.State.Paused]:
+                    log_warning(
+                        f"Media not ready for seeking, state: {state}", component="vlc"
+                    )
+                    return False
+
+                # Ensure we have valid duration before seeking
+                length_ms = self.vlc_player.get_length()
+                if length_ms <= 0:
+                    log_warning(
+                        "Media length not available, cannot seek", component="vlc"
+                    )
+                    return False
+
                 if self.use_position_seeking:
                     # Position-based seeking (ratio 0.0-1.0)
-                    length_ms = self.vlc_player.get_length()
-                    if length_ms > 0:
-                        position_ratio = (seconds * 1000.0) / length_ms
-                        position_ratio = max(0.0, min(1.0, position_ratio))
-                        self.vlc_player.set_position(position_ratio)
-                        return True
+                    position_ratio = (seconds * 1000.0) / length_ms
+                    position_ratio = max(0.0, min(1.0, position_ratio))
+                    result = self.vlc_player.set_position(position_ratio)
+                    log_info(
+                        f"Position seek to {position_ratio:.3f} ({seconds:.3f}s), result: {result}",
+                        component="vlc",
+                    )
+                    return result == 0
                 else:
                     # Time-based seeking (milliseconds)
                     time_ms = int(seconds * 1000)
-                    self.vlc_player.set_time(time_ms)
-                    return True
+                    result = self.vlc_player.set_time(time_ms)
+                    log_info(
+                        f"Time seek to {time_ms}ms ({seconds:.3f}s), result: {result}",
+                        component="vlc",
+                    )
+                    return result == 0
             return False
         except Exception as e:
             log_error(f"Error setting position: {e}", component="vlc")
