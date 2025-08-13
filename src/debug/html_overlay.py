@@ -24,6 +24,64 @@ from src.debug.template_engine import DebugTemplateManager
 from src.ui.window_manager import WindowManager
 
 
+class SystemInfoCache:
+    """Smart caching system to avoid expensive subprocess calls every update"""
+    
+    def __init__(self, cache_duration: int = 30):
+        self.cache_duration = cache_duration  # Cache for 30 seconds
+        self.cache = {}
+        self.last_updated = {}
+    
+    def get_cached_or_run(self, cache_key: str, subprocess_cmd: list, timeout: int = 5):
+        """Get cached result or run subprocess if cache is stale"""
+        current_time = time.time()
+        
+        # Check if we have fresh cached data
+        if (cache_key in self.cache and 
+            cache_key in self.last_updated and
+            current_time - self.last_updated[cache_key] < self.cache_duration):
+            return self.cache[cache_key]
+        
+        # Cache is stale or missing, run the command
+        try:
+            result = subprocess.run(
+                subprocess_cmd,
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+            )
+            
+            # Cache the result
+            self.cache[cache_key] = result
+            self.last_updated[cache_key] = current_time
+            
+            return result
+            
+        except Exception as e:
+            # Return cached result if available, otherwise create error result
+            if cache_key in self.cache:
+                debug_log_warning(f"Subprocess failed, using cached result for {cache_key}: {e}")
+                return self.cache[cache_key]
+            else:
+                # Create error result object that matches subprocess.run return
+                class ErrorResult:
+                    def __init__(self, error_msg):
+                        self.returncode = 1
+                        self.stdout = ""
+                        self.stderr = str(error_msg)
+                
+                return ErrorResult(e)
+    
+    def invalidate(self, cache_key: str = None):
+        """Invalidate specific cache key or all cache"""
+        if cache_key:
+            self.cache.pop(cache_key, None)
+            self.last_updated.pop(cache_key, None)
+        else:
+            self.cache.clear()
+            self.last_updated.clear()
+
+
 def _tail_log_file(file_path: str, max_lines: int = 10) -> list:
     """Efficiently read only the last N lines from a log file without loading entire file"""
     try:
@@ -93,6 +151,9 @@ class HTMLDebugOverlay:
         template_dir = Path(__file__).parent / "templates"
         self.template_manager = DebugTemplateManager(str(template_dir))
         self.html_file = f"/tmp/kitchensync_debug_{pi_id}/index.html"
+        
+        # Smart caching system to avoid expensive subprocess calls every update
+        self.system_cache = SystemInfoCache(cache_duration=30)  # 30-second cache
 
         # Initialize state
         self.state = {
@@ -241,10 +302,15 @@ class HTMLDebugOverlay:
         # Stop the main thread first
         self.running = False
 
-        # Kill Firefox process
+        # Kill Firefox process (OPTIMIZED - rate limited)
         try:
-            subprocess.run(["pkill", "-f", "firefox"], check=False, timeout=3)
-            debug_log_info("Killed Firefox process")
+            current_time = time.time()
+            if not hasattr(self, '_last_cleanup_kill') or current_time - self._last_cleanup_kill > 10:
+                subprocess.run(["pkill", "-f", "firefox"], check=False, timeout=3)
+                self._last_cleanup_kill = current_time
+                debug_log_info("Killed Firefox process (cleanup)")
+            else:
+                debug_log_info("Firefox kill skipped (rate-limited)")
         except Exception as e:
             debug_log_warning(f"Could not kill Firefox: {e}")
 
@@ -298,10 +364,15 @@ class HTMLDebugOverlay:
             import threading
             import time
 
-            # Kill any existing Firefox processes first to avoid tab accumulation
+            # Kill any existing Firefox processes first to avoid tab accumulation (OPTIMIZED)
+            # Only kill if we haven't done it recently to avoid excessive pkill calls
             try:
-                subprocess.run(["pkill", "-f", "firefox"], check=False, timeout=3)
-                time.sleep(0.5)  # Give it time to close
+                current_time = time.time()
+                if not hasattr(self, '_last_firefox_kill') or current_time - self._last_firefox_kill > 30:
+                    subprocess.run(["pkill", "-f", "firefox"], check=False, timeout=3)
+                    self._last_firefox_kill = current_time
+                    time.sleep(0.5)  # Give it time to close
+                    debug_log_info("Killed Firefox processes (rate-limited)")
                 self.firefox_opened = False  # Reset flag after killing
             except:
                 pass
@@ -611,12 +682,11 @@ user_pref("browser.newtabpage.activity-stream.default.sites", "");
                 "vlc_logs": "No VLC logs available",
             }
 
-            # Check service status (user service, not system service)
+            # Check service status (user service, not system service) - CACHED
             try:
-                result = subprocess.run(
+                result = self.system_cache.get_cached_or_run(
+                    "service_status",
                     ["systemctl", "is-active", "kitchensync.service"],
-                    capture_output=True,
-                    text=True,
                     timeout=5,
                 )
                 if result.returncode == 0:
@@ -629,18 +699,17 @@ user_pref("browser.newtabpage.activity-stream.default.sites", "");
                 info["service_status"] = "Check failed"
                 info["service_status_class"] = "error"
 
-            # Get service PID and uptime (user service)
+            # Get service PID and uptime (user service) - CACHED  
             try:
-                result = subprocess.run(
+                result = self.system_cache.get_cached_or_run(
+                    "service_details",
                     [
                         "systemctl",
-                        "--user",
+                        "--user", 
                         "show",
                         "kitchensync.service",
                         "--property=MainPID,ActiveEnterTimestamp",
                     ],
-                    capture_output=True,
-                    text=True,
                     timeout=5,
                 )
                 if result.returncode == 0:
@@ -667,11 +736,10 @@ user_pref("browser.newtabpage.activity-stream.default.sites", "");
                 vlc_found = False
                 vlc_pid = None
 
-                # Check if our main process (which contains VLC) is running
-                main_result = subprocess.run(
+                # Check if our main process (which contains VLC) is running - CACHED
+                main_result = self.system_cache.get_cached_or_run(
+                    "leader_process",
                     ["pgrep", "-f", "leader.py"],
-                    capture_output=True,
-                    text=True,
                     timeout=5,
                 )
 
