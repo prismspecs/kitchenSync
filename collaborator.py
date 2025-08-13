@@ -83,6 +83,9 @@ class CollaboratorPi:
         self.last_correction_time = 0
         self.video_start_time = None
 
+        # Test flag to disable sync correction (set via command line)
+        self.disable_sync_correction = False  # Default to sync enabled
+
         # Setup command handlers
         self._setup_command_handlers()
 
@@ -128,8 +131,12 @@ class CollaboratorPi:
         # Process MIDI cues (safe no-op if no schedule)
         self.midi_scheduler.process_cues(leader_time)
 
-        # Check video sync (only if we've been running for a bit)
-        if self.system_state.is_running and self.video_start_time:
+        # Check video sync (only if we've been running for a bit and sync correction is enabled)
+        if (
+            self.system_state.is_running
+            and self.video_start_time
+            and not self.disable_sync_correction
+        ):
             time_since_start = time.time() - self.video_start_time
             if time_since_start > 2.0:  # Wait 2 seconds before sync corrections
                 self._check_video_sync(leader_time)
@@ -358,6 +365,9 @@ def main():
         help="Configuration file to use",
     )
     parser.add_argument("--debug", action="store_true", help="Enable debug mode")
+    parser.add_argument(
+        "--no-sync", action="store_true", help="Disable sync correction for testing"
+    )
     args = parser.parse_args()
 
     try:
@@ -367,6 +377,11 @@ def main():
         if args.debug:
             collaborator.config.config["KITCHENSYNC"]["debug"] = "true"
             print("✓ Debug mode: ENABLED (via command line)")
+
+        # Override sync correction if specified
+        if args.no_sync:
+            collaborator.disable_sync_correction = True
+            print("✓ Sync correction: DISABLED (via command line)")
 
         collaborator.run()
     except KeyboardInterrupt:
