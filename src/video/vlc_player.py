@@ -485,9 +485,7 @@ class VLCVideoPlayer:
             args.extend(
                 [
                     "--avcodec-hw=none",  # Disable hardware decoding
-                    "--no-hwdec",  # Additional hardware decode disable
-                    "--vout-filter=",  # Disable video filters
-                    "--video-filter=",  # Disable video filters
+                    "--no-video-filters",  # Disable video filters
                 ]
             )
 
