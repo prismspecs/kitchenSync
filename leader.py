@@ -190,7 +190,12 @@ class LeaderPi:
                 )
                 f.write("=" * 40 + "\n\n")
 
+        # Add startup delay to ensure display is fully ready before networking
+        log_info("Waiting for display to be fully ready...", component="leader")
+        time.sleep(2)  # Give display and Firefox time to initialize
+
         # Start networking
+        log_info("Starting networking components...", component="leader")
         self.sync_broadcaster.start_broadcasting(self.system_state.start_time)
         self.command_manager.start_listening()
 

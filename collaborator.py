@@ -253,7 +253,12 @@ class CollaboratorPi:
         """Main run loop"""
         print(f"Starting KitchenSync Collaborator '{self.config.pi_id}'")
 
+        # Add startup delay to ensure display is fully ready before networking
+        print("Waiting for display to be fully ready...")
+        time.sleep(2)  # Give display time to initialize
+
         # Start networking
+        print("Starting networking components...")
         self.sync_receiver.start_listening()
         self.command_listener.start_listening()
 

@@ -37,6 +37,8 @@ Environment=MOZ_ACCELERATED=1
 ExecStartPre=/bin/sleep 10
 # Additional wait for X11 display to be fully ready
 ExecStartPre=/bin/bash -c 'until xset q >/dev/null 2>&1; do sleep 1; done'
+# Wait for network to be fully ready (check if ports 5005 and 5006 are available)
+ExecStartPre=/bin/bash -c 'until ! netstat -tuln | grep -q ":5005\|:5006"; do sleep 1; done'
 
 [Install]
 WantedBy=graphical.target

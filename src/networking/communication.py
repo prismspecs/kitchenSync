@@ -34,6 +34,8 @@ class SyncBroadcaster:
         try:
             self.sync_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             self.sync_sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+            # Add timeout to prevent blocking
+            self.sync_sock.settimeout(1.0)
         except Exception as e:
             raise NetworkError(f"Failed to setup sync socket: {e}")
 
@@ -61,8 +63,12 @@ class SyncBroadcaster:
                         self.sync_sock.sendto(
                             payload.encode(), (self.broadcast_ip, self.sync_port)
                         )
+                    except socket.timeout:
+                        # Socket timeout - continue without blocking
+                        pass
                     except Exception as e:
-                        pass  # Ignore broadcast errors
+                        # Log error but don't block
+                        pass
 
                 time.sleep(self.tick_interval)
 
@@ -95,6 +101,8 @@ class SyncReceiver:
         """Initialize sync receive socket"""
         try:
             self.sync_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            # Add timeout to prevent blocking
+            self.sync_sock.settimeout(1.0)
             self.sync_sock.bind(("", self.sync_port))
         except Exception as e:
             raise NetworkError(f"Failed to setup sync receive socket: {e}")
@@ -119,11 +127,15 @@ class SyncReceiver:
                         if self.sync_callback:
                             self.sync_callback(leader_time)
 
+                except socket.timeout:
+                    # Socket timeout - continue without blocking
+                    continue
                 except json.JSONDecodeError:
                     continue
                 except Exception as e:
                     if self.is_running:
-                        pass  # Ignore sync listener errors
+                        # Log error but don't block
+                        pass
 
         thread = threading.Thread(target=listen_loop, daemon=True)
         thread.start()
@@ -160,6 +172,7 @@ class CommandManager:
         try:
             self.control_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             self.control_sock.bind(("", self.control_port))
+            # Add timeout to prevent blocking
             self.control_sock.settimeout(1.0)
         except Exception as e:
             raise NetworkError(f"Failed to setup command socket: {e}")
@@ -184,12 +197,14 @@ class CommandManager:
                         self._handle_default_message(msg, addr)
 
                 except socket.timeout:
+                    # Socket timeout - continue without blocking
                     continue
                 except json.JSONDecodeError:
                     continue
                 except Exception as e:
                     if self.is_running:
-                        pass  # Ignore command listener errors
+                        # Log error but don't block
+                        pass
 
         thread = threading.Thread(target=listen_loop, daemon=True)
         thread.start()
@@ -273,6 +288,8 @@ class CommandListener:
         """Initialize command socket"""
         try:
             self.control_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            # Add timeout to prevent blocking
+            self.control_sock.settimeout(1.0)
             self.control_sock.bind(("", self.control_port))
         except Exception as e:
             raise NetworkError(f"Failed to setup command socket: {e}")
@@ -294,11 +311,15 @@ class CommandListener:
                     if msg_type in self.message_handlers:
                         self.message_handlers[msg_type](msg, addr)
 
+                except socket.timeout:
+                    # Socket timeout - continue without blocking
+                    continue
                 except json.JSONDecodeError:
                     continue
                 except Exception as e:
                     if self.is_running:
-                        pass  # Ignore command listener errors
+                        # Log error but don't block
+                        pass
 
         thread = threading.Thread(target=listen_loop, daemon=True)
         thread.start()
@@ -329,6 +350,8 @@ class CommandListener:
         try:
             sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+            # Add timeout to prevent blocking
+            sock.settimeout(2.0)
             sock.sendto(
                 json.dumps(registration).encode(),
                 ("255.255.255.255", self.control_port),
@@ -345,6 +368,8 @@ class CommandListener:
         try:
             sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+            # Add timeout to prevent blocking
+            sock.settimeout(2.0)
             sock.sendto(
                 json.dumps(heartbeat).encode(), ("255.255.255.255", self.control_port)
             )
