@@ -285,7 +285,7 @@ class HTMLDebugOverlay:
                 firefox_window = self.window_manager.wait_for_window(
                     search_terms=["firefox", "kitchensync debug"],
                     exclude_terms=["vlc", "media player"],
-                    timeout=10
+                    timeout=30
                 )
 
                 if firefox_window:
