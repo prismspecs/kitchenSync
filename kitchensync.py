@@ -69,11 +69,6 @@ class KitchenSyncAutoStart:
         print("=" * 40)
         snapshot_env()
 
-        # Add startup delay to ensure system is fully ready
-        print("⏳ Waiting for system to be fully ready...")
-        time.sleep(3)  # Give system time to stabilize
-        print("✅ System ready, proceeding with startup...")
-
         # Step 1: Load configuration
         if not self._load_configuration():
             ErrorDisplay.show_error("No USB configuration found")

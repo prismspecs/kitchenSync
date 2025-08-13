@@ -60,21 +60,6 @@ if ! xset q >/dev/null 2>&1; then
     fi
 fi
 
-# Verify network ports are available before proceeding
-echo "$(date): Verifying network ports..." >> /tmp/kitchensync_startup.log
-for i in {1..30}; do
-    if ! netstat -tuln 2>/dev/null | grep -q ":5005\|:5006"; then
-        echo "$(date): Network ports 5005 and 5006 are available" >> /tmp/kitchensync_startup.log
-        break
-    fi
-    echo "$(date): Waiting for network ports to be free (attempt ${i}/30)..." >> /tmp/kitchensync_startup.log
-    sleep 1
-done
-
-if netstat -tuln 2>/dev/null | grep -q ":5005\|:5006"; then
-    echo "$(date): WARNING: Network ports still in use, but proceeding anyway" >> /tmp/kitchensync_startup.log
-fi
-
 # Start KitchenSync main script
 echo "$(date): Launching kitchensync.py" >> /tmp/kitchensync_startup.log
 exec python3 kitchensync.py "$@"
