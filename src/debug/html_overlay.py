@@ -406,11 +406,11 @@ user_pref("browser.newtabpage.activity-stream.default.sites", "");
             def position_window():
                 log_info("Starting to wait for Firefox window...", component="overlay")
                 
-                # Wait for Firefox window to appear
+                # Wait for Firefox window to appear (reduced timeout for faster startup)
                 firefox_window = self.window_manager.wait_for_window(
                     search_terms=["firefox", "kitchensync debug"],
                     exclude_terms=["vlc", "media player"],
-                    timeout=30
+                    timeout=10  # Reduced from 30s to 10s for faster startup
                 )
 
                 if firefox_window:
@@ -873,15 +873,12 @@ class HTMLDebugManager:
     def start(self):
         """Start the HTML debug overlay"""
         try:
-            # Open in browser
-            self.overlay.open_in_browser()
-
-            # Start update thread
+            # Start update thread (Firefox will be opened separately for faster startup)
             self.running = True
             self.update_thread = threading.Thread(target=self._update_loop, daemon=True)
             self.update_thread.start()
 
-            log_info("HTML debug manager created", component="overlay")
+            log_info("HTML debug manager started (Firefox will be opened separately)", component="overlay")
         except Exception as e:
             log_error(f"Failed to start HTML debug manager: {e}", component="overlay")
 

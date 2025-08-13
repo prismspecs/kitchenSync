@@ -111,7 +111,32 @@ class LeaderPi:
         # Load schedule for MIDI scheduler
         self.midi_scheduler.load_schedule(self.schedule.get_cues())
 
-        # Start video playback first so VLC creates its window
+        # OPTIMIZATION: Start Firefox debug overlay FIRST for faster perceived startup
+        if self.config.debug_mode and self.html_debug is not None:
+            log_info("Starting Firefox debug overlay first for faster startup...", component="leader")
+            # Force Firefox to open immediately (don't wait for VLC)
+            try:
+                self.html_debug.overlay.open_in_browser()
+                log_info("Firefox debug overlay started successfully", component="leader")
+            except Exception as e:
+                log_error(f"Failed to start Firefox debug overlay: {e}", component="leader")
+        else:
+            log_warning(
+                "HTML overlay not found - falling back to file debug",
+                component="leader",
+            )
+            # Fallback to file debug if overlay fails
+            self.debug_file = "/tmp/kitchensync_leader_debug.txt"
+            with open(self.debug_file, "w") as f:
+                f.write("KitchenSync Leader Debug (Fallback)\n")
+                f.write("=" * 40 + "\n")
+                f.write(f"Started: {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
+                f.write(
+                    f"Video: {os.path.basename(self.video_path) if self.video_path else 'None'}\n"
+                )
+                f.write("=" * 40 + "\n\n")
+
+        # Now start video playback (Firefox is already visible)
         if self.video_player.video_path:
             log_info("Starting video playback...", component="video")
             log_info("About to start video playback", component="leader")
@@ -169,26 +194,6 @@ class LeaderPi:
                         )
             except Exception as e:
                 log_error(f"Exception starting video playback: {e}", component="leader")
-
-        # Now create overlay (after VLC window exists) so both windows are visible
-        if self.config.debug_mode and self.html_debug is not None:
-            # HTML overlay already exists from __init__, just ensure it's visible
-            log_info("HTML overlay already exists", component="leader")
-        else:
-            log_warning(
-                "HTML overlay not found - falling back to file debug",
-                component="leader",
-            )
-            # Fallback to file debug if overlay fails
-            self.debug_file = "/tmp/kitchensync_leader_debug.txt"
-            with open(self.debug_file, "w") as f:
-                f.write("KitchenSync Leader Debug (Fallback)\n")
-                f.write("=" * 40 + "\n")
-                f.write(f"Started: {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
-                f.write(
-                    f"Video: {os.path.basename(self.video_path) if self.video_path else 'None'}\n"
-                )
-                f.write("=" * 40 + "\n\n")
 
         # Start networking
         self.sync_broadcaster.start_broadcasting(self.system_state.start_time)
