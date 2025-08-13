@@ -22,8 +22,8 @@ Environment=GDK_BACKEND=x11
 Environment=QT_QPA_PLATFORM=xcb
 Environment=WAYLAND_DISPLAY=
 
-# Wait for desktop to be ready
-ExecStartPre=/bin/sleep 30
+# Wait for desktop to be ready (reduced from 30s to 15s)
+ExecStartPre=/bin/sleep 15
 
 [Install]
 WantedBy=graphical.target
