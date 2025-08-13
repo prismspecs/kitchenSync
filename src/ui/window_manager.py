@@ -53,6 +53,8 @@ class WindowManager:
         except:
             pass
         
+        # If we can't confirm Wayland, default to X11 (more reliable)
+        log_info("Wayland detection inconclusive, defaulting to X11", component="window_manager")
         return False
 
     def list_windows(self) -> List[str]:
@@ -78,6 +80,11 @@ class WindowManager:
                 # Filter out empty lines and add debug info
                 filtered_windows = [w for w in windows if w.strip()]
                 log_info(f"Found {len(filtered_windows)} windows using {self.window_tool}", component="window_manager")
+                
+                # Debug: show the first few windows
+                for i, window in enumerate(filtered_windows[:5]):
+                    log_info(f"Window {i}: '{window}'", component="window_manager")
+                
                 return filtered_windows
             else:
                 log_warning(f"Failed to list windows: {result.stderr}")

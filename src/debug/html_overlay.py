@@ -233,16 +233,18 @@ class HTMLDebugOverlay:
                 'DISPLAY': ':0',
                 'XDG_RUNTIME_DIR': f'/run/user/{os.getuid()}',
                 'HOME': f'/home/{current_user}',
-                # Let Chromium use Wayland naturally
-                'WAYLAND_DISPLAY': os.environ.get('WAYLAND_DISPLAY', ''),
-                'XDG_SESSION_TYPE': os.environ.get('XDG_SESSION_TYPE', 'wayland'),
+                # Force Chromium to use X11 instead of Wayland for better window management
+                'WAYLAND_DISPLAY': '',
+                'XDG_SESSION_TYPE': 'x11',
+                'GDK_BACKEND': 'x11',
+                'QT_QPA_PLATFORM': 'xcb',
                 # Chromium-specific optimizations
                 'CHROMIUM_FLAGS': '--disable-extensions --disable-plugins --disable-background-tabs --disable-background-mode --disable-background-networking --disable-default-apps --disable-sync --disable-translate --disable-web-security --no-first-run --no-default-browser-check --disable-features=VizDisplayCompositor',
             })
             
-            log_info(f"Launching Chromium with environment: USER={current_user}, WAYLAND_DISPLAY={chromium_env.get('WAYLAND_DISPLAY')}, XDG_SESSION_TYPE={chromium_env.get('XDG_SESSION_TYPE')}", component="overlay")
+            log_info(f"Launching Chromium with environment: USER={current_user}, DISPLAY={chromium_env.get('DISPLAY')}, XDG_SESSION_TYPE={chromium_env.get('XDG_SESSION_TYPE')}", component="overlay")
             
-            # Launch Chromium with optimized flags for speed
+            # Launch Chromium with optimized flags for speed and X11 compatibility
             try:
                 process = subprocess.Popen(
                     [
@@ -271,6 +273,9 @@ class HTMLDebugOverlay:
                         "--disable-features=TranslateUI",
                         "--disable-features=NetworkService",
                         "--disable-features=NetworkServiceLogging",
+                        # Force X11 mode
+                        "--disable-ozone",
+                        "--use-x11",
                         f"file://{self.html_file}",
                     ],
                     stdout=subprocess.PIPE,
