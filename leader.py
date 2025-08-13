@@ -207,10 +207,6 @@ class LeaderPi:
         }
         self.command_manager.send_command(start_command)
 
-        # Start simple debug updates if enabled
-        if self.config.debug_mode:
-            self._start_simple_debug()
-
         log_info("System started successfully!", component="leader")
         paths = log_file_paths()
         log_info(
@@ -260,115 +256,6 @@ class LeaderPi:
         """Edit the MIDI schedule"""
         editor = ScheduleEditor(self.schedule)
         editor.run_editor()
-
-    def _start_simple_debug(self) -> None:
-        """Start simple visual debug updates"""
-
-        def simple_debug_loop():
-            last_time = 0
-            while self.system_state.is_running:
-                try:
-                    # Get actual video position and timing
-                    session_time = self.system_state.current_time
-                    video_position = self.video_player.get_position()
-                    video_duration = self.video_player.get_duration() or 180.0
-
-                    # Use video position if available, otherwise session time
-                    if (
-                        video_position is not None
-                        and 0 <= video_position <= video_duration
-                    ):
-                        current_time = video_position
-                    else:
-                        current_time = (
-                            session_time % video_duration
-                            if video_duration > 0
-                            else session_time
-                        )
-
-                    # Update debug overlay every second
-                    if abs(current_time - last_time) >= 1.0:
-                        last_time = current_time
-
-                        # Get MIDI info
-                        current_cues = (
-                            self.midi_scheduler.get_current_cues(current_time)
-                            if hasattr(self.midi_scheduler, "get_current_cues")
-                            else []
-                        )
-                        upcoming_cues = (
-                            self.midi_scheduler.get_upcoming_cues(current_time)
-                            if hasattr(self.midi_scheduler, "get_upcoming_cues")
-                            else []
-                        )
-
-                        # Update visual overlay
-                        if self.html_debug and self.html_debug.overlay:
-                            video_file = (
-                                self.video_player.video_path
-                                or self.video_path
-                                or "Unknown"
-                            )
-                            self.html_debug.update_debug_info(
-                                video_file=video_file,
-                                current_time=current_time,
-                                total_time=video_duration,
-                                session_time=session_time,
-                                video_position=video_position,
-                                current_cues=current_cues,
-                                upcoming_cues=upcoming_cues,
-                            )
-
-                        # Fallback to file debug if overlay failed
-                        elif hasattr(self, "debug_file") and self.debug_file:
-                            # Format time
-                            current_min = int(current_time // 60)
-                            current_sec = int(current_time % 60)
-                            total_min = int(video_duration // 60)
-                            total_sec = int(video_duration % 60)
-                            time_str = f"{current_min:02d}:{current_sec:02d} / {total_min:02d}:{total_sec:02d}"
-
-                            # Write debug info
-                            with open(self.debug_file, "a") as f:
-                                timestamp = time.strftime("%H:%M:%S")
-                                video_name = os.path.basename(
-                                    self.video_player.video_path
-                                    or self.video_path
-                                    or "Unknown"
-                                )
-
-                                f.write(f"[{timestamp}] KitchenSync Leader\n")
-                                f.write(f"  Video: {video_name}\n")
-                                f.write(f"  Time: {time_str}\n")
-                                f.write(
-                                    f"  Session: {session_time:.1f}s, Video pos: {video_position or 'N/A'}\n"
-                                )
-
-                                if current_cues:
-                                    cue = current_cues[0]
-                                    f.write(
-                                        f"  Current MIDI: {cue.get('type', 'unknown')} Ch{cue.get('channel', 1)}\n"
-                                    )
-
-                                if upcoming_cues:
-                                    next_cue = upcoming_cues[0]
-                                    time_until = next_cue.get("time", 0) - current_time
-                                    f.write(
-                                        f"  Next MIDI: {next_cue.get('type', 'unknown')} in {time_until:.1f}s\n"
-                                    )
-
-                                f.write("  " + "-" * 30 + "\n")
-                                f.flush()
-
-                    time.sleep(0.5)  # Check twice per second for smoother updates
-
-                except Exception as e:
-                    log_error(f"Simple debug error: {e}", component="debug")
-                    time.sleep(5)
-
-        log_info("Starting simple debug loop", component="debug")
-        thread = threading.Thread(target=simple_debug_loop, daemon=True)
-        thread.start()
 
     def cleanup(self) -> None:
         """Clean up resources"""

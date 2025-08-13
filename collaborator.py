@@ -20,7 +20,6 @@ from networking import SyncReceiver, CommandListener
 from midi import MidiScheduler, MidiManager
 from core import SystemState, SyncTracker
 from core.logger import log_info, log_warning, log_error
-from debug.simple_overlay import SimpleDebugManager
 
 
 class CollaboratorPi:
@@ -56,9 +55,6 @@ class CollaboratorPi:
             log_info(f"Video file loaded: {self.video_path}", component="collaborator")
         else:
             log_warning("No video file found at startup", component="collaborator")
-
-        # Delay overlay creation until after VLC window exists (start_playback)
-        self.simple_debug = None
 
         # Sync settings
         self.sync_tolerance = self.config.getfloat("sync_tolerance", 1.0)
@@ -167,22 +163,6 @@ class CollaboratorPi:
             log_info("Starting video...", component="video")
             self.video_player.start_playback()
 
-        # Create overlay after VLC window exists
-        if self.config.debug_mode and self.simple_debug is None:
-            self.simple_debug = SimpleDebugManager(
-                self.config.device_id, is_leader=False
-            )
-            if self.simple_debug.overlay:
-                log_info(
-                    f"Simple overlay created for {self.config.device_id}",
-                    component="debug",
-                )
-            else:
-                log_error(
-                    f"Failed to create overlay for {self.config.device_id}",
-                    component="debug",
-                )
-
         # Start MIDI playback with video duration for looping
         video_duration = self.video_player.get_duration()
         self.midi_scheduler.start_playback(self.system_state.start_time, video_duration)
@@ -272,10 +252,6 @@ class CollaboratorPi:
         heartbeat_thread = threading.Thread(target=heartbeat_loop, daemon=True)
         heartbeat_thread.start()
 
-        # Start simple debug updates if enabled (overlay is created in start_playback)
-        if self.config.debug_mode:
-            self._start_simple_debug()
-
         print(f"✅ Collaborator {self.config.device_id} started successfully!")
 
         print("Collaborator ready. Waiting for commands from leader...")
@@ -290,86 +266,6 @@ class CollaboratorPi:
         finally:
             self.cleanup()
 
-    def _start_simple_debug(self) -> None:
-        """Start simple visual debug updates for collaborator"""
-
-        def simple_debug_loop():
-            last_time = 0
-            while self.system_state.is_running:
-                try:
-                    # Get actual video position and timing
-                    session_time = self.system_state.current_time
-                    video_position = self.video_player.get_position()
-                    video_duration = self.video_player.get_duration() or 180.0
-
-                    # Use video position if available, otherwise session time
-                    if (
-                        video_position is not None
-                        and 0 <= video_position <= video_duration
-                    ):
-                        current_time = video_position
-                    else:
-                        current_time = (
-                            session_time % video_duration
-                            if video_duration > 0
-                            else session_time
-                        )
-
-                    # Update debug overlay every second
-                    if abs(current_time - last_time) >= 1.0:
-                        last_time = current_time
-
-                        # Get MIDI info
-                        current_cues = (
-                            self.midi_scheduler.get_current_cues(current_time)
-                            if hasattr(self.midi_scheduler, "get_current_cues")
-                            else []
-                        )
-                        upcoming_cues = (
-                            self.midi_scheduler.get_upcoming_cues(current_time)
-                            if hasattr(self.midi_scheduler, "get_upcoming_cues")
-                            else []
-                        )
-
-                        # Update visual overlay
-                        if self.simple_debug and self.simple_debug.overlay:
-                            video_file = self.video_player.video_path or "Unknown"
-
-                            # Get loop information
-                            video_info = self.video_player.get_video_info()
-                            video_loop_count = video_info.get("loop_count", 0)
-                            video_looping_enabled = video_info.get(
-                                "looping_enabled", True
-                            )
-
-                            midi_stats = self.midi_scheduler.get_stats()
-                            midi_loop_count = midi_stats.get("loop_count", 0)
-
-                            self.simple_debug.update_debug_info(
-                                video_file=video_file,
-                                current_time=current_time,
-                                total_time=video_duration,
-                                session_time=session_time,
-                                video_position=video_position,
-                                current_cues=current_cues,
-                                upcoming_cues=upcoming_cues,
-                                video_loop_count=video_loop_count,
-                                midi_loop_count=midi_loop_count,
-                                looping_enabled=video_looping_enabled,
-                            )
-
-                    time.sleep(0.5)  # Check twice per second for smoother updates
-
-                except Exception as e:
-                    log_error(f"Collaborator debug error: {e}", component="debug")
-                    time.sleep(5)
-
-        log_info(
-            f"Starting simple debug loop for {self.config.device_id}", component="debug"
-        )
-        thread = threading.Thread(target=simple_debug_loop, daemon=True)
-        thread.start()
-
     def cleanup(self) -> None:
         """Clean up resources"""
         if self.system_state.is_running:
@@ -377,8 +273,6 @@ class CollaboratorPi:
 
         self.video_player.cleanup()
         self.midi_manager.cleanup()
-        if self.simple_debug:
-            self.simple_debug.cleanup()
         log_info("Cleanup completed", component="collaborator")
 
 
