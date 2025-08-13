@@ -90,12 +90,16 @@ class KitchenSyncAutoStart:
         return self._start_role()
 
     def _load_configuration(self) -> bool:
-        """Load configuration from USB drive"""
+        """Load configuration from USB drive; default to collaborator if none found"""
         print("🔍 Looking for USB drive configuration...")
 
         usb_config_path = USBConfigLoader.find_config_on_usb()
         if not usb_config_path:
-            return False
+            print("⚠️  No USB config found. Defaulting to COLLABORATOR mode.")
+            # Create a default configuration (collaborator by default)
+            self.config = ConfigManager()
+            self.config.load_configuration()
+            return True
 
         self.config = ConfigManager()
         self.config.usb_config_path = usb_config_path
