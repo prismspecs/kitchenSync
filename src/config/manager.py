@@ -134,6 +134,8 @@ class ConfigManager:
             "enable_vlc_logging": "false",
             "enable_system_logging": "false",
             "vlc_log_level": "0",  # 0=errors only, 1=warnings, 2=info, 3=debug
+            # Networking / sync
+            "tick_interval": "0.1",  # seconds between leader sync broadcasts
         }
 
         if self.config_file and not os.path.exists(self.config_file):
@@ -258,3 +260,8 @@ class ConfigManager:
     def vlc_log_level(self) -> int:
         """Get VLC logging verbosity level (0=errors, 1=warnings, 2=info, 3=debug)"""
         return self.getint("vlc_log_level", 0)
+
+    @property
+    def tick_interval(self) -> float:
+        """Leader broadcast interval in seconds (default 0.1)."""
+        return self.getfloat("tick_interval", 0.1)

@@ -60,8 +60,11 @@ class LeaderPi:
         # Set video output for reliable display
         self.video_player.video_output = "x11"
 
-        # Initialize networking
-        self.sync_broadcaster = SyncBroadcaster()
+        # Initialize networking (wire tick_interval from config)
+        self.sync_broadcaster = SyncBroadcaster(
+            sync_port=self.config.getint("sync_port", 5005),
+            tick_interval=self.config.tick_interval,
+        )
         self.command_manager = CommandManager()
 
         # Initialize MIDI (for local MIDI if needed)

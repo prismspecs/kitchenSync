@@ -22,7 +22,11 @@ class SyncBroadcaster:
 
     def __init__(self, sync_port: int = 5005, tick_interval: float = 0.1):
         self.sync_port = sync_port
-        self.tick_interval = tick_interval
+        # Clamp to a safe range to avoid CPU burn or sluggish updates
+        try:
+            self.tick_interval = max(0.02, min(float(tick_interval), 5.0))
+        except Exception:
+            self.tick_interval = 0.1
         self.broadcast_ip = "255.255.255.255"
         self.leader_id = "leader-001"
         self.is_running = False
