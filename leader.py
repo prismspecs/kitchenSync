@@ -95,12 +95,6 @@ class LeaderPi:
         if pi_id:
             self.collaborators.update_heartbeat(pi_id, msg.get("status", "ready"))
 
-    def _on_video_loop(self, loop_count: int) -> None:
-        """Handle video loop events - keep MIDI scheduler in sync"""
-        log_info(f"Video loop #{loop_count} detected, syncing MIDI", component="leader")
-        # Notify MIDI scheduler to verify sync
-        self.midi_scheduler.notify_video_loop(loop_count)
-
     def start_system(self) -> None:
         """Start the synchronized playback system"""
         if self.system_state.is_running:
@@ -116,9 +110,6 @@ class LeaderPi:
         # Load schedule for MIDI scheduler
         self.midi_scheduler.load_schedule(self.schedule.get_cues())
 
-        # Set up video loop callback to notify MIDI scheduler
-        self.video_player.loop_callback = self._on_video_loop
-        
         # Start video playback first so VLC creates its window
         if self.video_player.video_path:
             log_info("Starting video playback...", component="video")

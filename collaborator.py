@@ -87,7 +87,7 @@ class CollaboratorPi:
         )
 
     def _handle_sync(self, leader_time: float) -> None:
-        """Handle time sync from leader - this is the authoritative timing source"""
+        """Handle time sync from leader"""
         local_time = time.time()
         self.sync_tracker.record_sync(leader_time, local_time)
 
@@ -95,10 +95,10 @@ class CollaboratorPi:
         if self.system_state.is_running:
             self.system_state.current_time = leader_time
 
-            # Process MIDI cues using leader's timing (authoritative)
+            # Process MIDI cues
             self.midi_scheduler.process_cues(leader_time)
 
-            # Check video sync and correct if needed
+            # Check video sync
             self._check_video_sync(leader_time)
 
     def _handle_start_command(self, msg: dict, addr: tuple) -> None:
