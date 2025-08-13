@@ -867,8 +867,6 @@ class HTMLDebugManager:
         self.overlay = HTMLDebugOverlay(pi_id, video_player)
         self.overlay.midi_scheduler = midi_scheduler  # Pass MIDI scheduler to overlay
         self.midi_scheduler = midi_scheduler
-        self.update_thread = None
-        self.running = False
 
     def start(self):
         """Start the HTML debug overlay"""
@@ -876,12 +874,7 @@ class HTMLDebugManager:
             # Open in browser
             self.overlay.open_in_browser()
 
-            # Start update thread
-            self.running = True
-            self.update_thread = threading.Thread(target=self._update_loop, daemon=True)
-            self.update_thread.start()
-
-            log_info("HTML debug manager created", component="overlay")
+            log_info("HTML debug manager started", component="overlay")
         except Exception as e:
             log_error(f"Failed to start HTML debug manager: {e}", component="overlay")
 
@@ -932,28 +925,3 @@ class HTMLDebugManager:
         self.stop()
         if self.overlay:
             self.overlay.cleanup()
-
-    def _update_loop(self):
-        """Update loop for the HTML overlay"""
-        update_count = 0
-        log_info("HTML update loop started", component="overlay")
-
-        while self.running:
-            try:
-                update_count += 1
-                log_info(f"HTML update #{update_count} starting", component="overlay")
-
-                # Update the HTML content with current system info
-                self.overlay.update_content()
-
-                log_info(f"HTML update #{update_count} completed", component="overlay")
-                time.sleep(5)  # Update every 5 seconds
-
-            except Exception as e:
-                log_error(
-                    f"Error in HTML update loop #{update_count}: {e}",
-                    component="overlay",
-                )
-                time.sleep(5)  # Continue trying
-
-        log_info("HTML update loop stopped", component="overlay")
