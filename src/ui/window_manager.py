@@ -121,6 +121,32 @@ class WindowManager:
         
         return None
 
+    def _detect_coordinate_offset(self, window_identifier: str, target_x: int, target_y: int) -> Tuple[int, int]:
+        """Detect and return coordinate offset for a window"""
+        try:
+            result = subprocess.run(
+                ["wmctrl", "-lG"], capture_output=True, text=True, timeout=5
+            )
+            
+            if result.returncode == 0:
+                for line in result.stdout.strip().split("\n"):
+                    if window_identifier in line:
+                        parts = line.split()
+                        if len(parts) >= 5:
+                            actual_x = int(parts[2])
+                            actual_y = int(parts[3])
+                            
+                            offset_x = actual_x - target_x
+                            offset_y = actual_y - target_y
+                            
+                            log_info(f"Coordinate offset detected: ({offset_x}, {offset_y})")
+                            return offset_x, offset_y
+                            
+        except Exception as e:
+            log_warning(f"Failed to detect coordinate offset: {e}")
+            
+        return 0, 0
+
     def get_display_geometry(self) -> Tuple[int, int]:
         """Get the current display geometry (width, height)"""
         try:
@@ -196,6 +222,23 @@ class WindowManager:
                         for line in verify_result.stdout.strip().split("\n"):
                             if window_identifier in line:
                                 log_info(f"Window position verified: {line.strip()}")
+                                
+                                # Parse the actual position to check for coordinate offset
+                                try:
+                                    parts = line.split()
+                                    if len(parts) >= 5:
+                                        actual_x = int(parts[2])
+                                        actual_y = int(parts[3])
+                                        actual_w = int(parts[4])
+                                        actual_h = int(parts[5])
+                                        
+                                        log_info(f"Actual position: ({actual_x}, {actual_y}) {actual_w}x{actual_h}")
+                                        
+                                        # If there's a significant offset, log it for debugging
+                                        if abs(actual_x - x) > 100 or abs(actual_y - y) > 100:
+                                            log_warning(f"Large coordinate offset detected: requested ({x},{y}), got ({actual_x},{actual_y})")
+                                except (ValueError, IndexError) as e:
+                                    log_warning(f"Could not parse window position: {e}")
                                 break
                     
                     return True
