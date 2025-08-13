@@ -403,10 +403,10 @@ class HTMLDebugOverlay:
                 "vlc_logs": "No VLC logs available",
             }
 
-            # Check service status
+            # Check service status (user service, not system service)
             try:
                 result = subprocess.run(
-                    ["systemctl", "is-active", "kitchensync.service"],
+                    ["systemctl", "--user", "is-active", "kitchensync.service"],
                     capture_output=True,
                     text=True,
                     timeout=5,
@@ -421,11 +421,12 @@ class HTMLDebugOverlay:
                 info["service_status"] = "Check failed"
                 info["service_status_class"] = "error"
 
-            # Get service PID and uptime
+            # Get service PID and uptime (user service)
             try:
                 result = subprocess.run(
                     [
                         "systemctl",
+                        "--user",
                         "show",
                         "kitchensync.service",
                         "--property=MainPID,ActiveEnterTimestamp",
