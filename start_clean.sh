@@ -16,6 +16,11 @@ export XDG_RUNTIME_DIR=/run/user/1000
 # SDL video driver settings for pygame/overlay
 export SDL_VIDEODRIVER=x11
 
+# Force X11 mode (disable Wayland)
+export GDK_BACKEND=x11
+export QT_QPA_PLATFORM=xcb
+export WAYLAND_DISPLAY=
+
 # Ensure we're in the right directory
 cd /home/kitchensync/kitchenSync
 

@@ -47,12 +47,45 @@ sudo usermod -a -G plugdev,disk $USER
 echo "Installing Python packages system-wide..."
 sudo pip install python-rtmidi dbus-python python-vlc --break-system-packages
 
+# Configure system for X11 mode (disable Wayland)
+echo "Configuring system for X11 mode..."
+# Set X11 as default session
+if [ -f /etc/gdm3/daemon.conf ]; then
+    sudo sed -i 's/#WaylandEnable=false/WaylandEnable=false/' /etc/gdm3/daemon.conf 2>/dev/null || true
+fi
+
+# Add X11 environment variables to user profile
+echo "# Force X11 mode for KitchenSync" >> ~/.bashrc
+echo "export GDK_BACKEND=x11" >> ~/.bashrc
+echo "export QT_QPA_PLATFORM=xcb" >> ~/.bashrc
+echo "export WAYLAND_DISPLAY=" >> ~/.bashrc
+
+# Update start_clean.sh to include X11 environment variables
+if ! grep -q "GDK_BACKEND=x11" start_clean.sh; then
+    sed -i '/export SDL_VIDEODRIVER=x11/a\\n# Force X11 mode (disable Wayland)\nexport GDK_BACKEND=x11\nexport QT_QPA_PLATFORM=xcb\nexport WAYLAND_DISPLAY=' start_clean.sh
+fi
+
 # Setup auto-start service
 echo "Setting up auto-start service..."
 mkdir -p ~/.config/systemd/user
 cp kitchensync.service ~/.config/systemd/user/
 sed -i "s/kitchensync/$USER/g" ~/.config/systemd/user/kitchensync.service
 sed -i "s|/home/kitchensync/kitchenSync|$(pwd)|g" ~/.config/systemd/user/kitchensync.service
+
+# Fix user service compatibility - remove User/Group directives
+sed -i '/^User=/d' ~/.config/systemd/user/kitchensync.service
+sed -i '/^Group=/d' ~/.config/systemd/user/kitchensync.service
+
+# Change target to default.target for better headless compatibility
+sed -i 's/graphical-session.target/default.target/g' ~/.config/systemd/user/kitchensync.service
+
+# Increase startup delay for better window manager compatibility
+sed -i 's/ExecStartPre=\/bin\/sleep 30/ExecStartPre=\/bin\/sleep 45/' ~/.config/systemd/user/kitchensync.service
+
+# Force X11 mode for reliable window management (disable Wayland)
+sed -i '/Environment=SDL_VIDEODRIVER=x11/a Environment=GDK_BACKEND=x11' ~/.config/systemd/user/kitchensync.service
+sed -i '/Environment=GDK_BACKEND=x11/a Environment=QT_QPA_PLATFORM=xcb' ~/.config/systemd/user/kitchensync.service
+sed -i '/Environment=QT_QPA_PLATFORM=xcb/a Environment=WAYLAND_DISPLAY=' ~/.config/systemd/user/kitchensync.service
 
 # Enable lingering so user services start on boot without login
 echo "Enabling user service lingering for boot startup..."
@@ -116,6 +149,11 @@ echo "- Test with display (SSH): DISPLAY=:0 PULSE_SERVER=unix:/run/user/1000/pul
 echo "- Test service: systemctl --user start kitchensync"
 echo "- Manual leader: python3 leader.py"
 echo "- Manual collaborator: python3 collaborator.py"
+echo ""
+echo "🖥️  DISPLAY CONFIGURATION:"
+echo "- System configured for X11 mode (Wayland disabled)"
+echo "- This ensures reliable window positioning"
+echo "- Reboot required for display changes to take effect"
 echo ""
 echo "🎵 MIDI Setup:"
 echo "1. Connect USB MIDI interface to collaborator Pis"
