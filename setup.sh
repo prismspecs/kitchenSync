@@ -79,8 +79,9 @@ sed -i '/^Group=/d' ~/.config/systemd/user/kitchensync.service
 # Change target to default.target for better headless compatibility
 sed -i 's/graphical-session.target/default.target/g' ~/.config/systemd/user/kitchensync.service
 
-# Increase startup delay for better window manager compatibility
-sed -i 's/ExecStartPre=\/bin\/sleep 30/ExecStartPre=\/bin\/sleep 45/' ~/.config/systemd/user/kitchensync.service
+# Optimize startup delay for X11 mode (reduced from 45 to 30 seconds)
+sed -i 's/ExecStartPre=\/bin\/sleep 45/ExecStartPre=\/bin\/sleep 30/' ~/.config/systemd/user/kitchensync.service
+sed -i 's/ExecStartPre=\/bin\/sleep 30/ExecStartPre=\/bin\/sleep 30/' ~/.config/systemd/user/kitchensync.service
 
 # Force X11 mode for reliable window management (disable Wayland)
 sed -i '/Environment=SDL_VIDEODRIVER=x11/a Environment=GDK_BACKEND=x11' ~/.config/systemd/user/kitchensync.service

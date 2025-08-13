@@ -208,8 +208,8 @@ class HTMLDebugOverlay:
 
             # Kill any existing Firefox processes first to avoid tab accumulation
             try:
-                subprocess.run(["pkill", "-f", "firefox"], check=False, timeout=5)
-                time.sleep(1)  # Give it time to close
+                subprocess.run(["pkill", "-f", "firefox"], check=False, timeout=3)
+                time.sleep(0.5)  # Give it time to close
                 self.firefox_opened = False  # Reset flag after killing
             except:
                 pass
@@ -240,7 +240,7 @@ class HTMLDebugOverlay:
 
             # Position window after a short delay (in background thread)
             def position_window():
-                max_wait_seconds = 30
+                max_wait_seconds = 10
                 start_time = time.time()
                 firefox_window_id = None
 

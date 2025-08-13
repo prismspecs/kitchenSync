@@ -245,7 +245,7 @@ class VLCVideoPlayer:
             import time
 
             # Wait for VLC window to appear
-            time.sleep(3)
+            time.sleep(1)
 
             # Find VLC windows and force position
             result = subprocess.run(
@@ -325,7 +325,7 @@ class VLCVideoPlayer:
             log_info(f"Launched VLC with audio: {' '.join(cmd)}", component="vlc")
 
             # Give VLC time to start
-            time.sleep(3)
+            time.sleep(1)
 
             if self.command_process.poll() is None:
                 self.is_playing = True

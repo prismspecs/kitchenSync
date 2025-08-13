@@ -125,7 +125,7 @@ class LeaderPi:
                         import threading
 
                         def position_vlc_window():
-                            time.sleep(3)  # Wait for VLC window to appear first
+                            time.sleep(1)  # Wait for VLC window to appear first
                             try:
                                 import subprocess
 
