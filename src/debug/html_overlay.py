@@ -44,8 +44,8 @@ class HTMLDebugOverlay:
             "looping_enabled": True,
         }
 
-        # Track Chromium state
-        self.chromium_opened = False
+        # Track Firefox state
+        self.firefox_opened = False
         
         # Initialize window manager
         self.window_manager = WindowManager()
@@ -190,17 +190,17 @@ class HTMLDebugOverlay:
         except Exception as e:
             log_warning(f"Could not remove HTML directory: {e}", component="overlay")
 
-        # Reset Chromium flag
-        self.chromium_opened = False
+        # Reset Firefox flag
+        self.firefox_opened = False
         log_info("HTML overlay cleaned up", component="overlay")
 
     def open_in_browser(self):
-        """Open the HTML file in Chromium browser (much lighter than Firefox)"""
+        """Open the HTML file in the default browser"""
         try:
-            # Prevent multiple Chromium instances
-            if self.chromium_opened:
+            # Prevent multiple Firefox instances
+            if self.firefox_opened:
                 log_info(
-                    "Chromium already opened, skipping duplicate launch",
+                    "Firefox already opened, skipping duplicate launch",
                     component="overlay",
                 )
                 return
@@ -210,163 +210,118 @@ class HTMLDebugOverlay:
             import threading
             import time
 
-            # Kill any existing Chromium processes first to avoid tab accumulation
+            # Kill any existing Firefox processes first to avoid tab accumulation
             try:
-                subprocess.run(["pkill", "-f", "chromium"], check=False, timeout=3)
-                time.sleep(0.2)  # Reduced wait time
-                self.chromium_opened = False  # Reset flag after killing
+                subprocess.run(["pkill", "-f", "firefox"], check=False, timeout=3)
+                time.sleep(0.5)  # Give it time to close
+                self.firefox_opened = False  # Reset flag after killing
             except:
                 pass
 
-            # Create a temporary Chromium profile directory
-            profile_dir = "/tmp/chromium-debug-profile"
+            # Create a temporary Firefox profile directory
+            profile_dir = "/tmp/firefox-debug-profile"
             import os
 
             os.makedirs(profile_dir, exist_ok=True)
 
-            # Open Chromium with the profile (non-blocking)
-            # Set up environment for Chromium in system service context
+            # Open Firefox with the profile (non-blocking)
+            # Set up environment for Firefox in system service context
             current_user = os.getenv("USER", "kitchensync")
             
-            chromium_env = os.environ.copy()
-            chromium_env.update({
+            firefox_env = os.environ.copy()
+            firefox_env.update({
                 'DISPLAY': ':0',
+                'XAUTHORITY': f'/home/{current_user}/.Xauthority',
                 'XDG_RUNTIME_DIR': f'/run/user/{os.getuid()}',
                 'HOME': f'/home/{current_user}',
-                # Force Chromium to use X11 instead of Wayland for better window management
-                'WAYLAND_DISPLAY': '',
+                # Additional environment variables for Firefox
                 'XDG_SESSION_TYPE': 'x11',
                 'GDK_BACKEND': 'x11',
                 'QT_QPA_PLATFORM': 'xcb',
-                # Chromium-specific optimizations
-                'CHROMIUM_FLAGS': '--disable-extensions --disable-plugins --disable-background-tabs --disable-background-mode --disable-background-networking --disable-default-apps --disable-sync --disable-translate --disable-web-security --no-first-run --no-default-browser-check --disable-features=VizDisplayCompositor',
+                'WAYLAND_DISPLAY': '',
             })
             
-            log_info(f"Launching Chromium with environment: USER={current_user}, DISPLAY={chromium_env.get('DISPLAY')}, XDG_SESSION_TYPE={chromium_env.get('XDG_SESSION_TYPE')}", component="overlay")
+            log_info(f"Launching Firefox with environment: USER={current_user}, DISPLAY={firefox_env.get('DISPLAY')}, XAUTHORITY={firefox_env.get('XAUTHORITY')}", component="overlay")
             
-            # Launch Chromium with optimized flags for speed and X11 compatibility
+            # Launch Firefox and capture any errors
             try:
                 process = subprocess.Popen(
                     [
-                        "chromium-browser",
+                        "firefox",
+                        "--new-instance",
                         "--new-window",
-                        "--user-data-dir=" + profile_dir,
-                        "--no-first-run",
-                        "--disable-extensions",
-                        "--disable-plugins",
-                        "--disable-background-tabs",
-                        "--disable-background-mode",
-                        "--disable-background-networking",
-                        "--disable-default-apps",
-                        "--disable-sync",
-                        "--disable-translate",
-                        "--disable-web-security",
-                        "--no-default-browser-check",
-                        "--disable-features=VizDisplayCompositor",
-                        "--disable-gpu-sandbox",
-                        "--disable-software-rasterizer",
-                        "--disable-dev-shm-usage",
-                        "--disable-ipc-flooding-protection",
-                        "--disable-renderer-backgrounding",
-                        "--disable-backgrounding-occluded-windows",
-                        "--disable-background-timer-throttling",
-                        "--disable-features=TranslateUI",
-                        "--disable-features=NetworkService",
-                        "--disable-features=NetworkServiceLogging",
-                        # Force X11 mode
-                        "--disable-ozone",
-                        "--use-x11",
+                        "--profile",
+                        profile_dir,
                         f"file://{self.html_file}",
                     ],
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
-                    env=chromium_env,
+                    env=firefox_env,
                 )
                 
-                # Check if Chromium started successfully (don't wait for completion)
-                time.sleep(0.3)  # Reduced wait time
+                # Check if Firefox started successfully (don't wait for completion)
+                time.sleep(0.5)
                 if process.poll() is not None:
                     # Process exited, capture error
                     stdout, stderr = process.communicate()
-                    log_error(f"Chromium failed to start. Exit code: {process.returncode}", component="overlay")
-                    log_error(f"Chromium stdout: {stdout.decode()}", component="overlay")
-                    log_error(f"Chromium stderr: {stderr.decode()}", component="overlay")
+                    log_error(f"Firefox failed to start. Exit code: {process.returncode}", component="overlay")
+                    log_error(f"Firefox stdout: {stdout.decode()}", component="overlay")
+                    log_error(f"Firefox stderr: {stderr.decode()}", component="overlay")
                     return
                     
             except Exception as e:
-                log_error(f"Exception launching Chromium: {e}", component="overlay")
+                log_error(f"Exception launching Firefox: {e}", component="overlay")
                 return
 
-            # Mark Chromium as opened
-            self.chromium_opened = True
-            log_info("Chromium launched successfully", component="overlay")
+            # Mark Firefox as opened
+            self.firefox_opened = True
+            log_info("Firefox launched successfully", component="overlay")
 
             # Position window after a short delay (in background thread)
             def position_window():
-                log_info("Starting to wait for Chromium window...", component="overlay")
+                log_info("Starting to wait for Firefox window...", component="overlay")
                 
-                # First, let's debug what windows are currently visible
-                log_info("=== DEBUG: Current window list ===", component="overlay")
-                all_windows = self.window_manager.list_windows()
-                for i, window in enumerate(all_windows):
-                    if window.strip():
-                        log_info(f"Window {i}: {window}", component="overlay")
-                log_info("=== END DEBUG ===", component="overlay")
-                
-                # Wait for Chromium window to appear (reduced timeout)
-                # Use more flexible search terms for Wayland - the actual window name is "KitchenSync Debug"
-                chromium_window = self.window_manager.wait_for_window(
-                    search_terms=["kitchensync debug", "kitchensync", "debug", "chromium"],
+                # Wait for Firefox window to appear
+                firefox_window = self.window_manager.wait_for_window(
+                    search_terms=["firefox", "kitchensync debug"],
                     exclude_terms=["vlc", "media player"],
-                    timeout=5  # Reduced from 10s to 5s
+                    timeout=10
                 )
 
-                if chromium_window:
-                    log_info(f"Found Chromium window: {chromium_window}", component="overlay")
+                if firefox_window:
+                    log_info(f"Found Firefox window: {firefox_window}", component="overlay")
                     
                     # Get display geometry for better positioning
                     display_width, display_height = self.window_manager.get_display_geometry()
                     log_info(f"Display geometry: {display_width}x{display_height}", component="overlay")
                     
                     # Calculate positioning based on display size
-                    # Position Chromium on right side with proper coordinates
-                    chromium_x = max(0, display_width - 640)  # Right side, 640px wide
-                    chromium_y = 0
-                    chromium_width = 640
-                    chromium_height = min(1080, display_height)
+                    # Position Firefox on right side with proper coordinates
+                    firefox_x = max(0, display_width - 640)  # Right side, 640px wide
+                    firefox_y = 0
+                    firefox_width = 640
+                    firefox_height = min(1080, display_height)
                     
-                    log_info(f"Target Chromium position: ({chromium_x}, {chromium_y}) {chromium_width}x{chromium_height}", component="overlay")
+                    log_info(f"Target Firefox position: ({firefox_x}, {firefox_y}) {firefox_width}x{firefox_height}", component="overlay")
                     
                     # Log current window positions
                     window_details = self.window_manager.get_window_details()
-                    log_info(f"Current window positions before Chromium positioning:\n{window_details}", component="overlay")
+                    log_info(f"Current window positions before Firefox positioning:\n{window_details}", component="overlay")
                     
-                    # Position Chromium window
-                    success = self.window_manager.position_window(chromium_window, chromium_x, chromium_y, chromium_width, chromium_height)
+                    # Position Firefox window
+                    success = self.window_manager.position_window(firefox_window, firefox_x, firefox_y, firefox_width, firefox_height)
                     
                     if success:
-                        log_info("Positioned Chromium window on right side", component="overlay")
+                        log_info("Positioned Firefox window on right side", component="overlay")
                         
                         # Log positions after positioning
                         time.sleep(0.5)
                         after_details = self.window_manager.get_window_details()
-                        log_info(f"Window positions after Chromium positioning:\n{after_details}", component="overlay")
+                        log_info(f"Window positions after Firefox positioning:\n{after_details}", component="overlay")
                     else:
-                        log_warning("Failed to position Chromium window", component="overlay")
-                        
-                        # Try alternative positioning approach for Chromium
-                        log_info("Trying alternative Chromium positioning...", component="overlay")
-                        self._try_alternative_chromium_positioning(chromium_window, chromium_x, chromium_y, chromium_width, chromium_height)
+                        log_warning("Failed to position Firefox window", component="overlay")
                 else:
-                    log_warning("Chromium window not found for positioning", component="overlay")
-                    
-                    # Debug: show what windows we can see
-                    log_info("=== DEBUG: Windows found after timeout ===", component="overlay")
-                    final_windows = self.window_manager.list_windows()
-                    for i, window in enumerate(final_windows):
-                        if window.strip():
-                            log_info(f"Window {i}: {window}", component="overlay")
-                    log_info("=== END DEBUG ===", component="overlay")
+                    log_warning("Firefox window not found for positioning", component="overlay")
 
             threading.Thread(target=position_window, daemon=True).start()
 
@@ -778,76 +733,6 @@ class HTMLDebugOverlay:
                 "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 "error": f"Failed to get system info: {e}",
             }
-
-    def _try_alternative_chromium_positioning(self, window_id, x, y, width, height):
-        """Try alternative methods to position Chromium window"""
-        try:
-            log_info(f"Attempting alternative positioning for Chromium window {window_id}", component="overlay")
-            
-            # Method 1: Try using xdotool if available
-            try:
-                import subprocess
-                result = subprocess.run(
-                    ["xdotool", "search", "--name", "chromium", "windowmove", str(x), str(y)],
-                    capture_output=True, timeout=5
-                )
-                if result.returncode == 0:
-                    log_info("Successfully moved Chromium window with xdotool", component="overlay")
-                    
-                    # Now try to resize
-                    resize_result = subprocess.run(
-                        ["xdotool", "search", "--name", "chromium", "windowsize", str(width), str(height)],
-                        capture_output=True, timeout=5
-                    )
-                    if resize_result.returncode == 0:
-                        log_info("Successfully resized Chromium window with xdotool", component="overlay")
-                        return True
-                    else:
-                        log_warning(f"xdotool resize failed: {resize_result.stderr.decode()}", component="overlay")
-                else:
-                    log_warning(f"xdotool move failed: {result.stderr.decode()}", component="overlay")
-            except FileNotFoundError:
-                log_info("xdotool not available, trying next method", component="overlay")
-            
-            # Method 2: Try using wmctrl with different approach
-            try:
-                import subprocess
-                # First try to focus the window
-                focus_result = subprocess.run(
-                    ["wmctrl", "-ia", window_id], check=False, timeout=5, capture_output=True
-                )
-                if focus_result.returncode == 0:
-                    log_info("Successfully focused Chromium window", component="overlay")
-                
-                # Try positioning with wmctrl using different format
-                position_result = subprocess.run(
-                    ["wmctrl", "-ir", window_id, "-e", f"0,{x},{y},{width},{height}"],
-                    check=False, timeout=5, capture_output=True
-                )
-                if position_result.returncode == 0:
-                    log_info("Alternative wmctrl positioning successful", component="overlay")
-                    return True
-                else:
-                    log_warning(f"Alternative wmctrl failed: {position_result.stderr.decode()}", component="overlay")
-                    
-            except Exception as e:
-                log_error(f"Alternative positioning failed: {e}", component="overlay")
-            
-            # Method 3: Try using xwininfo to get window info
-            try:
-                import subprocess
-                info_result = subprocess.run(
-                    ["xwininfo", "-id", window_id], capture_output=True, timeout=5
-                )
-                if info_result.returncode == 0:
-                    log_info(f"Window info for {window_id}:\n{info_result.stdout.decode()}", component="overlay")
-            except FileNotFoundError:
-                log_info("xwininfo not available", component="overlay")
-                
-        except Exception as e:
-            log_error(f"Alternative positioning methods failed: {e}", component="overlay")
-        
-        return False
 
 
 class HTMLDebugManager:

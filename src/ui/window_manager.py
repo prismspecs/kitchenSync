@@ -39,22 +39,6 @@ class WindowManager:
         except (FileNotFoundError, subprocess.TimeoutExpired):
             pass
         
-        # Additional check: look for Wayland processes
-        try:
-            result = subprocess.run(
-                ["ps", "aux"], 
-                capture_output=True, 
-                text=True, 
-                timeout=2
-            )
-            if result.returncode == 0:
-                if "wayfire" in result.stdout.lower() or "wlrctl" in result.stdout.lower():
-                    return True
-        except:
-            pass
-        
-        # If we can't confirm Wayland, default to X11 (more reliable)
-        log_info("Wayland detection inconclusive, defaulting to X11", component="window_manager")
         return False
 
     def list_windows(self) -> List[str]:
@@ -76,16 +60,7 @@ class WindowManager:
                 )
             
             if result.returncode == 0:
-                windows = result.stdout.strip().split("\n")
-                # Filter out empty lines and add debug info
-                filtered_windows = [w for w in windows if w.strip()]
-                log_info(f"Found {len(filtered_windows)} windows using {self.window_tool}", component="window_manager")
-                
-                # Debug: show the first few windows
-                for i, window in enumerate(filtered_windows[:5]):
-                    log_info(f"Window {i}: '{window}'", component="window_manager")
-                
-                return filtered_windows
+                return result.stdout.strip().split("\n")
             else:
                 log_warning(f"Failed to list windows: {result.stderr}")
                 return []
@@ -100,56 +75,50 @@ class WindowManager:
             exclude_terms = []
             
         windows = self.list_windows()
-        log_info(f"Searching for windows with terms: {search_terms}", component="window_manager")
-        log_info(f"Excluding terms: {exclude_terms}", component="window_manager")
-        log_info(f"Total windows found: {len(windows)}", component="window_manager")
         
         for line in windows:
             if not line.strip():
                 continue
                 
             line_lower = line.lower()
-            log_info(f"Checking window: '{line}'", component="window_manager")
             
-            # Check if any search term matches (case-insensitive)
-            term_found = False
-            matched_term = None
-            for term in search_terms:
-                if term.lower() in line_lower:
-                    term_found = True
-                    matched_term = term
-                    break
+            # Check if any search term matches
+            term_found = any(term.lower() in line_lower for term in search_terms)
             
-            # Check if any exclude term matches (case-insensitive)
+            # Check if any exclude term matches
             exclude_found = any(term.lower() in line_lower for term in exclude_terms)
             
-            log_info(f"  Search match: {term_found} (term: {matched_term})", component="window_manager")
-            log_info(f"  Exclude match: {exclude_found}", component="window_manager")
-            
             if term_found and not exclude_found:
-                log_info(f"✅ Window matched: '{line}'", component="window_manager")
                 if self.is_wayland:
                     # wlrctl format: app_id window_title
-                    # For Chromium, we might get something like "chromium" or "kitchensync debug"
-                    parts = line.strip().split(None, 1)
-                    if len(parts) >= 1:
-                        window_id = parts[0]  # Return app_id
-                        log_info(f"Returning Wayland window ID: {window_id}", component="window_manager")
-                        return window_id
+                    return line.strip()
                 else:
                     # wmctrl format: window_id desktop class hostname window_title
                     parts = line.split(None, 4)
                     if len(parts) >= 1:
-                        window_id = parts[0]  # Return window ID
-                        log_info(f"Returning X11 window ID: {window_id}", component="window_manager")
-                        return window_id
-            else:
-                if term_found and exclude_found:
-                    log_info(f"  ❌ Window excluded by exclude terms", component="window_manager")
-                elif not term_found:
-                    log_info(f"  ❌ No search terms matched", component="window_manager")
+                        return parts[0]  # Return window ID
         
-        log_info("No matching windows found", component="window_manager")
+        # If no exact match, try partial matches for window titles
+        for line in windows:
+            if not line.strip():
+                continue
+                
+            line_lower = line.lower()
+            
+            # Check for partial matches in window titles (more flexible)
+            for term in search_terms:
+                term_lower = term.lower()
+                if term_lower in line_lower:
+                    # Check if any exclude term matches
+                    exclude_found = any(exclude.lower() in line_lower for exclude in exclude_terms)
+                    if not exclude_found:
+                        if self.is_wayland:
+                            return line.strip()
+                        else:
+                            parts = line.split(None, 4)
+                            if len(parts) >= 1:
+                                return parts[0]
+        
         return None
 
     def _detect_coordinate_offset(self, window_identifier: str, target_x: int, target_y: int) -> Tuple[int, int]:
@@ -217,67 +186,18 @@ class WindowManager:
             return 1920, 1080  # Default fallback
 
     def position_window(self, window_identifier: str, x: int, y: int, width: int, height: int) -> bool:
-        """Position a window at specific coordinates"""
+        """Position a window at the specified coordinates"""
         try:
-            log_info(f"Positioning window {window_identifier} to ({x},{y}) {width}x{height}", component="window_manager")
-            
             if self.is_wayland:
-                # Wayland with wlrctl - try to move and resize the window
-                try:
-                    # First try to move the window
-                    move_result = subprocess.run(
-                        ["wlrctl", "toplevel", "move", window_identifier, str(x), str(y)],
-                        check=False,
-                        timeout=5,
-                        capture_output=True,
-                        text=True
-                    )
-                    
-                    if move_result.returncode == 0:
-                        log_info(f"Moved Wayland window {window_identifier} to ({x},{y})")
-                        
-                        # Now try to resize it
-                        resize_result = subprocess.run(
-                            ["wlrctl", "toplevel", "resize", window_identifier, str(width), str(height)],
-                            check=False,
-                            timeout=5,
-                            capture_output=True,
-                            text=True
-                        )
-                        
-                        if resize_result.returncode == 0:
-                            log_info(f"Resized Wayland window {window_identifier} to {width}x{height}")
-                            return True
-                        else:
-                            log_warning(f"Failed to resize Wayland window: {resize_result.stderr}")
-                            # Move was successful, resize failed
-                            return True
-                    else:
-                        log_warning(f"Failed to move Wayland window: {move_result.stderr}")
-                        
-                        # Try alternative approach: use wlrctl toplevel set
-                        try:
-                            set_result = subprocess.run(
-                                ["wlrctl", "toplevel", "set", window_identifier, str(x), str(y), str(width), str(height)],
-                                check=False,
-                                timeout=5,
-                                capture_output=True,
-                                text=True
-                            )
-                            
-                            if set_result.returncode == 0:
-                                log_info(f"Set Wayland window {window_identifier} to ({x},{y}) {width}x{height}")
-                                return True
-                            else:
-                                log_warning(f"Alternative Wayland positioning failed: {set_result.stderr}")
-                        except Exception as e:
-                            log_warning(f"Alternative Wayland positioning exception: {e}")
-                        
-                        return False
-                        
-                except Exception as e:
-                    log_error(f"Exception positioning Wayland window: {e}")
-                    return False
+                # Note: wlrctl may have limited positioning support
+                # Try to focus first
+                subprocess.run(
+                    ["wlrctl", "toplevel", "focus", window_identifier],
+                    check=False,
+                    timeout=5
+                )
+                log_info(f"Focused Wayland window: {window_identifier}")
+                return True
             else:
                 # X11 with wmctrl - try multiple approaches
                 # First, try to move the window
@@ -402,7 +322,7 @@ class WindowManager:
             window = self.find_window(search_terms, exclude_terms)
             if window:
                 return window
-            time.sleep(0.2)  # Reduced from 0.5s to 0.2s for faster detection
+            time.sleep(0.5)
         
         log_warning(f"Window with terms {search_terms} not found within {timeout} seconds")
         return None
