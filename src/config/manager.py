@@ -128,7 +128,7 @@ class ConfigManager:
         self.config["KITCHENSYNC"] = {
             "is_leader": str(is_leader).lower(),
             "debug": "false",
-            "pi_id": f"pi-{int(os.urandom(2).hex(), 16):03d}",
+            "device_id": f"pi-{int(os.urandom(2).hex(), 16):03d}",
             "video_file": video_file or "video.mp4",
         }
 
@@ -226,14 +226,9 @@ class ConfigManager:
         return self.getboolean("debug", False)
 
     @property
-    def pi_id(self) -> str:
-        """Get Pi identifier"""
-        return self.get("pi_id", "unknown-pi")
-
-    @property
     def device_id(self) -> str:
-        """Alias for pi_id for backward compatibility"""
-        return self.pi_id
+        """Get device identifier"""
+        return self.get("device_id", "unknown-pi")
 
     @property
     def video_file(self) -> str:

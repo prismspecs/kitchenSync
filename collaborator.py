@@ -70,7 +70,7 @@ class CollaboratorPi:
         self._setup_command_handlers()
 
         log_info(
-            f"KitchenSync Collaborator '{self.config.pi_id}' initialized",
+            f"KitchenSync Collaborator '{self.config.device_id}' initialized",
             component="collaborator",
         )
 
@@ -231,7 +231,7 @@ class CollaboratorPi:
 
     def run(self) -> None:
         """Main run loop"""
-        print(f"Starting KitchenSync Collaborator '{self.config.pi_id}'")
+        print(f"Starting KitchenSync Collaborator '{self.config.device_id}'")
 
         # Start networking
         self.sync_receiver.start_listening()
@@ -239,14 +239,14 @@ class CollaboratorPi:
 
         # Register with leader
         self.command_listener.send_registration(
-            self.config.pi_id, self.config.video_file
+            self.config.device_id, self.config.video_file
         )
 
         # Start heartbeat
         def heartbeat_loop():
             while True:
                 status = "running" if self.system_state.is_running else "ready"
-                self.command_listener.send_heartbeat(self.config.pi_id, status)
+                self.command_listener.send_heartbeat(self.config.device_id, status)
                 time.sleep(2)
 
         heartbeat_thread = threading.Thread(target=heartbeat_loop, daemon=True)

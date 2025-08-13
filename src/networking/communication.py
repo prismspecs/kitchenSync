@@ -237,24 +237,24 @@ class CommandManager:
         msg_type = msg.get("type")
 
         if msg_type == "register":
-            pi_id = msg.get("pi_id")
-            if pi_id:
-                self.collaborators[pi_id] = {
+            device_id = msg.get("device_id")
+            if device_id:
+                self.collaborators[device_id] = {
                     "ip": addr[0],
                     "last_seen": time.time(),
                     "status": msg.get("status", "unknown"),
                 }
-                # print(f"Registered Pi: {pi_id} at {addr[0]}")
+                # print(f"Registered Pi: {device_id} at {addr[0]}")
 
         elif msg_type == "heartbeat":
-            pi_id = msg.get("pi_id")
-            if pi_id in self.collaborators:
-                self.collaborators[pi_id]["last_seen"] = time.time()
+            device_id = msg.get("device_id")
+            if device_id in self.collaborators:
+                self.collaborators[device_id]["last_seen"] = time.time()
 
     def get_collaborators(self) -> Dict[str, Dict]:
         """Get current collaborator status"""
         current_time = time.time()
-        for pi_id, info in self.collaborators.items():
+        for device_id, info in self.collaborators.items():
             last_seen = current_time - info["last_seen"]
             info["online"] = last_seen < 5
         return self.collaborators
@@ -317,11 +317,11 @@ class CommandListener:
         """Register a message handler"""
         self.message_handlers[message_type] = handler
 
-    def send_registration(self, pi_id: str, video_file: str) -> None:
+    def send_registration(self, device_id: str, video_file: str) -> None:
         """Send registration to leader"""
         registration = {
             "type": "register",
-            "pi_id": pi_id,
+            "device_id": device_id,
             "status": "ready",
             "video_file": video_file,
         }
@@ -334,13 +334,13 @@ class CommandListener:
                 ("255.255.255.255", self.control_port),
             )
             sock.close()
-            # print(f"Registered with leader as '{pi_id}'")
+            # print(f"Registered with leader as '{device_id}'")
         except Exception as e:
             pass  # Ignore registration errors
 
-    def send_heartbeat(self, pi_id: str, status: str = "ready") -> None:
+    def send_heartbeat(self, device_id: str, status: str = "ready") -> None:
         """Send heartbeat to leader"""
-        heartbeat = {"type": "heartbeat", "pi_id": pi_id, "status": status}
+        heartbeat = {"type": "heartbeat", "device_id": device_id, "status": status}
 
         try:
             sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
