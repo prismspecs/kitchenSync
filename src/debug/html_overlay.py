@@ -283,21 +283,33 @@ class HTMLDebugOverlay:
 
                 if firefox_window_id:
                     try:
+                        # Log current window position before positioning
+                        current_pos = subprocess.run(
+                            ["wmctrl", "-lG"], capture_output=True, text=True, timeout=5
+                        )
+                        log_info(f"Current window positions before Firefox positioning:\n{current_pos.stdout}", component="overlay")
+                        
                         # Position using window ID instead of title
+                        pos_cmd = ["wmctrl", "-i", "-r", firefox_window_id, "-e", "0,1280,0,640,1080"]
+                        log_info(f"Executing positioning command: {' '.join(pos_cmd)}", component="overlay")
+                        
                         pos_result = subprocess.run(
-                            [
-                                "wmctrl",
-                                "-i",
-                                "-r",
-                                firefox_window_id,
-                                "-e",
-                                "0,1280,0,640,1080",
-                            ],
+                            pos_cmd,
                             check=False,
                             timeout=5,
-                            stdout=subprocess.DEVNULL,
-                            stderr=subprocess.DEVNULL,
+                            capture_output=True,
+                            text=True,
                         )
+                        
+                        log_info(f"Positioning command result: return_code={pos_result.returncode}, stdout='{pos_result.stdout}', stderr='{pos_result.stderr}'", component="overlay")
+                        
+                        # Wait a moment and check the result
+                        time.sleep(0.5)
+                        after_pos = subprocess.run(
+                            ["wmctrl", "-lG"], capture_output=True, text=True, timeout=5
+                        )
+                        log_info(f"Window positions after Firefox positioning:\n{after_pos.stdout}", component="overlay")
+                        
                         if pos_result.returncode == 0:
                             log_info(
                                 f"Positioned Firefox window on right side using window ID: {firefox_window_id}",
@@ -305,7 +317,7 @@ class HTMLDebugOverlay:
                             )
                         else:
                             log_warning(
-                                f"Failed to position Firefox window with ID: {firefox_window_id}",
+                                f"Failed to position Firefox window with ID: {firefox_window_id}, return_code: {pos_result.returncode}",
                                 component="overlay",
                             )
                     except Exception as e:
