@@ -148,79 +148,63 @@ class WindowManager:
         return 0, 0
 
     def get_display_geometry(self) -> Tuple[int, int]:
-        """Get the display geometry (width, height)"""
+        """Get the current display geometry (width, height)"""
         try:
             if self.is_wayland:
-                # For Wayland, try to get geometry from environment or use defaults
-                # Most Raspberry Pi displays are 1920x1080 or 1280x720
-                return (1920, 1080)  # Default to common Pi resolution
+                # For Wayland, try to get from environment or use defaults
+                width = int(os.environ.get("WLR_HEADLESS_WIDTH", "1920"))
+                height = int(os.environ.get("WLR_HEADLESS_HEIGHT", "1080"))
+                return width, height
             else:
-                # For X11, try to get actual display geometry
+                # For X11, try to get from xrandr or use defaults
                 try:
                     result = subprocess.run(
                         ["xrandr", "--current"], 
                         capture_output=True, 
                         text=True, 
-                        timeout=3
+                        timeout=5
                     )
                     if result.returncode == 0:
                         for line in result.stdout.split("\n"):
-                            if "*" in line:  # Current resolution marked with *
+                            if "*" in line:  # Current mode
                                 parts = line.split()
                                 if len(parts) >= 2:
                                     resolution = parts[1]
                                     if "x" in resolution:
-                                        width, height = map(int, resolution.split("x"))
-                                        return (width, height)
+                                        w, h = resolution.split("x")
+                                        return int(w), int(h)
                 except:
                     pass
                 
-                # Fallback to common Raspberry Pi resolutions
-                return (1920, 1080)
+                # Fallback to environment variables or defaults
+                width = int(os.environ.get("DISPLAY_WIDTH", "1920"))
+                height = int(os.environ.get("DISPLAY_HEIGHT", "1080"))
+                return width, height
                 
         except Exception as e:
-            log_warning(f"Could not determine display geometry: {e}")
-            return (1920, 1080)  # Default fallback
+            log_warning(f"Failed to get display geometry: {e}")
+            return 1920, 1080  # Default fallback
 
     def position_window(self, window_identifier: str, x: int, y: int, width: int, height: int) -> bool:
-        """Position a window at specific coordinates"""
+        """Position a window at the specified coordinates"""
         try:
             if self.is_wayland:
-                # Wayland with wlrctl
-                result = subprocess.run(
-                    ["wlrctl", "toplevel", "move", window_identifier, str(x), str(y)],
+                # Note: wlrctl may have limited positioning support
+                # Try to focus first
+                subprocess.run(
+                    ["wlrctl", "toplevel", "focus", window_identifier],
                     check=False,
-                    timeout=3,  # Add timeout protection
-                    capture_output=True,
-                    text=True
+                    timeout=5
                 )
-                
-                if result.returncode == 0:
-                    # Resize separately for Wayland
-                    resize_result = subprocess.run(
-                        ["wlrctl", "toplevel", "resize", window_identifier, str(width), str(height)],
-                        check=False,
-                        timeout=3,  # Add timeout protection
-                        capture_output=True,
-                        text=True
-                    )
-                    
-                    if resize_result.returncode == 0:
-                        log_info(f"Positioned Wayland window {window_identifier} to ({x},{y},{width},{height})")
-                        return True
-                    else:
-                        log_warning(f"Failed to resize Wayland window: {resize_result.stderr}")
-                        return False
-                else:
-                    log_warning(f"Failed to move Wayland window: {result.stderr}")
-                    return False
+                log_info(f"Focused Wayland window: {window_identifier}")
+                return True
             else:
                 # X11 with wmctrl - try multiple approaches
                 # First, try to move the window
                 move_result = subprocess.run(
                     ["wmctrl", "-ir", window_identifier, "-e", f"0,{x},{y},{width},{height}"],
                     check=False,
-                    timeout=3,  # Reduced timeout from 5s
+                    timeout=5,
                     capture_output=True,
                     text=True
                 )
@@ -228,10 +212,10 @@ class WindowManager:
                 if move_result.returncode == 0:
                     log_info(f"Positioned X11 window {window_identifier} to ({x},{y},{width},{height})")
                     
-                    # Verify the positioning worked by checking window position (with timeout)
-                    time.sleep(0.1)  # Reduced from 0.2s
+                    # Verify the positioning worked by checking window position
+                    time.sleep(0.2)  # Give it time to move
                     verify_result = subprocess.run(
-                        ["wmctrl", "-lG"], capture_output=True, text=True, timeout=3  # Reduced timeout
+                        ["wmctrl", "-lG"], capture_output=True, text=True, timeout=5
                     )
                     
                     if verify_result.returncode == 0:
@@ -268,7 +252,7 @@ class WindowManager:
                     move_only = subprocess.run(
                         ["wmctrl", "-ir", window_identifier, "-e", f"0,{x},{y},-1,-1"],
                         check=False,
-                        timeout=3,  # Reduced timeout
+                        timeout=5,
                         capture_output=True,
                         text=True
                     )
@@ -280,7 +264,7 @@ class WindowManager:
                         resize_only = subprocess.run(
                             ["wmctrl", "-ir", window_identifier, "-e", f"0,-1,-1,{width},{height}"],
                             check=False,
-                            timeout=3,  # Reduced timeout
+                            timeout=5,
                             capture_output=True,
                             text=True
                         )
@@ -338,7 +322,7 @@ class WindowManager:
             window = self.find_window(search_terms, exclude_terms)
             if window:
                 return window
-            time.sleep(0.2)  # Reduced from 0.5s for more responsive detection
+            time.sleep(0.5)
         
         log_warning(f"Window with terms {search_terms} not found within {timeout} seconds")
         return None
