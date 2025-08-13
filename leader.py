@@ -40,7 +40,7 @@ class LeaderPi:
         # Initialize configuration
         self.config = ConfigManager("leader_config.ini")
 
-        # Configure logging based on config settings
+        # Configure logging based on config settings (must be AFTER config loaded)
         enable_system_logging(self.config.enable_system_logging)
 
         # Initialize core components
@@ -340,11 +340,13 @@ def main():
     signal.signal(signal.SIGINT, signal_handler)
 
     try:
-        log_info("Starting main() function", component="autostart")
+        # Create LeaderPi instance first to configure logging
         try:
             leader_instance = LeaderPi()
+            # Now logging is configured, safe to log
             log_info("LeaderPi initialized successfully", component="autostart")
         except Exception as e:
+            # Always log errors regardless of logging settings
             log_error(
                 f"FATAL: LeaderPi initialization failed: {e}", component="autostart"
             )

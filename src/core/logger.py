@@ -25,9 +25,23 @@ def _ensure_log_dir() -> None:
         pass
 
 
+def _should_log(level: str) -> bool:
+    """Check if we should log based on current settings"""
+    # Always log errors
+    if level == "ERROR":
+        return True
+
+    # Check if system logging is enabled
+    if _ENABLE_SYSTEM_LOGGING:
+        return True
+
+    # Don't log anything else by default
+    return False
+
+
 def _write(level: str, message: str, component: Optional[str] = None) -> None:
-    # Only log if system logging is enabled or it's an error
-    if not _ENABLE_SYSTEM_LOGGING and level != "ERROR":
+    # Check if we should log this message
+    if not _should_log(level):
         return
 
     _ensure_log_dir()
