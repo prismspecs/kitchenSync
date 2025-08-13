@@ -28,8 +28,15 @@ class VLCPlayerError(Exception):
 class VLCVideoPlayer:
     """VLC-based video player with sync capabilities using Python VLC bindings"""
 
-    def __init__(self, debug_mode: bool = False):
+    def __init__(
+        self,
+        debug_mode: bool = False,
+        enable_vlc_logging: bool = False,
+        vlc_log_level: int = 0,
+    ):
         self.debug_mode = debug_mode
+        self.enable_vlc_logging = enable_vlc_logging
+        self.vlc_log_level = vlc_log_level
         self.vlc_instance = None
         self.vlc_player = None
         self.vlc_media = None
@@ -46,8 +53,9 @@ class VLCVideoPlayer:
                 "Python VLC bindings not available - required for KitchenSync"
             )
 
-        # Log environment snapshot once when player is constructed
-        snapshot_env()
+        # Log environment snapshot once when player is constructed (only if VLC logging enabled)
+        if enable_vlc_logging:
+            snapshot_env()
 
     def _ms_to_seconds(self, milliseconds: int) -> float:
         """Convert milliseconds to seconds"""
@@ -259,12 +267,8 @@ class VLCVideoPlayer:
 
     def _get_python_vlc_args(self) -> list[str]:
         """Get optimized VLC arguments for Raspberry Pi hardware acceleration"""
-        paths = log_file_paths()
         args = [
-            # Basic logging
-            "--file-logging",
-            f"--logfile={paths['vlc_main']}",
-            "--verbose=2",
+            # Essential settings for performance
             "--no-video-title-show",
             # Hardware acceleration for Raspberry Pi performance
             "--avcodec-hw=any",  # Enable hardware decoding (CRITICAL for performance)
@@ -273,6 +277,25 @@ class VLCVideoPlayer:
             "--vout=gl",  # Use OpenGL video output for hardware acceleration
             "--no-audio",  # Disable audio for video-only playback (reduces load)
         ]
+
+        # Add logging only if enabled (default: disabled for performance)
+        if self.enable_vlc_logging:
+            paths = log_file_paths()
+            args.extend(
+                [
+                    "--file-logging",
+                    f"--logfile={paths['vlc_main']}",
+                    f"--verbose={self.vlc_log_level}",  # Use configurable log level
+                ]
+            )
+        else:
+            # Minimal logging - errors only
+            args.extend(
+                [
+                    "--quiet",  # Suppress most output
+                    "--verbose=0",  # Only critical errors
+                ]
+            )
 
         # Override video output if explicitly specified
         if self.video_output:

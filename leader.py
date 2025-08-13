@@ -23,7 +23,14 @@ from midi import MidiScheduler, MidiManager
 from core import Schedule, ScheduleEditor, SystemState, CollaboratorRegistry
 from ui import CommandInterface, StatusDisplay
 from debug.html_overlay import HTMLDebugManager
-from core.logger import log_info, log_warning, log_error, snapshot_env, log_file_paths
+from core.logger import (
+    log_info,
+    log_warning,
+    log_error,
+    snapshot_env,
+    log_file_paths,
+    enable_system_logging,
+)
 
 
 class LeaderPi:
@@ -33,16 +40,23 @@ class LeaderPi:
         # Initialize configuration
         self.config = ConfigManager("leader_config.ini")
 
+        # Configure logging based on config settings
+        enable_system_logging(self.config.enable_system_logging)
+
         # Initialize core components
         self.system_state = SystemState()
         self.collaborators = CollaboratorRegistry()
         self.schedule = Schedule()
 
-        # Initialize video components
+        # Initialize video components with configurable logging
         self.video_manager = VideoFileManager(
             self.config.video_file, self.config.usb_mount_point
         )
-        self.video_player = VLCVideoPlayer(self.config.debug_mode)
+        self.video_player = VLCVideoPlayer(
+            debug_mode=self.config.debug_mode,
+            enable_vlc_logging=self.config.enable_vlc_logging,
+            vlc_log_level=self.config.vlc_log_level,
+        )
         # Set video output for reliable display
         self.video_player.video_output = "x11"
 

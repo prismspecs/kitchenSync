@@ -19,7 +19,7 @@ from video import VideoFileManager, VLCVideoPlayer
 from networking import SyncReceiver, CommandListener
 from midi import MidiScheduler, MidiManager
 from core import SystemState, SyncTracker
-from core.logger import log_info, log_warning, log_error
+from core.logger import log_info, log_warning, log_error, enable_system_logging
 
 
 class CollaboratorPi:
@@ -29,15 +29,22 @@ class CollaboratorPi:
         # Initialize configuration
         self.config = ConfigManager(config_file)
 
+        # Configure logging based on config settings
+        enable_system_logging(self.config.enable_system_logging)
+
         # Initialize core components
         self.system_state = SystemState()
         self.sync_tracker = SyncTracker()
 
-        # Initialize video components
+        # Initialize video components with configurable logging
         self.video_manager = VideoFileManager(
             self.config.video_file, self.config.usb_mount_point
         )
-        self.video_player = VLCVideoPlayer(self.config.debug_mode)
+        self.video_player = VLCVideoPlayer(
+            debug_mode=self.config.debug_mode,
+            enable_vlc_logging=self.config.enable_vlc_logging,
+            vlc_log_level=self.config.vlc_log_level,
+        )
         # Set video output for reliable display
         self.video_player.video_output = "x11"
         log_info(

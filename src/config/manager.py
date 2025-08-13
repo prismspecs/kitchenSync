@@ -130,6 +130,10 @@ class ConfigManager:
             "debug": "false",
             "device_id": f"pi-{int(os.urandom(2).hex(), 16):03d}",
             "video_file": video_file or "video.mp4",
+            # Logging settings - default to minimal for performance
+            "enable_vlc_logging": "false",
+            "enable_system_logging": "false",
+            "vlc_log_level": "0",  # 0=errors only, 1=warnings, 2=info, 3=debug
         }
 
         if self.config_file and not os.path.exists(self.config_file):
@@ -239,3 +243,18 @@ class ConfigManager:
     def usb_mount_point(self) -> Optional[str]:
         """Get USB mount point if available"""
         return self._usb_mount_point
+
+    @property
+    def enable_vlc_logging(self) -> bool:
+        """Check if VLC detailed logging is enabled"""
+        return self.getboolean("enable_vlc_logging", False)
+
+    @property
+    def enable_system_logging(self) -> bool:
+        """Check if system detailed logging is enabled"""
+        return self.getboolean("enable_system_logging", False)
+
+    @property
+    def vlc_log_level(self) -> int:
+        """Get VLC logging verbosity level (0=errors, 1=warnings, 2=info, 3=debug)"""
+        return self.getint("vlc_log_level", 0)

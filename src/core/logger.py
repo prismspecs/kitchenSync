@@ -13,6 +13,9 @@ from typing import Dict, Optional
 LOG_DIR = "/tmp"
 SYSTEM_LOG_PATH = os.path.join(LOG_DIR, "kitchensync_system.log")
 
+# Global logging control - set by main application
+_ENABLE_SYSTEM_LOGGING = False
+
 
 def _ensure_log_dir() -> None:
     try:
@@ -23,6 +26,10 @@ def _ensure_log_dir() -> None:
 
 
 def _write(level: str, message: str, component: Optional[str] = None) -> None:
+    # Only log if system logging is enabled or it's an error
+    if not _ENABLE_SYSTEM_LOGGING and level != "ERROR":
+        return
+
     _ensure_log_dir()
     timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
     pid = os.getpid()
@@ -33,11 +40,12 @@ def _write(level: str, message: str, component: Optional[str] = None) -> None:
         with open(SYSTEM_LOG_PATH, "a") as f:
             f.write(line)
     except Exception:
-        # As a last resort, print
-        try:
-            print(line, end="")
-        except Exception:
-            pass
+        # As a last resort, print only errors
+        if level == "ERROR":
+            try:
+                print(line, end="")
+            except Exception:
+                pass
 
 
 def log_debug(message: str, component: Optional[str] = None) -> None:
@@ -54,6 +62,12 @@ def log_warning(message: str, component: Optional[str] = None) -> None:
 
 def log_error(message: str, component: Optional[str] = None) -> None:
     _write("ERROR", message, component)
+
+
+def enable_system_logging(enabled: bool = True) -> None:
+    """Enable or disable system logging globally"""
+    global _ENABLE_SYSTEM_LOGGING
+    _ENABLE_SYSTEM_LOGGING = enabled
 
 
 def snapshot_env() -> Dict[str, str]:
