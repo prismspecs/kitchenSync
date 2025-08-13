@@ -208,6 +208,10 @@ The issue occurs because:
   - Remove profile before each launch for guaranteed clean state
   - Basic Firefox arguments: `--no-remote --profile /tmp/ff-clean-profile --new-instance`
   - No complex configuration files or preferences
+- **NEW: Firefox Welcome Screen Suppression**
+  - `user.js` file with preferences to disable Privacy Notice and welcome screens
+  - `policies.json` for enterprise-level suppression of first-run pages
+  - Ensures Firefox launches completely clean without popups or extra tabs
 - Fallback launch mechanism if primary launch fails
 - Enhanced error handling and logging
 
@@ -232,6 +236,49 @@ MOZ_DISABLE_GMP_SANDBOX=1
 MOZ_DISABLE_GPU_SANDBOX=1
 MOZ_DISABLE_CONTENT_SANDBOX=1
 ```
+
+### Firefox Welcome Screen Suppression
+
+The system now creates two configuration files in each Firefox profile to ensure completely clean launches:
+
+**1. `user.js` - User Preferences**
+```javascript
+// Disable privacy notice tab
+user_pref("toolkit.telemetry.reportingpolicy.firstRun", false);
+user_pref("datareporting.policy.dataSubmissionPolicyBypassNotification", true);
+
+// Suppress welcome/onboarding pages
+user_pref("trailhead.firstrun.didSeeAboutWelcome", true);
+user_pref("browser.aboutwelcome.enabled", false);
+user_pref("startup.homepage_welcome_url", "");
+user_pref("browser.startup.homepage_override.mstone", "ignore");
+
+// Force clean startup
+user_pref("browser.startup.page", 0);
+user_pref("browser.startup.homepage", "about:blank");
+user_pref("browser.newtabpage.enabled", false);
+user_pref("browser.sessionstore.enabled", false);
+```
+
+**2. `policies.json` - Enterprise Policies**
+```json
+{
+  "policies": {
+    "OverrideFirstRunPage": "",
+    "OverridePostUpdatePage": "",
+    "DisableTelemetry": true,
+    "DisableFirefoxStudies": true,
+    "DisablePocket": true
+  }
+}
+```
+
+This dual approach ensures Firefox launches without:
+- Privacy Notice tabs
+- Welcome/onboarding screens
+- Telemetry prompts
+- Update splash screens
+- Activity stream content
 
 ### Testing Results
 - **Before**: Firefox startup took 30+ seconds after reboot, window positioning failed

@@ -255,6 +255,67 @@ class HTMLDebugOverlay:
             # Create fresh profile directory
             os.makedirs(profile_dir, exist_ok=True)
 
+            # Create user.js to suppress Firefox Privacy Notice and welcome screens
+            userjs_path = os.path.join(profile_dir, "user.js")
+            try:
+                with open(userjs_path, "w") as f:
+                    f.write("""// Firefox user.js to suppress Privacy Notice and welcome screens
+// This ensures a completely clean launch without popups or extra tabs
+
+// Disable privacy notice tab
+user_pref("toolkit.telemetry.reportingpolicy.firstRun", false);
+user_pref("datareporting.policy.dataSubmissionPolicyBypassNotification", true);
+
+// Suppress welcome/onboarding pages
+user_pref("trailhead.firstrun.didSeeAboutWelcome", true);
+user_pref("browser.aboutwelcome.enabled", false);
+user_pref("startup.homepage_welcome_url", "");
+user_pref("browser.startup.homepage_override.mstone", "ignore");
+
+// Disable telemetry and data collection
+user_pref("toolkit.telemetry.enabled", false);
+user_pref("toolkit.telemetry.unified", false);
+user_pref("browser.ping-centre.telemetry", false);
+
+// Force clean startup
+user_pref("browser.startup.page", 0);
+user_pref("browser.startup.homepage", "about:blank");
+user_pref("browser.newtabpage.enabled", false);
+user_pref("browser.sessionstore.enabled", false);
+user_pref("browser.sessionstore.resume_from_crash", false);
+
+// Disable activity stream and other startup features
+user_pref("browser.newtabpage.activity-stream.enabled", false);
+user_pref("browser.newtabpage.activity-stream.default.sites", "");
+""")
+                log_info("Created user.js to suppress Firefox welcome screens", component="overlay")
+            except Exception as e:
+                log_warning(f"Could not create user.js: {e}", component="overlay")
+
+            # Also create policies.json for enterprise-level suppression (more effective)
+            policies_path = os.path.join(profile_dir, "policies.json")
+            try:
+                with open(policies_path, "w") as f:
+                    f.write("""{
+  "policies": {
+    "OverrideFirstRunPage": "",
+    "OverridePostUpdatePage": "",
+    "DisableFirefoxStudies": true,
+    "DisablePocket": true,
+    "DisableTelemetry": true,
+    "DisableFirefoxAccounts": true,
+    "DisableProfileImport": true,
+    "DisablePasswordReveal": true,
+    "DisableFormHistory": true,
+    "DisableBookmarks": true,
+    "DisableDeveloperTools": false,
+    "DisableFirefoxScreenshots": true
+  }
+}""")
+                log_info("Created policies.json for enterprise-level Firefox suppression", component="overlay")
+            except Exception as e:
+                log_warning(f"Could not create policies.json: {e}", component="overlay")
+
             # Get current user for environment setup
             current_user = os.getenv("USER", "kitchensync")
 
