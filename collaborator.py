@@ -347,8 +347,6 @@ class CollaboratorPi:
             except Exception as e:
                 log_error(f"UDP test failed: {e}", component="debug")
 
-        import threading
-
         threading.Thread(target=debug_udp, daemon=True).start()
 
         try:
