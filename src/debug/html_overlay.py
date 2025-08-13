@@ -245,15 +245,30 @@ class HTMLDebugOverlay:
             
             # Launch Firefox and capture any errors
             try:
+                # Get display geometry for window positioning
+                display_width, display_height = self.window_manager.get_display_geometry()
+                firefox_x = max(0, display_width - 640)  # Right side, 640px wide
+                firefox_y = 0
+                firefox_width = 640
+                firefox_height = min(1080, display_height)
+                
+                # Firefox command with window positioning arguments
+                firefox_cmd = [
+                    "firefox",
+                    "--new-instance",
+                    "--new-window",
+                    "--profile", profile_dir,
+                    "--width", str(firefox_width),
+                    "--height", str(firefox_height),
+                    "--x", str(firefox_x),
+                    "--y", str(firefox_y),
+                    f"file://{self.html_file}",
+                ]
+                
+                log_info(f"Launching Firefox with positioning: {' '.join(firefox_cmd)}", component="overlay")
+                
                 process = subprocess.Popen(
-                    [
-                        "firefox",
-                        "--new-instance",
-                        "--new-window",
-                        "--profile",
-                        profile_dir,
-                        f"file://{self.html_file}",
-                    ],
+                    firefox_cmd,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
                     env=firefox_env,
@@ -277,9 +292,9 @@ class HTMLDebugOverlay:
             self.firefox_opened = True
             log_info("Firefox launched successfully", component="overlay")
 
-            # Position window after a short delay (in background thread)
-            def position_window():
-                log_info("Starting to wait for Firefox window...", component="overlay")
+            # Simple positioning check after launch
+            def check_positioning():
+                log_info("Checking Firefox positioning...", component="overlay")
                 
                 # Wait for Firefox window to appear
                 firefox_window = self.window_manager.wait_for_window(
@@ -291,39 +306,13 @@ class HTMLDebugOverlay:
                 if firefox_window:
                     log_info(f"Found Firefox window: {firefox_window}", component="overlay")
                     
-                    # Get display geometry for better positioning
-                    display_width, display_height = self.window_manager.get_display_geometry()
-                    log_info(f"Display geometry: {display_width}x{display_height}", component="overlay")
-                    
-                    # Calculate positioning based on display size
-                    # Position Firefox on right side with proper coordinates
-                    firefox_x = max(0, display_width - 640)  # Right side, 640px wide
-                    firefox_y = 0
-                    firefox_width = 640
-                    firefox_height = min(1080, display_height)
-                    
-                    log_info(f"Target Firefox position: ({firefox_x}, {firefox_y}) {firefox_width}x{firefox_height}", component="overlay")
-                    
-                    # Log current window positions
+                    # Log window details for verification
                     window_details = self.window_manager.get_window_details()
-                    log_info(f"Current window positions before Firefox positioning:\n{window_details}", component="overlay")
-                    
-                    # Position Firefox window
-                    success = self.window_manager.position_window(firefox_window, firefox_x, firefox_y, firefox_width, firefox_height)
-                    
-                    if success:
-                        log_info("Positioned Firefox window on right side", component="overlay")
-                        
-                        # Log positions after positioning
-                        time.sleep(0.5)
-                        after_details = self.window_manager.get_window_details()
-                        log_info(f"Window positions after Firefox positioning:\n{after_details}", component="overlay")
-                    else:
-                        log_warning("Failed to position Firefox window", component="overlay")
+                    log_info(f"Firefox window details:\n{window_details}", component="overlay")
                 else:
-                    log_warning("Firefox window not found for positioning", component="overlay")
+                    log_warning("Firefox window not found for positioning check", component="overlay")
 
-            threading.Thread(target=position_window, daemon=True).start()
+            threading.Thread(target=check_positioning, daemon=True).start()
 
             log_info(f"HTML debug overlay opened in browser: {self.html_file}")
         except Exception as e:
