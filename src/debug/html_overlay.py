@@ -12,6 +12,7 @@ import threading
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, Dict, Any
+import html
 
 try:
     import psutil
@@ -648,14 +649,20 @@ user_pref("browser.newtabpage.activity-stream.default.sites", "");
                             pid = line.split("=")[1].strip()
                             if pid != "0":
                                 info["service_pid"] = pid
-                                # Get process uptime
-                                try:
-                                    proc = psutil.Process(int(pid))
-                                    uptime = datetime.now() - datetime.fromtimestamp(
-                                        proc.create_time()
-                                    )
-                                    info["service_uptime"] = str(uptime).split(".")[0]
-                                except:
+                                # Get process uptime (only if psutil is available)
+                                if psutil:
+                                    try:
+                                        proc = psutil.Process(int(pid))
+                                        uptime = (
+                                            datetime.now()
+                                            - datetime.fromtimestamp(proc.create_time())
+                                        )
+                                        info["service_uptime"] = str(uptime).split(".")[
+                                            0
+                                        ]
+                                    except Exception:
+                                        info["service_uptime"] = "Unknown"
+                                else:
                                     info["service_uptime"] = "Unknown"
             except Exception:
                 pass
@@ -917,17 +924,21 @@ user_pref("browser.newtabpage.activity-stream.default.sites", "");
 
             # Generate log sections HTML conditionally
             if _ENABLE_SYSTEM_LOGGING:
+                # Ensure log contents are HTML-escaped before injecting into HTML
+                escaped_system = html.escape(info.get("recent_logs", "") or "")
+                escaped_vlc = html.escape(info.get("vlc_logs", "") or "")
+
                 info[
                     "log_sections_html"
                 ] = f"""
-                <div class="log-section">
+                <div class=\"log-section\">
                     <h3>Recent System Log (Last 10 entries)</h3>
-                    <div class="log-content">{info["recent_logs"]}</div>
+                    <div class=\"log-content\">{escaped_system}</div>
                 </div>
 
-                <div class="log-section">
+                <div class=\"log-section\">
                     <h3>Recent VLC Log (Last 10 entries)</h3>
-                    <div class="log-content">{info["vlc_logs"]}</div>
+                    <div class=\"log-content\">{escaped_vlc}</div>
                 </div>
                 """
             else:
