@@ -1,7 +1,7 @@
 /* KitchenSync Debug Overlay JavaScript */
 
 // Auto-refresh configuration  
-const REFRESH_INTERVAL = 5000; // 5 seconds - back to original timing
+const REFRESH_INTERVAL = 15000; // 15 seconds - reduced frequency for better performance
 
 // Auto-refresh function with improved reliability and error handling
 function startAutoRefresh() {

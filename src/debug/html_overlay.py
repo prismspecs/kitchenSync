@@ -168,7 +168,7 @@ class HTMLDebugOverlay:
         while self.running:
             try:
                 self.update_content()
-                time.sleep(5)  # Update every 5 seconds
+                time.sleep(10)  # Update every 10 seconds
             except Exception as e:
                 log_error(f"HTML update error: {e}", component="overlay")
                 time.sleep(5)
