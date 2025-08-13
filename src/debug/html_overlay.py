@@ -315,6 +315,14 @@ class HTMLDebugOverlay:
             def position_window():
                 log_info("Starting to wait for Chromium window...", component="overlay")
                 
+                # First, let's debug what windows are currently visible
+                log_info("=== DEBUG: Current window list ===", component="overlay")
+                all_windows = self.window_manager.list_windows()
+                for i, window in enumerate(all_windows):
+                    if window.strip():
+                        log_info(f"Window {i}: {window}", component="overlay")
+                log_info("=== END DEBUG ===", component="overlay")
+                
                 # Wait for Chromium window to appear (reduced timeout)
                 chromium_window = self.window_manager.wait_for_window(
                     search_terms=["chromium", "kitchensync debug", "debug"],
@@ -354,8 +362,20 @@ class HTMLDebugOverlay:
                         log_info(f"Window positions after Chromium positioning:\n{after_details}", component="overlay")
                     else:
                         log_warning("Failed to position Chromium window", component="overlay")
+                        
+                        # Try alternative positioning approach for Chromium
+                        log_info("Trying alternative Chromium positioning...", component="overlay")
+                        self._try_alternative_chromium_positioning(chromium_window, chromium_x, chromium_y, chromium_width, chromium_height)
                 else:
                     log_warning("Chromium window not found for positioning", component="overlay")
+                    
+                    # Debug: show what windows we can see
+                    log_info("=== DEBUG: Windows found after timeout ===", component="overlay")
+                    final_windows = self.window_manager.list_windows()
+                    for i, window in enumerate(final_windows):
+                        if window.strip():
+                            log_info(f"Window {i}: {window}", component="overlay")
+                    log_info("=== END DEBUG ===", component="overlay")
 
             threading.Thread(target=position_window, daemon=True).start()
 
@@ -767,6 +787,76 @@ class HTMLDebugOverlay:
                 "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 "error": f"Failed to get system info: {e}",
             }
+
+    def _try_alternative_chromium_positioning(self, window_id, x, y, width, height):
+        """Try alternative methods to position Chromium window"""
+        try:
+            log_info(f"Attempting alternative positioning for Chromium window {window_id}", component="overlay")
+            
+            # Method 1: Try using xdotool if available
+            try:
+                import subprocess
+                result = subprocess.run(
+                    ["xdotool", "search", "--name", "chromium", "windowmove", str(x), str(y)],
+                    capture_output=True, timeout=5
+                )
+                if result.returncode == 0:
+                    log_info("Successfully moved Chromium window with xdotool", component="overlay")
+                    
+                    # Now try to resize
+                    resize_result = subprocess.run(
+                        ["xdotool", "search", "--name", "chromium", "windowsize", str(width), str(height)],
+                        capture_output=True, timeout=5
+                    )
+                    if resize_result.returncode == 0:
+                        log_info("Successfully resized Chromium window with xdotool", component="overlay")
+                        return True
+                    else:
+                        log_warning(f"xdotool resize failed: {resize_result.stderr.decode()}", component="overlay")
+                else:
+                    log_warning(f"xdotool move failed: {result.stderr.decode()}", component="overlay")
+            except FileNotFoundError:
+                log_info("xdotool not available, trying next method", component="overlay")
+            
+            # Method 2: Try using wmctrl with different approach
+            try:
+                import subprocess
+                # First try to focus the window
+                focus_result = subprocess.run(
+                    ["wmctrl", "-ia", window_id], check=False, timeout=5, capture_output=True
+                )
+                if focus_result.returncode == 0:
+                    log_info("Successfully focused Chromium window", component="overlay")
+                
+                # Try positioning with wmctrl using different format
+                position_result = subprocess.run(
+                    ["wmctrl", "-ir", window_id, "-e", f"0,{x},{y},{width},{height}"],
+                    check=False, timeout=5, capture_output=True
+                )
+                if position_result.returncode == 0:
+                    log_info("Alternative wmctrl positioning successful", component="overlay")
+                    return True
+                else:
+                    log_warning(f"Alternative wmctrl failed: {position_result.stderr.decode()}", component="overlay")
+                    
+            except Exception as e:
+                log_error(f"Alternative positioning failed: {e}", component="overlay")
+            
+            # Method 3: Try using xwininfo to get window info
+            try:
+                import subprocess
+                info_result = subprocess.run(
+                    ["xwininfo", "-id", window_id], capture_output=True, timeout=5
+                )
+                if info_result.returncode == 0:
+                    log_info(f"Window info for {window_id}:\n{info_result.stdout.decode()}", component="overlay")
+            except FileNotFoundError:
+                log_info("xwininfo not available", component="overlay")
+                
+        except Exception as e:
+            log_error(f"Alternative positioning methods failed: {e}", component="overlay")
+        
+        return False
 
 
 class HTMLDebugManager:
