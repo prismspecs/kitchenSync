@@ -309,13 +309,15 @@ class VLCVideoPlayer:
             "--vout=gl",  # Use OpenGL video output for hardware acceleration
         ]
 
-        # Optional: allow audio clock to stabilize media timing
+        # Get audio output configuration
         try:
             from src.config.manager import ConfigManager  # local import to avoid cycles
 
             cm = ConfigManager()
+            audio_output = cm.audio_output
             enable_dummy_audio = cm.getboolean("enable_dummy_audio", False)
         except Exception:
+            audio_output = "hdmi"
             enable_dummy_audio = False
 
         if enable_dummy_audio:
@@ -328,8 +330,35 @@ class VLCVideoPlayer:
                 ]
             )
         else:
-            # Keep previous behavior
-            args.append("--no-audio")
+            # Configure audio output based on user preference
+            if audio_output == "hdmi":
+                # HDMI audio output for display/projector setups
+                args.extend(
+                    [
+                        "--aout=pulse",  # Use PulseAudio for HDMI audio
+                        "--audio-device=hdmi",  # Route to HDMI audio
+                    ]
+                )
+            elif audio_output == "headphone":
+                # Headphone jack output for speaker systems
+                args.extend(
+                    [
+                        "--aout=alsa",  # Use ALSA for direct audio output
+                        "--audio-device=default",  # Use default ALSA device (headphone jack)
+                    ]
+                )
+            else:
+                # Fallback to HDMI if invalid setting
+                log_warning(
+                    f"Invalid audio_output setting: {audio_output}, defaulting to HDMI",
+                    component="vlc",
+                )
+                args.extend(
+                    [
+                        "--aout=pulse",
+                        "--audio-device=hdmi",
+                    ]
+                )
 
         # Add logging only if enabled (default: disabled for performance)
         if self.enable_vlc_logging:

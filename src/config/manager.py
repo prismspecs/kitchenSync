@@ -138,6 +138,8 @@ class ConfigManager:
             "tick_interval": "0.1",  # seconds between leader sync broadcasts
             # Media clock stabilization
             "enable_dummy_audio": "false",  # some platforms need audio clock to keep A/V time stable
+            # Audio output selection
+            "audio_output": "hdmi",  # hdmi or headphone
         }
 
         if self.config_file and not os.path.exists(self.config_file):
@@ -267,3 +269,8 @@ class ConfigManager:
     def tick_interval(self) -> float:
         """Leader broadcast interval in seconds (default 0.1)."""
         return self.getfloat("tick_interval", 0.1)
+
+    @property
+    def audio_output(self) -> str:
+        """Get audio output selection (hdmi or headphone, default: hdmi)."""
+        return self.get("audio_output", "hdmi")

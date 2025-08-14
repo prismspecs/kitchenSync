@@ -10,6 +10,7 @@ I am developing this on a separate computer than the one on which it will run. C
 
 - **Language:** Python 3 (system-wide installation, no virtual environment)
 - **Media Player:** VLC with Python bindings (consolidated approach for both leader and collaborator)
+- **Audio Support:** Full audio track synchronization with configurable output (HDMI/headphone jack)
 - **MIDI Library:** python-rtmidi for USB MIDI interface communication
 - **Networking:** UDP broadcast for time sync and control commands
 - **Hardware:** Raspberry Pi 4 (recommended) + USB MIDI interfaces
@@ -84,8 +85,9 @@ I am developing this on a separate computer than the one on which it will run. C
 - Configuration file parsing from USB drives
 - Graceful handling of multiple drives and file conflicts
 
-**Video Synchronization Technology**
+**Video and Audio Synchronization Technology**
 
+- **Full A/V Synchronization**: Videos with audio tracks are synchronized across all nodes, ensuring both video and audio stay in perfect sync
 - Unified Python VLC bindings for all nodes (leader and collaborator)
 - Median deviation filtering to eliminate false corrections
 - Intelligent pause-during-correction for large deviations
@@ -115,6 +117,8 @@ I am developing this on a separate computer than the one on which it will run. C
 - Automatic role detection (leader/collaborator)
 - Per-Pi video file specification
 - MIDI port and sync parameter configuration
+- **Audio Output Configuration**: Configurable audio output selection (HDMI vs. headphone jack)
+- **Fallback Defaults**: Hardcoded defaults in code match INI file values for consistent behavior
 - Schedule file distribution and management
 
 ## Development Status ✅
@@ -136,12 +140,15 @@ I am developing this on a separate computer than the one on which it will run. C
 ### Technical Achievements
 
 - **Unified Video Engine**: Consolidated Python VLC approach for all nodes ensures consistent behavior
+- **Full A/V Synchronization**: Audio tracks are now properly synchronized across all nodes
+- **Configurable Audio Output**: Support for HDMI and headphone jack audio routing
 - **Professional USB Handling**: Enterprise-grade drive detection and mounting
 - **Intelligent Sync**: Statistical median filtering prevents false corrections
 - **Plug-and-Play Design**: Zero-configuration deployment via USB drives
 - **Production Ready**: Systemd integration for reliable auto-start
 - **Raspberry Pi OS Bookworm**: Full compatibility with latest Pi OS
 - **Simplified Architecture**: Single VLC playback method eliminates complexity and debug/production differences
+- **Configuration Consistency**: Default values in code always match INI file values for reliable fallback behavior
 
 ### Performance Characteristics
 
@@ -180,6 +187,72 @@ I am developing this on a separate computer than the one on which it will run. C
 - **Real-Time Control**: Interactive interface for live system management
 - **Status Monitoring**: Comprehensive system status and Pi health reporting
 - **Content Management**: USB-based video and configuration deployment
+
+## Audio Configuration
+
+### Audio Output Selection
+
+The system supports configurable audio output to accommodate different deployment scenarios:
+
+**Configuration Options**
+- **HDMI Audio** (default): Routes audio through HDMI for display/projector setups
+- **Headphone Jack**: Routes audio through the 3.5mm audio jack for speaker systems
+- **Configuration Key**: `audio_output` in config files
+- **Values**: `"hdmi"` or `"headphone"`
+
+**Default Behavior**
+- **Audio is now enabled by default** for full A/V synchronization
+- HDMI output is the default choice for most stage/projection setups
+- Audio tracks from synchronized videos play through the selected output
+- The system properly synchronizes both video and audio across all nodes
+
+**Example Configuration**
+```ini
+[DEFAULT]
+# Audio output selection
+audio_output = hdmi  # or "headphone"
+```
+
+## Configuration Management Workflow
+
+### Default Values and INI File Synchronization
+
+**Critical Requirement**: Default values in the code must always match the INI file values to ensure consistent behavior when INI files are missing or incomplete.
+
+**Why This Matters**:
+- **USB-less Deployment**: Collaborator Pis may not have INI files on their USB drives
+- **Fallback Behavior**: When no config is found, the system uses hardcoded defaults
+- **Consistency**: INI files and code defaults must represent the same intended behavior
+
+**Workflow for Adding New Configuration**:
+1. **Update INI files** (`leader_config.ini`, `collaborator_config.ini`) with new setting
+2. **Update default values** in `src/config/manager.py` to match INI values exactly
+3. **Update property methods** to use the same default values
+4. **Document the setting** in `plan.md` with examples
+
+**Example**: When adding `audio_output = hdmi`:
+- ✅ INI file: `audio_output = hdmi`
+- ✅ Config manager default: `"audio_output": "hdmi"`
+- ✅ Property method: `return self.get("audio_output", "hdmi")`
+
+**Current Synchronized Settings**:
+- `audio_output`: INI="hdmi", Code="hdmi" ✅
+- `debug`: INI="false", Code=False ✅
+- `vlc_log_level`: INI="0", Code=0 ✅
+- `tick_interval`: INI="0.1", Code=0.1 ✅
+- `midi_port`: INI="0", Code=0 ✅
+- `sync_port`: INI="5005", Code=5005 ✅
+- `control_port`: INI="5006", Code=5006 ✅
+- `enable_vlc_logging`: INI="false", Code=False ✅
+- `enable_system_logging`: INI="false", Code=False ✅
+
+**Configuration Synchronization Checklist**:
+When adding/modifying any configuration setting, verify ALL of these match:
+1. ✅ INI file value (leader_config.ini, collaborator_config.ini)
+2. ✅ ConfigManager default value in `_create_default_config()`
+3. ✅ Property method fallback value in `get()` calls
+4. ✅ Any hardcoded defaults in other components
+5. ✅ Documentation in plan.md
 
 ## Future Enhancement Opportunities
 
@@ -480,6 +553,8 @@ echo "fallback_bg=~/set_black_background_fallback.sh" >> ~/.config/wayfire.ini
 The KitchenSync leader system is fully operational with:
 
 - **VLC video playback**: Stable playback with window positioning on left side
+- **Full audio support**: Audio tracks are now enabled and synchronized across all nodes
+- **Configurable audio output**: HDMI (default) or headphone jack selection via config
 - **HTML debug overlay**: Live-updating interface positioned on right side  
 - **Real-time monitoring**: Video timing, VLC status, and system health
 - **Systemd auto-start**: Reliable boot-time initialization
@@ -512,6 +587,12 @@ The systemd service includes proper environment variables:
 - What edge cases or failure modes need to be considered?
 
 **Example**: When implementing configurable logging, don't just add config flags - trace through EVERY component that logs (HTML overlay, VLC args, config loading, startup sequences, etc.) and ensure ALL respect the configuration.
+
+**CONFIGURATION DIRECTIVE**: When adding/modifying configuration settings, ensure ALL default values are synchronized:
+- INI file values must match ConfigManager defaults
+- Property method fallbacks must match INI file values
+- Hardcoded defaults in components must match INI file values
+- This ensures consistent behavior when INI files are missing (common in USB-less deployments)
 
 This is the mark of professional programming vs. superficial patching.
 
