@@ -57,19 +57,15 @@ class LeaderPi:
             enable_vlc_logging=self.config.enable_vlc_logging,
             vlc_log_level=self.config.vlc_log_level,
         )
-        # Force X11 video output for reliable fullscreen on Pi (Wayland can be flaky)
+        # Set video output for reliable display
         self.video_player.video_output = "x11"
-        # Reset hooks per loop (MIDI etc.)
-        self.video_player.loop_callback = self._on_video_loop
 
         # Initialize networking (wire tick_interval from config)
         self.sync_broadcaster = SyncBroadcaster(
             sync_port=self.config.getint("sync_port", 5005),
             tick_interval=self.config.tick_interval,
         )
-        self.command_manager = CommandManager(
-            control_port=self.config.getint("control_port", 5006)
-        )
+        self.command_manager = CommandManager()
 
         # Initialize MIDI (for local MIDI if needed)
         self.midi_manager = MidiManager(use_mock=True)
@@ -118,20 +114,6 @@ class LeaderPi:
         pi_id = msg.get("device_id")  # Changed from pi_id
         if pi_id:
             self.collaborators.update_heartbeat(pi_id, msg.get("status", "ready"))
-
-    def _on_video_loop(self, loop_count: int) -> None:
-        """Per-loop reset: ensure MIDI is sane and scheduler re-arms as needed."""
-        try:
-            # All Notes Off on channels 1-16 (adjust if you use fewer)
-            for ch in range(1, 17):
-                self.midi_manager.send_control_change(ch, 123, 0)
-            # Optional: hard reset scheduler cue triggers (MIDI scheduler already loops by modulo)
-            self.midi_scheduler.triggered_cues.clear()
-            log_info(
-                f"Per-loop reset completed (loop #{loop_count})", component="leader"
-            )
-        except Exception as e:
-            log_warning(f"Per-loop reset error: {e}", component="leader")
 
     def start_system(self) -> None:
         """Start the synchronized playback system"""

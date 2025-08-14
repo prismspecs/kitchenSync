@@ -10,7 +10,6 @@ Usage:
 """
 
 import json
-import configparser
 import socket
 import time
 from datetime import datetime
@@ -18,20 +17,7 @@ from datetime import datetime
 
 def monitor_leader():
     """Simple monitor for leader sync broadcasts"""
-    # Try to read the port from leader_config.ini to avoid mismatches
     sync_port = 5005
-    try:
-        cfg = configparser.ConfigParser()
-        if cfg.read("leader_config.ini"):
-            # Prefer KITCHENSYNC section, then DEFAULT
-            if cfg.has_section("KITCHENSYNC") and cfg.has_option(
-                "KITCHENSYNC", "sync_port"
-            ):
-                sync_port = cfg.getint("KITCHENSYNC", "sync_port", fallback=sync_port)
-            else:
-                sync_port = cfg.getint("DEFAULT", "sync_port", fallback=sync_port)
-    except Exception:
-        pass
 
     print("🔍 KitchenSync Network Test")
     print("=" * 40)

@@ -37,17 +37,6 @@ class SyncBroadcaster:
         """Initialize broadcast socket"""
         try:
             self.sync_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            # Improve cross-platform reliability for broadcasts
-            try:
-                self.sync_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            except Exception:
-                pass
-            try:
-                self.sync_sock.setsockopt(
-                    socket.SOL_SOCKET, getattr(socket, "SO_REUSEPORT", 15), 1
-                )
-            except Exception:
-                pass
             self.sync_sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
         except Exception as e:
             raise NetworkError(f"Failed to setup sync socket: {e}")
@@ -110,16 +99,6 @@ class SyncReceiver:
         """Initialize sync receive socket"""
         try:
             self.sync_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            try:
-                self.sync_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            except Exception:
-                pass
-            try:
-                self.sync_sock.setsockopt(
-                    socket.SOL_SOCKET, getattr(socket, "SO_REUSEPORT", 15), 1
-                )
-            except Exception:
-                pass
             self.sync_sock.bind(("", self.sync_port))
         except Exception as e:
             raise NetworkError(f"Failed to setup sync receive socket: {e}")
@@ -184,16 +163,6 @@ class CommandManager:
         """Initialize command socket"""
         try:
             self.control_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            try:
-                self.control_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            except Exception:
-                pass
-            try:
-                self.control_sock.setsockopt(
-                    socket.SOL_SOCKET, getattr(socket, "SO_REUSEPORT", 15), 1
-                )
-            except Exception:
-                pass
             self.control_sock.bind(("", self.control_port))
             self.control_sock.settimeout(1.0)
         except Exception as e:
@@ -308,16 +277,6 @@ class CommandListener:
         """Initialize command socket"""
         try:
             self.control_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            try:
-                self.control_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            except Exception:
-                pass
-            try:
-                self.control_sock.setsockopt(
-                    socket.SOL_SOCKET, getattr(socket, "SO_REUSEPORT", 15), 1
-                )
-            except Exception:
-                pass
             self.control_sock.bind(("", self.control_port))
         except Exception as e:
             raise NetworkError(f"Failed to setup command socket: {e}")
