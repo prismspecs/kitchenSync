@@ -5,6 +5,7 @@ Handles VLC video playback with sync capabilities
 """
 
 import os
+import threading
 import subprocess
 import time
 from typing import Optional
@@ -179,11 +180,26 @@ class VLCVideoPlayer:
                     except Exception as e:
                         log_error(f"Error in video loop callback: {e}", component="vlc")
 
-                # Reset to beginning and restart
-                self.vlc_player.set_position(0.0)
-                self.vlc_player.play()
+                # Restart playback from the beginning on a background thread
+                def restart():
+                    try:
+                        if not self.vlc_player:
+                            return
+                        # Stop to clear end state, then play and seek to 0 for reliability
+                        self.vlc_player.stop()
+                        time.sleep(0.05)
+                        self.vlc_player.play()
+                        time.sleep(0.05)
+                        self.vlc_player.set_time(0)
+                        log_info(
+                            f"Video loop #{self.loop_count} started", component="vlc"
+                        )
+                    except Exception as e:
+                        log_error(
+                            f"Error during loop restart thread: {e}", component="vlc"
+                        )
 
-                log_info(f"Video loop #{self.loop_count} started", component="vlc")
+                threading.Thread(target=restart, daemon=True).start()
             except Exception as e:
                 log_error(f"Error restarting video loop: {e}", component="vlc")
 
@@ -218,6 +234,17 @@ class VLCVideoPlayer:
             self.vlc_media = self.vlc_instance.media_new(self.video_path)
             if not self.vlc_media:
                 raise VLCPlayerError("Failed to create VLC media")
+
+            # Enforce looping at media level for reliability across VLC versions
+            if self.enable_looping:
+                try:
+                    # Repeat the item many times (practically infinite)
+                    # Using a high number for broad compatibility
+                    self.vlc_media.add_option(":input-repeat=65535")
+                except Exception as e:
+                    log_warning(
+                        f"Failed to set media repeat option: {e}", component="vlc"
+                    )
 
             self.vlc_player.set_media(self.vlc_media)
 
