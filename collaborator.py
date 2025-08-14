@@ -73,15 +73,13 @@ class CollaboratorPi:
         # sync_tolerance: general upper bound for considering system "in sync" (seconds)
         # Currently not used in the correction logic
         # sync_check_interval: minimum time between corrective seeks (seconds)
-        # Example: 5.0 means once we correct, we won't correct again for at least 5 seconds.
+        # Example: 5.0 means once we correct, we won’t correct again for at least 5 seconds.
         # deviation_threshold: absolute median error (seconds) that triggers a correction
-        # Example: 0.2 means only if we're ≳200 ms off (consistently) we'll correct.
+        # Example: 0.2 means only if we’re ≳200 ms off (consistently) we’ll correct.
 
         self.sync_tolerance = self.config.getfloat("sync_tolerance", 1.0)
         self.sync_check_interval = self.config.getfloat("sync_check_interval", 5.0)
-        self.deviation_threshold = self.config.getfloat(
-            "deviation_threshold", 0.05
-        )  # Match omxplayer-sync: 50ms
+        self.deviation_threshold = self.config.getfloat("deviation_threshold", 0.05)  # Match omxplayer-sync: 50ms
         # old defaults: sync_tolerance=1.0, sync_check_interval=5.0, deviation_threshold=0.5s
 
         # Video sync state
@@ -93,12 +91,8 @@ class CollaboratorPi:
         self.wait_for_sync = False
         self.wait_after_sync = False
         self.sync_timer = 0
-        self.sync_grace_time = self.config.getfloat(
-            "sync_grace_time", 5.0
-        )  # Match omxplayer-sync: 5 second grace
-        self.sync_jump_ahead = self.config.getfloat(
-            "sync_jump_ahead", 2.0
-        )  # Match omxplayer-sync: 2-3 second jump-ahead
+        self.sync_grace_time = self.config.getfloat("sync_grace_time", 5.0)  # Match omxplayer-sync: 5 second grace
+        self.sync_jump_ahead = self.config.getfloat("sync_jump_ahead", 2.0)  # Match omxplayer-sync: 2-3 second jump-ahead
 
         # Latency/seek tuning
         # Accounts for network transit + decode/display pipeline latency
@@ -161,10 +155,6 @@ class CollaboratorPi:
                     f"Sync achieved! Deviation: {deviation:.3f}s, resuming playback",
                     component="sync",
                 )
-                if self.config.debug_mode:
-                    print(
-                        f"   🎉 SYNC ACHIEVED! Deviation: {deviation:.3f}s, resuming playback"
-                    )
                 self.video_player.resume()
                 self.wait_for_sync = False
                 self.wait_after_sync = time.time()
@@ -175,33 +165,17 @@ class CollaboratorPi:
                         f"Sync timeout after 10s, deviation still {deviation:.3f}s",
                         component="sync",
                     )
-                    if self.config.debug_mode:
-                        print(
-                            f"   ⏰ SYNC TIMEOUT! Deviation still {deviation:.3f}s, resuming anyway"
-                        )
                     self.video_player.resume()
                     self.wait_for_sync = False
                     self.wait_after_sync = time.time()
-                elif (
-                    self.config.debug_mode and int(time.time()) % 2 == 0
-                ):  # Show progress every 2 seconds
-                    print(f"   ⏳ Waiting for sync... Deviation: {deviation:.3f}s")
                 return
 
         if self.wait_after_sync:
             # Grace period after correction - don't allow new corrections
-            grace_remaining = self.sync_grace_time - (
-                time.time() - self.wait_after_sync
-            )
-            if grace_remaining <= 0:
+            if (time.time() - self.wait_after_sync) > self.sync_grace_time:
                 self.wait_after_sync = False
-                if self.config.debug_mode:
-                    print(f"   ✅ Grace period ended, sync monitoring resumed")
-            elif (
-                self.config.debug_mode and int(time.time()) % 2 == 0
-            ):  # Show progress every 2 seconds
-                print(f"   🛡️  Grace period: {grace_remaining:.1f}s remaining")
-            return
+            else:
+                return
 
     def _handle_start_command(self, msg: dict, addr: tuple) -> None:
         """Handle start command from leader"""
@@ -352,15 +326,6 @@ class CollaboratorPi:
             )
             print(f"🔄 Sync correction: {median_deviation:.3f}s deviation")
 
-            # Debug: show detailed sync info
-            if self.config.debug_mode:
-                print(
-                    f"   📊 Expected: {expected_position:.3f}s, Current: {video_position:.3f}s"
-                )
-                print(
-                    f"   🎯 Target: {target_position:.3f}s, Jump ahead: {self.sync_jump_ahead:.3f}s"
-                )
-
             # Apply correction (respect duration wrap)
             # Nudge toward/away from leader to overcome actuation lag
             correction_lead = 0.0
@@ -385,9 +350,6 @@ class CollaboratorPi:
                 component="sync",
             )
 
-            if self.config.debug_mode:
-                print(f"   ⏸️  Pausing video for correction...")
-
             # Pause playback during correction
             if not self.video_player.pause():
                 log_warning("Failed to pause for correction", component="sync")
@@ -400,19 +362,11 @@ class CollaboratorPi:
             if duration and duration > 0:
                 jump_ahead_position = jump_ahead_position % duration
 
-            if self.config.debug_mode:
-                print(
-                    f"   🎯 Seeking to {jump_ahead_position:.3f}s (target + {self.sync_jump_ahead:.3f}s)"
-                )
-
             if self.video_player.set_position(jump_ahead_position):
                 log_info(
                     f"Seek successful to {jump_ahead_position:.3f}s (target was {target_position:.3f}s)",
                     component="sync",
                 )
-                if self.config.debug_mode:
-                    print(f"   ✅ Seek successful! Entering wait-for-sync state...")
-
                 # Enter wait-for-sync state
                 self.wait_for_sync = True
                 self.sync_timer = time.time()
@@ -425,8 +379,6 @@ class CollaboratorPi:
                 )
             else:
                 log_warning("Seek failed, resuming playback", component="sync")
-                if self.config.debug_mode:
-                    print(f"   ❌ Seek failed, resuming playback")
                 self.video_player.resume()
 
     def run(self) -> None:
