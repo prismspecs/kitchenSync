@@ -185,9 +185,28 @@ class VLCVideoPlayer:
                         log_error(f"Error in video loop callback: {e}", component="vlc")
 
                 # Reset to beginning and restart
-                print(f"🔄 Restarting video: set_position(0.0) + play()")
-                self.vlc_player.set_position(0.0)
-                self.vlc_player.play()
+                print(f"🔄 Restarting video: stop() -> set_media() -> play()")
+                try:
+                    # Stop current playback
+                    self.vlc_player.stop()
+                    print(f"  ✓ Stopped player")
+
+                    # Re-attach media (needed after stop)
+                    if self.vlc_media:
+                        self.vlc_player.set_media(self.vlc_media)
+                        print(f"  ✓ Re-attached media")
+
+                    # Start from beginning
+                    result = self.vlc_player.play()
+                    print(f"  ✓ play() returned: {result}")
+
+                    # Force position to 0 after a brief delay
+                    time.sleep(0.1)
+                    self.vlc_player.set_position(0.0)
+                    print(f"  ✓ Set position to 0.0")
+
+                except Exception as restart_error:
+                    print(f"  ❌ Restart error: {restart_error}")
 
                 print(f"✅ Video loop #{self.loop_count} restart completed")
                 log_info(f"Video loop #{self.loop_count} started", component="vlc")
