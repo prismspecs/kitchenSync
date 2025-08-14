@@ -56,9 +56,14 @@ DEFAULT_SEEK_SETTLE_TIME = 0.1  # VLC settling time after seek
 class CollaboratorPi:
     """Refactored Collaborator Pi with clean separation of concerns"""
 
-    def __init__(self, config_file: str = "collaborator_config.ini"):
+    def __init__(self, config_file: str = "collaborator_config.ini", debug_override: bool = False):
         # Initialize configuration
         self.config = ConfigManager(config_file)
+        
+        # Apply debug override before any other initialization
+        if debug_override:
+            self.config.config["KITCHENSYNC"]["debug"] = "true"
+            print("✓ Debug mode: ENABLED (via command line)")
 
         # Configure logging based on config settings
         enable_system_logging(self.config.enable_system_logging)
@@ -506,13 +511,8 @@ def main():
     args = parser.parse_args()
 
     try:
-        collaborator = CollaboratorPi(args.config_file)
-
-        # Override debug mode if specified
-        if args.debug:
-            collaborator.config.config["KITCHENSYNC"]["debug"] = "true"
-            print("✓ Debug mode: ENABLED (via command line)")
-
+        # Pass debug override to constructor
+        collaborator = CollaboratorPi(args.config_file, debug_override=args.debug)
         collaborator.run()
     except KeyboardInterrupt:
         print("\nExiting...")
