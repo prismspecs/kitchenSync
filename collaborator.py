@@ -79,11 +79,15 @@ class CollaboratorPi:
 
         self.sync_tolerance = self.config.getfloat("sync_tolerance", 1.0)
         self.sync_check_interval = self.config.getfloat("sync_check_interval", 5.0)
-        self.deviation_threshold = self.config.getfloat("deviation_threshold", 0.05)  # Match omxplayer-sync: 50ms
+        self.deviation_threshold = self.config.getfloat(
+            "deviation_threshold", 0.05
+        )  # Match omxplayer-sync: 50ms
         # old defaults: sync_tolerance=1.0, sync_check_interval=5.0, deviation_threshold=0.5s
 
         # Video sync state
-        self.deviation_samples = deque(maxlen=10)
+        self.deviation_samples = deque(
+            maxlen=10
+        )  # Back to original: 10 samples for frequent measurements
         self.last_correction_time = 0
         self.video_start_time = None
 
@@ -91,8 +95,12 @@ class CollaboratorPi:
         self.wait_for_sync = False
         self.wait_after_sync = False
         self.sync_timer = 0
-        self.sync_grace_time = self.config.getfloat("sync_grace_time", 5.0)  # Match omxplayer-sync: 5 second grace
-        self.sync_jump_ahead = self.config.getfloat("sync_jump_ahead", 2.0)  # Match omxplayer-sync: 2-3 second jump-ahead
+        self.sync_grace_time = self.config.getfloat(
+            "sync_grace_time", 5.0
+        )  # Match omxplayer-sync: 5 second grace
+        self.sync_jump_ahead = self.config.getfloat(
+            "sync_jump_ahead", 3.0
+        )  # Exact match to omxplayer-sync: SYNC_JUMP_AHEAD = 3
 
         # Latency/seek tuning
         # Accounts for network transit + decode/display pipeline latency
@@ -292,7 +300,7 @@ class CollaboratorPi:
         self.deviation_samples.append(deviation)
 
         # Only proceed if we have enough samples
-        if len(self.deviation_samples) < 5:
+        if len(self.deviation_samples) < 5:  # Back to original: 5 samples needed
             return
 
         # Calculate median deviation with outlier filtering
