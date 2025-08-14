@@ -111,12 +111,17 @@ class CollaboratorPi:
 
         # Auto-start playback on first valid sync
         if not self.system_state.is_running:
+            print(f"🚀 Auto-starting from sync, leader time: {leader_time:.3f}s")
             self.start_playback()
             # Don't attempt immediate seeking - let video stabilize first
             log_info(
                 f"Auto-started from sync, leader time: {leader_time:.3f}s",
                 component="collaborator",
             )
+        else:
+            # Quiet sync update - only print occasionally
+            if int(leader_time) % 10 == 0:  # Every 10 seconds
+                print(f"🔄 Sync update: {leader_time:.1f}s")
 
         # Update system time and maintain sync
         self.system_state.current_time = leader_time
