@@ -45,8 +45,6 @@ class CollaboratorPi:
             enable_vlc_logging=self.config.enable_vlc_logging,
             vlc_log_level=self.config.vlc_log_level,
         )
-        # Set video output for reliable display
-        self.video_player.video_output = "x11"
         log_info(
             "Collaborator using Python VLC for precise sync control",
             component="collaborator",

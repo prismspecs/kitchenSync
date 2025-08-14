@@ -681,6 +681,44 @@ sudo usermod -a -G plugdev,disk $USER
 - Check CPU usage during playback
 - Consider video file resolution and bitrate
 
+### Audio Output Configuration
+
+**To switch audio output from a script on your system:**
+
+```bash
+# Switch to headphone jack (3.5mm)
+pactl set-default-sink alsa_output.platform-fe00b840.mailbox.stereo-fallback
+
+# Switch to HDMI
+pactl set-default-sink alsa_output.platform-fef00700.hdmi.hdmi-stereo
+```
+
+**In Python:**
+```python
+import subprocess
+
+def set_audio_output(output_type):
+    sinks = {
+        'headphone': 'alsa_output.platform-fe00b840.mailbox.stereo-fallback',
+        'hdmi': 'alsa_output.platform-fef00700.hdmi.hdmi-stereo'
+    }
+    
+    try:
+        subprocess.run(['pactl', 'set-default-sink', sinks[output_type]], check=True)
+        print(f"Audio output switched to {output_type}")
+    except subprocess.CalledProcessError:
+        print(f"Failed to switch to {output_type}")
+
+# Usage
+set_audio_output('hdmi')      # Switch to HDMI
+set_audio_output('headphone') # Switch to headphone jack
+```
+
+**Note:** These sink names are specific to Raspberry Pi hardware. To find the correct sink names for your system, run:
+```bash
+pactl list short sinks
+```
+
 ### Auto-Discovery
 
 Collaborator Pis automatically register with the leader when started.
