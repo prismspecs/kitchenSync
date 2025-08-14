@@ -22,6 +22,37 @@ from core import SystemState, SyncTracker
 from core.logger import log_info, log_warning, log_error, enable_system_logging
 
 
+# =============================================================================
+# SYNCHRONIZATION PARAMETERS - Edit these values to tune sync behavior
+# =============================================================================
+
+# Constants for sync logic - these control the basic behavior of the sync system
+DEVIATION_SAMPLES_MAXLEN = 20  # How many timing samples to keep for median filtering
+INITIAL_SYNC_WAIT_SECONDS = (
+    2.0  # Grace period after startup before sync corrections begin
+)
+SYNC_TIMEOUT_SECONDS = 10.0  # Max time to wait for sync after a seek operation
+SYNC_DEVIATION_THRESHOLD_RESUME = (
+    0.1  # Deviation (seconds) required to resume after seek
+)
+HEARTBEAT_INTERVAL_SECONDS = 2.0  # How often to send status updates to leader
+REREGISTER_INTERVAL_SECONDS = 60.0  # How often to re-register with leader
+
+# Default sync settings - these are tunable parameters that affect sync quality
+# (Can be overridden in config file)
+DEFAULT_SYNC_TOLERANCE = 1.0  # General sync tolerance (not currently used)
+DEFAULT_SYNC_CHECK_INTERVAL = 5.0  # Min time between corrections
+DEFAULT_DEVIATION_THRESHOLD = 0.2  # Error threshold to trigger correction
+DEFAULT_SYNC_GRACE_TIME = 5.0  # Cooldown period after correction
+DEFAULT_SYNC_JUMP_AHEAD = 3.0  # How far ahead to seek for corrections
+DEFAULT_LATENCY_COMPENSATION = (
+    0.0  # Network/processing delay offset (DISABLED - may cause issues)
+)
+DEFAULT_SEEK_SETTLE_TIME = 0.1  # VLC settling time after seek
+
+# =============================================================================
+
+
 class CollaboratorPi:
     """Refactored Collaborator Pi with clean separation of concerns"""
 
@@ -77,46 +108,36 @@ class CollaboratorPi:
 
     def _initialize_sync_parameters(self):
         """Initialize synchronization parameters from config and set initial state."""
-        # Constants for sync logic - these control the basic behavior of the sync system
-        self.deviation_samples_maxlen = (
-            20  # How many timing samples to keep for median filtering
-        )
-        self.initial_sync_wait_seconds = (
-            2.0  # Grace period after startup before sync corrections begin
-        )
-        self.sync_timeout_seconds = (
-            10.0  # Max time to wait for sync after a seek operation
-        )
-        self.sync_deviation_threshold_resume = (
-            0.1  # Deviation (seconds) required to resume after seek
-        )
-        self.heartbeat_interval_seconds = (
-            2.0  # How often to send status updates to leader
-        )
-        self.reregister_interval_seconds = 60.0  # How often to re-register with leader
+        # Use constants defined at top of file for easy editing
+        self.deviation_samples_maxlen = DEVIATION_SAMPLES_MAXLEN
+        self.initial_sync_wait_seconds = INITIAL_SYNC_WAIT_SECONDS
+        self.sync_timeout_seconds = SYNC_TIMEOUT_SECONDS
+        self.sync_deviation_threshold_resume = SYNC_DEVIATION_THRESHOLD_RESUME
+        self.heartbeat_interval_seconds = HEARTBEAT_INTERVAL_SECONDS
+        self.reregister_interval_seconds = REREGISTER_INTERVAL_SECONDS
 
-        # Sync settings from config - these are tunable parameters that affect sync quality
+        # Load sync settings from config with defaults from constants
         self.sync_tolerance = self.config.getfloat(
-            "sync_tolerance", 1.0
-        )  # General sync tolerance (not currently used)
+            "sync_tolerance", DEFAULT_SYNC_TOLERANCE
+        )
         self.sync_check_interval = self.config.getfloat(
-            "sync_check_interval", 5.0
-        )  # Min time between corrections
+            "sync_check_interval", DEFAULT_SYNC_CHECK_INTERVAL
+        )
         self.deviation_threshold = self.config.getfloat(
-            "deviation_threshold", 0.2
-        )  # Error threshold to trigger correction
+            "deviation_threshold", DEFAULT_DEVIATION_THRESHOLD
+        )
         self.sync_grace_time = self.config.getfloat(
-            "sync_grace_time", 5.0
-        )  # Cooldown period after correction
+            "sync_grace_time", DEFAULT_SYNC_GRACE_TIME
+        )
         self.sync_jump_ahead = self.config.getfloat(
-            "sync_jump_ahead", 3.0
-        )  # How far ahead to seek for corrections
+            "sync_jump_ahead", DEFAULT_SYNC_JUMP_AHEAD
+        )
         self.latency_compensation = self.config.getfloat(
-            "latency_compensation", 0.0
-        )  # Network/processing delay offset (DISABLED - may cause issues)
+            "latency_compensation", DEFAULT_LATENCY_COMPENSATION
+        )
         self.seek_settle_time = self.config.getfloat(
-            "seek_settle_time", 0.1
-        )  # VLC settling time after seek
+            "seek_settle_time", DEFAULT_SEEK_SETTLE_TIME
+        )
 
         # Video sync state
         self.deviation_samples = deque(maxlen=self.deviation_samples_maxlen)
