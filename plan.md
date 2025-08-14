@@ -158,7 +158,7 @@ I am developing this on a separate computer than the one on which it will run. C
 
 1. Install VLC and Python dependencies system-wide
 2. **(Recommended)** Optimize the OS by removing unused packages and services
-3. Configure desktop appearance (hide icons, set black background)
+3. Configure desktop appearance (panel autohide, hide icons, set black background)
 4. Copy systemd service file and enable auto-start
 5. Prepare USB drives with configuration and video files
 6. Deploy to Raspberry Pis and power on
@@ -428,10 +428,20 @@ mkdir -p ~/.config
 echo "[background]" > ~/.config/wf-shell.ini
 echo "color = \\#000000" >> ~/.config/wf-shell.ini
 
-# Disable desktop icons in pcmanfm (if used)
-mkdir -p ~/.config/pcmanfm/default
-echo "[desktop]" >> ~/.config/pcmanfm/default/pcmanfm.conf
-echo "show_desktop=0" >> ~/.config/pcmanfm/default/pcmanfm.conf
+# Wayfire panel autohide (smooth stage experience)
+echo "autohide=true" >> ~/.config/wf-panel-pi.ini
+echo "autohide_duration=500" >> ~/.config/wf-panel-pi.ini
+
+# PCManFM desktop (system-wide overrides; ensure no per-user override file exists)
+sudo mkdir -p /etc/xdg/pcmanfm/LXDE-pi
+sudo tee -a /etc/xdg/pcmanfm/LXDE-pi/desktop-items-0.conf >/dev/null <<'EOF'
+# KitchenSync overrides (desktop)
+show_trash=0
+show_mounts=0
+wallpaper=
+desktop_bg=#000000
+EOF
+rm -f ~/.config/pcmanfm/LXDE-pi/desktop-items-0.conf
 
 # Install swaybg as fallback
 sudo apt install -y swaybg

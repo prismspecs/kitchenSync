@@ -66,6 +66,56 @@ if ! grep -q "GDK_BACKEND=x11" start_clean.sh; then
     sed -i '/export SDL_VIDEODRIVER=x11/a\\n# Force X11 mode (disable Wayland)\nexport GDK_BACKEND=x11\nexport QT_QPA_PLATFORM=xcb\nexport WAYLAND_DISPLAY=' start_clean.sh
 fi
 
+#############################################
+# Desktop configuration (Wayfire/PCManFM)
+#############################################
+echo "Configuring desktop (panel autohide, hide icons, black background)..."
+
+# 1) Wayfire panel autohide settings
+mkdir -p "$HOME/.config"
+PANEL_INI="$HOME/.config/wf-panel-pi.ini"
+touch "$PANEL_INI"
+
+# Ensure autohide=true
+if grep -qE '^\s*autohide\s*=' "$PANEL_INI"; then
+    sed -i 's/^\s*autohide\s*=.*/autohide=true/' "$PANEL_INI"
+else
+    echo "autohide=true" >> "$PANEL_INI"
+fi
+
+# Ensure autohide_duration=500
+if grep -qE '^\s*autohide_duration\s*=' "$PANEL_INI"; then
+    sed -i 's/^\s*autohide_duration\s*=.*/autohide_duration=500/' "$PANEL_INI"
+else
+    echo "autohide_duration=500" >> "$PANEL_INI"
+fi
+
+# 2) PCManFM desktop overrides (append to system config to take precedence)
+GLOBAL_PC_CONF="/etc/xdg/pcmanfm/LXDE-pi/desktop-items-0.conf"
+echo "Applying PCManFM desktop overrides (system-wide)..."
+sudo mkdir -p "/etc/xdg/pcmanfm/LXDE-pi"
+if [ ! -f "$GLOBAL_PC_CONF" ]; then
+    sudo touch "$GLOBAL_PC_CONF"
+fi
+
+# Append our overrides once at the end; do not replace earlier keys
+if ! grep -q "# KitchenSync overrides (desktop)" "$GLOBAL_PC_CONF"; then
+    sudo tee -a "$GLOBAL_PC_CONF" >/dev/null <<'EOF'
+# KitchenSync overrides (desktop)
+show_trash=0
+show_mounts=0
+wallpaper=
+desktop_bg=#000000
+EOF
+fi
+
+# 3) Remove per-user override so system config is respected
+USER_PC_CONF="$HOME/.config/pcmanfm/LXDE-pi/desktop-items-0.conf"
+if [ -f "$USER_PC_CONF" ]; then
+    echo "Removing per-user PCManFM desktop config to use system defaults..."
+    rm -f "$USER_PC_CONF"
+fi
+
 # Setup auto-start service as SYSTEM service
 echo "Setting up auto-start SYSTEM service..."
 # Create a temporary service file with correct paths

@@ -45,6 +45,8 @@ class CollaboratorPi:
             enable_vlc_logging=self.config.enable_vlc_logging,
             vlc_log_level=self.config.vlc_log_level,
         )
+        # Set video output for reliable display
+        self.video_player.video_output = "x11"
         log_info(
             "Collaborator using Python VLC for precise sync control",
             component="collaborator",
@@ -55,9 +57,14 @@ class CollaboratorPi:
         self.midi_manager = MidiManager(midi_port)
         self.midi_scheduler = MidiScheduler(self.midi_manager)
 
-        # Initialize networking
-        self.sync_receiver = SyncReceiver(sync_callback=self._handle_sync)
-        self.command_listener = CommandListener()
+        # Initialize networking (respect configured ports)
+        self.sync_receiver = SyncReceiver(
+            sync_port=self.config.getint("sync_port", 5005),
+            sync_callback=self._handle_sync,
+        )
+        self.command_listener = CommandListener(
+            control_port=self.config.getint("control_port", 5006)
+        )
 
         # Find and load video file before creating debug overlay
         self.video_path = self.video_manager.find_video_file()

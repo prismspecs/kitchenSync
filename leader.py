@@ -65,7 +65,9 @@ class LeaderPi:
             sync_port=self.config.getint("sync_port", 5005),
             tick_interval=self.config.tick_interval,
         )
-        self.command_manager = CommandManager()
+        self.command_manager = CommandManager(
+            control_port=self.config.getint("control_port", 5006)
+        )
 
         # Initialize MIDI (for local MIDI if needed)
         self.midi_manager = MidiManager(use_mock=True)
