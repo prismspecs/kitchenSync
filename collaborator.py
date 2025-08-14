@@ -142,7 +142,10 @@ class CollaboratorPi:
         # State 1: Waiting for sync to be achieved after a correction
         if self.wait_for_sync:
             current_position = self.video_player.get_position() or 0
-            deviation = abs(leader_time - current_position)
+            # Check against the expected position, including latency
+            expected_position = leader_time + self.sync_config.latency_compensation
+            deviation = abs(expected_position - current_position)
+
             if deviation < 0.1:  # Within 100ms, we're synced
                 log_info(
                     f"Sync achieved! Deviation: {deviation:.3f}s, resuming playback",
