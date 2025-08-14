@@ -96,6 +96,17 @@ class SyncBroadcaster:
                         self.sync_sock.sendto(
                             payload.encode(), (self.broadcast_ip, self.sync_port)
                         )
+                        # Log diagnostic info if system logging is enabled
+                        try:
+                            from src.core.logger import log_info
+
+                            log_info(
+                                f"Sync broadcast: {current_time:.3f}s from {time_source} "
+                                f"(duration: {leader_duration:.1f}s if known)",
+                                component="sync",
+                            )
+                        except ImportError:
+                            pass  # Logger not available
                     except Exception as e:
                         pass  # Ignore broadcast errors
 
@@ -158,11 +169,24 @@ class SyncReceiver:
                     if msg.get("type") == "sync":
                         self.last_sync_time = time.time()
                         leader_time = msg.get("time", 0)
+                        time_source = msg.get("source", "unknown")
+                        duration = msg.get("duration")
 
                         if self.sync_callback:
                             try:
                                 # Pass both leader_time and receive timestamp
                                 self.sync_callback(leader_time, self.last_sync_time)
+                                # Log diagnostic info if system logging is enabled
+                                try:
+                                    from src.core.logger import log_info
+
+                                    log_info(
+                                        f"Sync received: {leader_time:.3f}s from {time_source} "
+                                        f"(duration: {duration:.1f}s if known)",
+                                        component="sync",
+                                    )
+                                except ImportError:
+                                    pass  # Logger not available
                             except TypeError:
                                 # Backward compatibility: callbacks expecting one arg
                                 self.sync_callback(leader_time)

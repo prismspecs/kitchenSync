@@ -126,6 +126,7 @@ class CollaboratorPi:
             )
 
         # Update system time and maintain sync
+        # leader_time is now wall-clock time since start, so we can use it directly
         self.system_state.current_time = leader_time
 
         # Process MIDI cues (safe no-op if no schedule)

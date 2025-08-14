@@ -92,8 +92,9 @@ I am developing this on a separate computer than the one on which it will run. C
 - Configurable thresholds and grace periods
 - Real-time position tracking and drift compensation
 - Consistent seeking behavior across all Pis
- - Configurable latency compensation to counter network/compute lag
- - Seek settle timing to allow decoder/display to catch up after seeks
+- Configurable latency compensation to counter network/compute lag
+- Seek settle timing to allow decoder/display to catch up after seeks
+- **Wall-clock time synchronization**: Leader broadcasts elapsed wall time since start, ensuring all nodes advance at the same rate rather than trying to match absolute video positions
 
 **Network Architecture**
 
