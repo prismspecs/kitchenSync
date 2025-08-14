@@ -148,14 +148,26 @@ class CollaboratorPi:
         # Handle omxplayer-sync style wait states
         if self.wait_for_sync:
             # We're waiting for deviation to become small enough after a seek
-            deviation = abs(leader_time - self.video_player.get_position() or 0)
+            current_position = self.video_player.get_position() or 0
+            deviation = abs(leader_time - current_position)
             if deviation < 0.1:  # Within 100ms, we're synced
-                log_info("Sync achieved, resuming playback", component="sync")
+                log_info(
+                    f"Sync achieved! Deviation: {deviation:.3f}s, resuming playback",
+                    component="sync",
+                )
                 self.video_player.resume()
                 self.wait_for_sync = False
                 self.wait_after_sync = time.time()
             else:
                 # Still waiting for sync
+                if time.time() - self.sync_timer > 10:  # Timeout after 10s
+                    log_warning(
+                        f"Sync timeout after 10s, deviation still {deviation:.3f}s",
+                        component="sync",
+                    )
+                    self.video_player.resume()
+                    self.wait_for_sync = False
+                    self.wait_after_sync = time.time()
                 return
 
         if self.wait_after_sync:
@@ -309,7 +321,7 @@ class CollaboratorPi:
                 return
 
             log_info(
-                f"Sync correction needed: {median_deviation:.3f}s deviation",
+                f"Sync correction needed: {median_deviation:.3f}s deviation (threshold: {correction_threshold:.3f}s)",
                 component="sync",
             )
             print(f"🔄 Sync correction: {median_deviation:.3f}s deviation")
@@ -359,8 +371,15 @@ class CollaboratorPi:
                 self.wait_for_sync = True
                 self.sync_timer = time.time()
                 self.last_correction_time = time.time()
+
+                # Log the expected sync behavior
+                log_info(
+                    f"Entering wait-for-sync state. Will resume when deviation < 0.1s",
+                    component="sync",
+                )
             else:
                 log_warning("Seek failed, resuming playback", component="sync")
+                self.video_player.resume()
 
     def run(self) -> None:
         """Main run loop"""
