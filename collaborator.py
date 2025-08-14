@@ -67,56 +67,46 @@ class CollaboratorPi:
         else:
             log_warning("No video file found at startup", component="collaborator")
 
-        # Sync settings
-        # sync_tolerance: general upper bound for considering system "in sync" (seconds)
-        # Currently not used in the correction logic
-        # sync_check_interval: minimum time between corrective seeks (seconds)
-        # Example: 5.0 means once we correct, we won’t correct again for at least 5 seconds.
-        # deviation_threshold: absolute median error (seconds) that triggers a correction
-        # Example: 0.2 means only if we’re ≳200 ms off (consistently) we’ll correct.
-
-        self.sync_tolerance = self.config.getfloat("sync_tolerance", 1.0)
-        self.sync_check_interval = self.config.getfloat("sync_check_interval", 5.0)
-        self.deviation_threshold = self.config.getfloat(
-            "deviation_threshold", 0.2
-        )  # Reverted: 0.05s was too tight, causing overcorrection
-        # old defaults: sync_tolerance=1.0, sync_check_interval=5.0, deviation_threshold=0.5s
-
-        # Video sync state
-        self.deviation_samples = deque(
-            maxlen=20
-        )  # Increased: more samples for frequent sync (50x/sec)
-        self.last_correction_time = 0
-        self.video_start_time = None
-
-        # Sync state management (based on omxplayer-sync approach)
-        self.wait_for_sync = False
-        self.wait_after_sync = False
-        self.sync_timer = 0
-        self.sync_grace_time = self.config.getfloat(
-            "sync_grace_time", 5.0
-        )  # Match omxplayer-sync: 5 second grace
-        self.sync_jump_ahead = self.config.getfloat(
-            "sync_jump_ahead", 3.0
-        )  # Exact match to omxplayer-sync: SYNC_JUMP_AHEAD = 3
-
-        # Latency/seek tuning
-        # Accounts for network transit + decode/display pipeline latency
-        self.latency_compensation = self.config.getfloat("latency_compensation", 0.15)
-        # Small delay for VLC to settle after a seek (seconds)
-        self.seek_settle_time = self.config.getfloat("seek_settle_time", 0.1)
-
-        # Setup command handlers
-        self._setup_command_handlers()
+        # Initialize sync parameters and state
+        self._initialize_sync_parameters()
 
         log_info(
             f"KitchenSync Collaborator '{self.config.device_id}' initialized",
             component="collaborator",
         )
 
-    def _setup_command_handlers(self) -> None:
-        """No-op: collaborator now auto-starts on timecode; no commands handled"""
-        return
+    def _initialize_sync_parameters(self):
+        """Initialize synchronization parameters from config and set initial state."""
+        # Constants for sync logic
+        self.deviation_samples_maxlen = (
+            20  # Number of samples for median deviation calculation
+        )
+        self.initial_sync_wait_seconds = 2.0  # Wait before starting sync corrections
+        self.sync_timeout_seconds = 10.0  # Timeout for waiting for sync after a seek
+        self.sync_deviation_threshold_resume = (
+            0.1  # Deviation to resume playback after seek
+        )
+        self.heartbeat_interval_seconds = 2.0
+        self.reregister_interval_seconds = 60.0
+
+        # Sync settings from config
+        self.sync_tolerance = self.config.getfloat("sync_tolerance", 1.0)
+        self.sync_check_interval = self.config.getfloat("sync_check_interval", 5.0)
+        self.deviation_threshold = self.config.getfloat("deviation_threshold", 0.2)
+        self.sync_grace_time = self.config.getfloat("sync_grace_time", 5.0)
+        self.sync_jump_ahead = self.config.getfloat("sync_jump_ahead", 3.0)
+        self.latency_compensation = self.config.getfloat("latency_compensation", 0.15)
+        self.seek_settle_time = self.config.getfloat("seek_settle_time", 0.1)
+
+        # Video sync state
+        self.deviation_samples = deque(maxlen=self.deviation_samples_maxlen)
+        self.last_correction_time = 0
+        self.video_start_time = None
+
+        # Sync state management
+        self.wait_for_sync = False
+        self.wait_after_sync = False
+        self.sync_timer = 0
 
     def _handle_sync(
         self, leader_time: float, received_at: float | None = None
@@ -148,7 +138,7 @@ class CollaboratorPi:
         # Check video sync (only if we've been running for a bit)
         if self.system_state.is_running and self.video_start_time:
             time_since_start = time.time() - self.video_start_time
-            if time_since_start > 2.0:  # Wait 2 seconds before sync corrections
+            if time_since_start > self.initial_sync_wait_seconds:
                 self._check_video_sync(leader_time)
 
         # Handle omxplayer-sync style wait states
@@ -156,7 +146,7 @@ class CollaboratorPi:
             # We're waiting for deviation to become small enough after a seek
             current_position = self.video_player.get_position() or 0
             deviation = abs(leader_time - current_position)
-            if deviation < 0.1:  # Within 100ms, we're synced
+            if deviation < self.sync_deviation_threshold_resume:
                 log_info(
                     f"Sync achieved! Deviation: {deviation:.3f}s, resuming playback",
                     component="sync",
@@ -166,9 +156,9 @@ class CollaboratorPi:
                 self.wait_after_sync = time.time()
             else:
                 # Still waiting for sync
-                if time.time() - self.sync_timer > 10:  # Timeout after 10s
+                if time.time() - self.sync_timer > self.sync_timeout_seconds:
                     log_warning(
-                        f"Sync timeout after 10s, deviation still {deviation:.3f}s",
+                        f"Sync timeout after {self.sync_timeout_seconds}s, deviation still {deviation:.3f}s",
                         component="sync",
                     )
                     self.video_player.resume()
@@ -298,9 +288,7 @@ class CollaboratorPi:
         self.deviation_samples.append(deviation)
 
         # Only proceed if we have enough samples
-        if (
-            len(self.deviation_samples) < 8
-        ):  # Adjusted: more samples needed for frequent sync
+        if len(self.deviation_samples) < self.deviation_samples_maxlen // 2:
             return
 
         # Calculate median deviation with outlier filtering
@@ -405,17 +393,17 @@ class CollaboratorPi:
         # Start heartbeat
         def heartbeat_loop():
             last_registration = time.time()
-            while True:
+            while self.system_state.is_running:
                 status = "running" if self.system_state.is_running else "ready"
                 self.command_listener.send_heartbeat(self.config.device_id, status)
-                # Periodic re-registration (every 60s)
+                # Periodic re-registration
                 now = time.time()
-                if now - last_registration >= 60:
+                if now - last_registration >= self.reregister_interval_seconds:
                     self.command_listener.send_registration(
                         self.config.device_id, self.config.video_file
                     )
                     last_registration = now
-                time.sleep(2)
+                time.sleep(self.heartbeat_interval_seconds)
 
         heartbeat_thread = threading.Thread(target=heartbeat_loop, daemon=True)
         heartbeat_thread.start()
