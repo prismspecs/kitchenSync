@@ -47,6 +47,8 @@ class VLCVideoPlayer:
         self.enable_looping = True
         self.loop_callback = None
         self.video_output: Optional[str] = None
+        self.fullscreen_enforcement_thread = None
+        self.should_be_fullscreen = False
 
         # Check VLC availability once at init
         if not VLC_PYTHON_AVAILABLE:
@@ -57,6 +59,32 @@ class VLCVideoPlayer:
         # Log environment snapshot once when player is constructed (only if VLC logging enabled)
         if enable_vlc_logging:
             snapshot_env()
+
+    def _enforce_fullscreen_periodically(self) -> None:
+        """Periodically check and enforce fullscreen mode"""
+        while self.is_playing and self.should_be_fullscreen and self.vlc_player:
+            try:
+                # Check every 2 seconds
+                time.sleep(2.0)
+                
+                if not self.is_playing or not self.should_be_fullscreen:
+                    break
+                    
+                # Check if we're actually in fullscreen
+                if self.vlc_player and not self.vlc_player.get_fullscreen():
+                    log_warning("VLC window not in fullscreen, re-enabling", component="vlc")
+                    self.vlc_player.set_fullscreen(True)
+                    
+                    # Verify it worked
+                    time.sleep(0.1)
+                    if self.vlc_player.get_fullscreen():
+                        log_info("Successfully restored fullscreen mode", component="vlc")
+                    else:
+                        log_error("Failed to restore fullscreen mode", component="vlc")
+                        
+            except Exception as e:
+                log_error(f"Error in fullscreen enforcement: {e}", component="vlc")
+                break
 
     def _ms_to_seconds(self, milliseconds: int) -> float:
         """Convert milliseconds to seconds"""
@@ -91,6 +119,10 @@ class VLCVideoPlayer:
     def stop_playback(self) -> None:
         """Stop video playback"""
         try:
+            # Stop fullscreen enforcement first
+            self.should_be_fullscreen = False
+            self.is_playing = False
+            
             if self.vlc_player:
                 self.vlc_player.stop()
                 log_info("Stopped VLC Python player", component="vlc")
@@ -98,7 +130,6 @@ class VLCVideoPlayer:
             # Kill any remaining VLC processes as safety measure
             subprocess.run(["pkill", "vlc"], capture_output=True)
 
-            self.is_playing = False
         except Exception as e:
             log_error(f"Error stopping video: {e}", component="vlc")
 
@@ -146,6 +177,35 @@ class VLCVideoPlayer:
         except Exception as e:
             log_error(f"Error getting duration: {e}", component="vlc")
             return None
+
+    def force_fullscreen(self) -> bool:
+        """Manually force fullscreen mode"""
+        if not self.vlc_player or self.debug_mode:
+            return False
+            
+        try:
+            log_info("Manually forcing fullscreen mode", component="vlc")
+            self.vlc_player.set_fullscreen(True)
+            time.sleep(0.1)
+            
+            success = self.vlc_player.get_fullscreen()
+            if success:
+                log_info("Manual fullscreen enforcement successful", component="vlc")
+            else:
+                log_warning("Manual fullscreen enforcement failed", component="vlc")
+            return success
+        except Exception as e:
+            log_error(f"Error forcing fullscreen: {e}", component="vlc")
+            return False
+
+    def is_fullscreen(self) -> bool:
+        """Check if VLC is currently in fullscreen mode"""
+        if not self.vlc_player:
+            return False
+        try:
+            return self.vlc_player.get_fullscreen()
+        except Exception:
+            return False
 
     def pause(self) -> bool:
         """Pause playback"""
@@ -275,17 +335,36 @@ class VLCVideoPlayer:
             # Set fullscreen mode for production or when specifically requested
             try:
                 if not self.debug_mode:
-                    # Wait a moment for VLC to initialize window
-                    time.sleep(0.5)
-                    self.vlc_player.set_fullscreen(True)
-                    log_info("Enabled fullscreen in production mode", component="vlc")
-                    # Double-check fullscreen is enabled
-                    time.sleep(0.2)
-                    if not self.vlc_player.get_fullscreen():
-                        log_warning(
-                            "Fullscreen not active, trying again", component="vlc"
-                        )
+                    self.should_be_fullscreen = True
+                    
+                    # Multiple attempts with increasing delays for reliability
+                    fullscreen_attempts = [0.3, 0.5, 1.0, 2.0]
+                    fullscreen_success = False
+                    
+                    for attempt, delay in enumerate(fullscreen_attempts, 1):
+                        time.sleep(delay)
+                        log_info(f"Fullscreen attempt #{attempt} (after {delay}s delay)", component="vlc")
                         self.vlc_player.set_fullscreen(True)
+                        
+                        # Check if it worked
+                        time.sleep(0.2)
+                        if self.vlc_player.get_fullscreen():
+                            log_info(f"Fullscreen enabled successfully on attempt #{attempt}", component="vlc")
+                            fullscreen_success = True
+                            break
+                        else:
+                            log_warning(f"Fullscreen attempt #{attempt} failed", component="vlc")
+                    
+                    if not fullscreen_success:
+                        log_error("All fullscreen attempts failed - will use enforcement thread", component="vlc")
+                    
+                    # Start fullscreen enforcement thread regardless of initial success
+                    self.fullscreen_enforcement_thread = threading.Thread(
+                        target=self._enforce_fullscreen_periodically, 
+                        daemon=True
+                    )
+                    self.fullscreen_enforcement_thread.start()
+                    log_info("Started fullscreen enforcement thread", component="vlc")
                 else:
                     log_info("Debug mode: running in windowed mode", component="vlc")
             except Exception as e:
@@ -308,6 +387,19 @@ class VLCVideoPlayer:
             # Video output optimization
             "--vout=gl",  # Use OpenGL video output for hardware acceleration
         ]
+
+        # Add fullscreen-specific args for production mode
+        if not self.debug_mode:
+            args.extend([
+                "--fullscreen",  # Start in fullscreen mode
+                "--no-embedded-video",  # Don't embed video in interface
+                "--video-on-top",  # Keep video window on top
+                "--no-video-deco",  # Remove window decorations
+            ])
+        else:
+            args.extend([
+                "--no-fullscreen",  # Explicitly disable fullscreen in debug mode
+            ])
 
         # VLC outputs audio normally - no audio routing arguments needed
         # Audio will be synchronized across all nodes using the system's default audio output
@@ -368,6 +460,9 @@ class VLCVideoPlayer:
             "state": "stopped",
             "loop_count": self.loop_count,
             "looping_enabled": self.enable_looping,
+            "is_fullscreen": False,
+            "should_be_fullscreen": self.should_be_fullscreen,
+            "enforcement_active": self.fullscreen_enforcement_thread is not None and self.fullscreen_enforcement_thread.is_alive(),
         }
 
         if not self.vlc_player:
@@ -394,6 +489,9 @@ class VLCVideoPlayer:
             if state:
                 info["state"] = str(state).split(".")[-1].lower()
                 info["is_playing"] = state == vlc.State.Playing
+
+            # Get fullscreen status
+            info["is_fullscreen"] = self.vlc_player.get_fullscreen()
 
         except Exception as e:
             log_error(f"Error getting video info: {e}", component="vlc")

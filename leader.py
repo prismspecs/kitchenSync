@@ -283,6 +283,25 @@ class LeaderPi:
         editor = ScheduleEditor(self.schedule)
         editor.run_editor()
 
+    def force_fullscreen(self) -> None:
+        """Force fullscreen mode for video player"""
+        if not self.video_player:
+            log_warning("No video player available", component="leader")
+            return
+            
+        current_status = self.video_player.is_fullscreen()
+        log_info(f"Current fullscreen status: {current_status}", component="leader")
+        
+        if not current_status:
+            log_info("Forcing fullscreen mode...", component="leader")
+            success = self.video_player.force_fullscreen()
+            if success:
+                log_info("✓ Fullscreen mode enabled", component="leader")
+            else:
+                log_error("✗ Failed to enable fullscreen mode", component="leader")
+        else:
+            log_info("✓ Already in fullscreen mode", component="leader")
+
     def cleanup(self) -> None:
         """Clean up resources"""
         if self.system_state.is_running:
@@ -312,6 +331,7 @@ def create_command_interface(leader: LeaderPi) -> CommandInterface:
     interface.register_command("stop", leader.stop_system, "Stop playback")
     interface.register_command("status", leader.show_status, "Show system status")
     interface.register_command("schedule", leader.edit_schedule, "Edit schedule")
+    interface.register_command("fullscreen", leader.force_fullscreen, "Force fullscreen mode")
 
     return interface
 
