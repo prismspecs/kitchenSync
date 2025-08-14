@@ -63,7 +63,7 @@ class LeaderPi:
         # Initialize networking (wire tick_interval from config)
         self.sync_broadcaster = SyncBroadcaster(
             sync_port=self.config.getint("sync_port", 5005),
-            tick_interval=self.config.tick_interval,  # Use config value (typically 0.1s)
+            tick_interval=0.02,  # Increased: 50 times per second for responsive sync
         )
         self.command_manager = CommandManager()
 

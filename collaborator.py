@@ -86,8 +86,8 @@ class CollaboratorPi:
 
         # Video sync state
         self.deviation_samples = deque(
-            maxlen=10
-        )  # Back to original: 10 samples for frequent measurements
+            maxlen=20
+        )  # Increased: more samples for frequent sync (50x/sec)
         self.last_correction_time = 0
         self.video_start_time = None
 
@@ -300,7 +300,9 @@ class CollaboratorPi:
         self.deviation_samples.append(deviation)
 
         # Only proceed if we have enough samples
-        if len(self.deviation_samples) < 5:  # Back to original: 5 samples needed
+        if (
+            len(self.deviation_samples) < 8
+        ):  # Adjusted: more samples needed for frequent sync
             return
 
         # Calculate median deviation with outlier filtering

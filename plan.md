@@ -98,6 +98,7 @@ I am developing this on a separate computer than the one on which it will run. C
 - **Anti-feedback sync**: Deviation samples cleared before seeking to prevent correction loops
 - **Outlier filtering**: Trimmed median calculation removes extreme measurements that could trigger false corrections
 - **Continuous sync monitoring**: Leader broadcasts position continuously (every 0.1s), collaborator monitors and corrects in real-time
+- **High-frequency sync**: Leader broadcasts every 0.02 seconds (50x/sec) for responsive wait-for-sync state management
 - **omxplayer-sync inspired approach**: Pause during correction, seek ahead to compensate for latency, wait-for-sync state management, and grace periods to prevent rapid re-corrections
 
 **Network Architecture**
