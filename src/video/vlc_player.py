@@ -184,29 +184,44 @@ class VLCVideoPlayer:
                     except Exception as e:
                         log_error(f"Error in video loop callback: {e}", component="vlc")
 
-                # Reset to beginning and restart
+                        # Reset to beginning and restart
                 print(f"🔄 Restarting video: stop() -> set_media() -> play()")
+
+                # Stop current playback
                 try:
-                    # Stop current playback
+                    print(f"  🛑 About to call stop()...")
                     self.vlc_player.stop()
                     print(f"  ✓ Stopped player")
+                except Exception as e:
+                    print(f"  ❌ stop() failed: {e}")
 
-                    # Re-attach media (needed after stop)
+                # Re-attach media (needed after stop)
+                try:
                     if self.vlc_media:
+                        print(f"  📼 About to re-attach media...")
                         self.vlc_player.set_media(self.vlc_media)
                         print(f"  ✓ Re-attached media")
+                    else:
+                        print(f"  ⚠️ No media to re-attach!")
+                except Exception as e:
+                    print(f"  ❌ set_media() failed: {e}")
 
-                    # Start from beginning
+                # Start from beginning
+                try:
+                    print(f"  ▶️ About to call play()...")
                     result = self.vlc_player.play()
                     print(f"  ✓ play() returned: {result}")
+                except Exception as e:
+                    print(f"  ❌ play() failed: {e}")
 
-                    # Force position to 0 after a brief delay
+                # Force position to 0 after a brief delay
+                try:
+                    print(f"  ⏱️ Waiting 0.1s then setting position...")
                     time.sleep(0.1)
                     self.vlc_player.set_position(0.0)
                     print(f"  ✓ Set position to 0.0")
-
-                except Exception as restart_error:
-                    print(f"  ❌ Restart error: {restart_error}")
+                except Exception as e:
+                    print(f"  ❌ set_position() failed: {e}")
 
                 print(f"✅ Video loop #{self.loop_count} restart completed")
                 log_info(f"Video loop #{self.loop_count} started", component="vlc")
