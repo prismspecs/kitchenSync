@@ -7,6 +7,7 @@ Handles VLC video playback with sync capabilities
 import os
 import subprocess
 import time
+import threading
 from typing import Optional
 from core.logger import log_info, log_error, log_warning, snapshot_env, log_file_paths
 
@@ -184,47 +185,11 @@ class VLCVideoPlayer:
                     except Exception as e:
                         log_error(f"Error in video loop callback: {e}", component="vlc")
 
-                        # Reset to beginning and restart
-                print(f"🔄 Restarting video: stop() -> set_media() -> play()")
+                                        # Schedule restart on separate thread to avoid VLC deadlock
+                print(f"🔄 Scheduling video restart on separate thread...")
+                restart_thread = threading.Thread(target=self._restart_video_thread, daemon=True)
+                restart_thread.start()
 
-                # Stop current playback
-                try:
-                    print(f"  🛑 About to call stop()...")
-                    self.vlc_player.stop()
-                    print(f"  ✓ Stopped player")
-                except Exception as e:
-                    print(f"  ❌ stop() failed: {e}")
-
-                # Re-attach media (needed after stop)
-                try:
-                    if self.vlc_media:
-                        print(f"  📼 About to re-attach media...")
-                        self.vlc_player.set_media(self.vlc_media)
-                        print(f"  ✓ Re-attached media")
-                    else:
-                        print(f"  ⚠️ No media to re-attach!")
-                except Exception as e:
-                    print(f"  ❌ set_media() failed: {e}")
-
-                # Start from beginning
-                try:
-                    print(f"  ▶️ About to call play()...")
-                    result = self.vlc_player.play()
-                    print(f"  ✓ play() returned: {result}")
-                except Exception as e:
-                    print(f"  ❌ play() failed: {e}")
-
-                # Force position to 0 after a brief delay
-                try:
-                    print(f"  ⏱️ Waiting 0.1s then setting position...")
-                    time.sleep(0.1)
-                    self.vlc_player.set_position(0.0)
-                    print(f"  ✓ Set position to 0.0")
-                except Exception as e:
-                    print(f"  ❌ set_position() failed: {e}")
-
-                print(f"✅ Video loop #{self.loop_count} restart completed")
-                log_info(f"Video loop #{self.loop_count} started", component="vlc")
             except Exception as e:
                 print(f"❌ Error in _on_video_end: {e}")
                 log_error(f"Error restarting video loop: {e}", component="vlc")
@@ -232,6 +197,49 @@ class VLCVideoPlayer:
             print(
                 f"⚠️ Loop skipped: enable_looping={self.enable_looping}, vlc_player={bool(self.vlc_player)}"
             )
+            
+    def _restart_video_thread(self):
+        """Restart video on separate thread to avoid VLC deadlock"""
+        print(f"🔄 Restarting video: stop() -> set_media() -> play()")
+        
+        # Stop current playback
+        try:
+            print(f"  🛑 About to call stop()...")
+            self.vlc_player.stop()
+            print(f"  ✓ Stopped player")
+        except Exception as e:
+            print(f"  ❌ stop() failed: {e}")
+        
+        # Re-attach media (needed after stop)
+        try:
+            if self.vlc_media:
+                print(f"  📼 About to re-attach media...")
+                self.vlc_player.set_media(self.vlc_media)
+                print(f"  ✓ Re-attached media")
+            else:
+                print(f"  ⚠️ No media to re-attach!")
+        except Exception as e:
+            print(f"  ❌ set_media() failed: {e}")
+        
+        # Start from beginning
+        try:
+            print(f"  ▶️ About to call play()...")
+            result = self.vlc_player.play()
+            print(f"  ✓ play() returned: {result}")
+        except Exception as e:
+            print(f"  ❌ play() failed: {e}")
+        
+        # Force position to 0 after a brief delay
+        try:
+            print(f"  ⏱️ Waiting 0.1s then setting position...")
+            time.sleep(0.1)
+            self.vlc_player.set_position(0.0)
+            print(f"  ✓ Set position to 0.0")
+        except Exception as e:
+            print(f"  ❌ set_position() failed: {e}")
+
+        print(f"✅ Video loop #{self.loop_count} restart completed")
+        log_info(f"Video loop #{self.loop_count} started", component="vlc")
 
     def _start_with_python_vlc(self) -> bool:
         """Start video using VLC Python bindings"""
