@@ -49,6 +49,7 @@ class VLCVideoPlayer:
         self.video_output: Optional[str] = None
         self._monitor_thread: Optional[threading.Thread] = None
         self._monitor_stop_event: Optional[threading.Event] = None
+        self._is_restarting: bool = False
 
         # Check VLC availability once at init
         if not VLC_PYTHON_AVAILABLE:
@@ -184,7 +185,11 @@ class VLCVideoPlayer:
         """Restart video from beginning and notify loop callback."""
         if not self.enable_looping or not self.vlc_player:
             return
+        if self._is_restarting:
+            return
+        self._is_restarting = True
         try:
+            # Notify callback first so MIDI and state reset before video resumes
             self.loop_count += 1
             if self.loop_callback:
                 try:
@@ -192,12 +197,58 @@ class VLCVideoPlayer:
                 except Exception as e:
                     log_error(f"Error in video loop callback: {e}", component="vlc")
 
-            # Reset to beginning and restart
-            self.set_position(0.0)
-            self.resume()
+            # Robust restart sequence for Ended/near-end states
+            try:
+                self.vlc_player.stop()
+            except Exception:
+                pass
+            time.sleep(0.05)
+            try:
+                if self.vlc_media:
+                    # Ensure media is set again for some backends after Ended
+                    self.vlc_player.set_media(self.vlc_media)
+            except Exception:
+                pass
+
+            # Try to reset to time 0; fallback to position if needed
+            reset_ok = False
+            try:
+                # set_time expects milliseconds
+                self.vlc_player.set_time(0)
+                reset_ok = True
+            except Exception:
+                pass
+            if not reset_ok:
+                try:
+                    self.set_position(0.0)
+                except Exception:
+                    pass
+
+            # Start playback again
+            result = None
+            try:
+                result = self.vlc_player.play()
+            except Exception as e:
+                log_error(f"play() failed during loop restart: {e}", component="vlc")
+            if result not in (None, 0):
+                log_warning(
+                    f"VLC play() returned {result} on loop restart", component="vlc"
+                )
+
+            # Re-assert fullscreen in production
+            try:
+                if not self.debug_mode:
+                    time.sleep(0.2)
+                    self.vlc_player.set_fullscreen(True)
+            except Exception:
+                pass
+
+            self.is_playing = True
             log_info(f"Restarted video loop #{self.loop_count}", component="vlc")
         except Exception as e:
             log_error(f"Error restarting loop: {e}", component="vlc")
+        finally:
+            self._is_restarting = False
 
     def _start_monitoring(self) -> None:
         """Start a background monitor to enforce reliable looping."""
