@@ -24,12 +24,12 @@ from core.logger import log_info, log_warning, log_error, enable_system_logging
 
 # =============================================================================
 # SYNCHRONIZATION PARAMETERS - Edit these values to tune sync behavior
-# Simplified based on omxplayer-sync proven approach
 # =============================================================================
 
 # Constants for sync logic - these control the basic behavior of the sync system
-DEVIATION_SAMPLES_MAXLEN = (
-    10  # How many timing samples to keep for median filtering (omxplayer-sync uses 10)
+DEVIATION_SAMPLES_MAXLEN = 20  # How many timing samples to keep for median filtering
+INITIAL_SYNC_WAIT_SECONDS = (
+    2.0  # Grace period after startup before sync corrections begin
 )
 SYNC_TIMEOUT_SECONDS = 10.0  # Max time to wait for sync after a seek operation
 SYNC_DEVIATION_THRESHOLD_RESUME = (
@@ -38,15 +38,15 @@ SYNC_DEVIATION_THRESHOLD_RESUME = (
 HEARTBEAT_INTERVAL_SECONDS = 2.0  # How often to send status updates to leader
 REREGISTER_INTERVAL_SECONDS = 60.0  # How often to re-register with leader
 
-# Default sync settings - these match omxplayer-sync proven values
+# Default sync settings - these are tunable parameters that affect sync quality
 # (Can be overridden in config file)
+DEFAULT_SYNC_TOLERANCE = 1.0  # General sync tolerance (not currently used)
 DEFAULT_SYNC_CHECK_INTERVAL = 5.0  # Min time between corrections
-DEFAULT_DEVIATION_THRESHOLD = (
-    0.2  # Error threshold to trigger correction (SYNC_TOLERANCE in omxplayer-sync)
-)
-DEFAULT_SYNC_GRACE_TIME = 5.0  # Cooldown period after correction AND initial grace period (SYNC_GRACE_TIME in omxplayer-sync)
-DEFAULT_SYNC_JUMP_AHEAD = (
-    3.0  # How far ahead to seek for corrections (SYNC_JUMP_AHEAD in omxplayer-sync)
+DEFAULT_DEVIATION_THRESHOLD = 0.2  # Error threshold to trigger correction
+DEFAULT_SYNC_GRACE_TIME = 5.0  # Cooldown period after correction
+DEFAULT_SYNC_JUMP_AHEAD = 3.0  # How far ahead to seek for corrections
+DEFAULT_LATENCY_COMPENSATION = (
+    0.0  # Network/processing delay offset (DISABLED - may cause issues)
 )
 DEFAULT_SEEK_SETTLE_TIME = 0.1  # VLC settling time after seek
 
@@ -110,12 +110,16 @@ class CollaboratorPi:
         """Initialize synchronization parameters from config and set initial state."""
         # Use constants defined at top of file for easy editing
         self.deviation_samples_maxlen = DEVIATION_SAMPLES_MAXLEN
+        self.initial_sync_wait_seconds = INITIAL_SYNC_WAIT_SECONDS
         self.sync_timeout_seconds = SYNC_TIMEOUT_SECONDS
         self.sync_deviation_threshold_resume = SYNC_DEVIATION_THRESHOLD_RESUME
         self.heartbeat_interval_seconds = HEARTBEAT_INTERVAL_SECONDS
         self.reregister_interval_seconds = REREGISTER_INTERVAL_SECONDS
 
         # Load sync settings from config with defaults from constants
+        self.sync_tolerance = self.config.getfloat(
+            "sync_tolerance", DEFAULT_SYNC_TOLERANCE
+        )
         self.sync_check_interval = self.config.getfloat(
             "sync_check_interval", DEFAULT_SYNC_CHECK_INTERVAL
         )
@@ -127,6 +131,9 @@ class CollaboratorPi:
         )
         self.sync_jump_ahead = self.config.getfloat(
             "sync_jump_ahead", DEFAULT_SYNC_JUMP_AHEAD
+        )
+        self.latency_compensation = self.config.getfloat(
+            "latency_compensation", DEFAULT_LATENCY_COMPENSATION
         )
         self.seek_settle_time = self.config.getfloat(
             "seek_settle_time", DEFAULT_SEEK_SETTLE_TIME
@@ -172,7 +179,7 @@ class CollaboratorPi:
         # Check video sync (only if we've been running for a bit)
         if self.system_state.is_running and self.video_start_time:
             time_since_start = time.time() - self.video_start_time
-            if time_since_start > self.sync_grace_time:
+            if time_since_start > self.initial_sync_wait_seconds:
                 self._check_video_sync(leader_time)
 
         # Handle omxplayer-sync style wait states
@@ -309,10 +316,10 @@ class CollaboratorPi:
             log_warning("Could not get video position for sync check", component="sync")
             return
 
-        # Calculate expected position (no latency compensation - following omxplayer-sync approach)
+        # Calculate expected position with latency compensation
         # Wrap to video duration if known
         duration = self.video_player.get_duration()
-        expected_position = leader_time
+        expected_position = leader_time + self.latency_compensation
         if duration and duration > 0:
             expected_position = expected_position % duration
 
@@ -356,8 +363,17 @@ class CollaboratorPi:
             )
             print(f"🔄 Sync correction: {median_deviation:.3f}s deviation")
 
-            # Apply correction following omxplayer-sync approach (no correction lead)
-            target_position = expected_position
+            # Apply correction (respect duration wrap)
+            # Nudge toward/away from leader to overcome actuation lag
+            correction_lead = 0.0
+            if median_deviation < 0:
+                # Video is behind → seek slightly ahead
+                correction_lead = self.latency_compensation
+            elif median_deviation > 0:
+                # Video is ahead → seek slightly behind
+                correction_lead = -self.latency_compensation
+
+            target_position = expected_position + correction_lead
             if duration and duration > 0:
                 target_position = target_position % duration
 
