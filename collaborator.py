@@ -188,20 +188,22 @@ class CollaboratorPi:
             current_position = self.video_player.get_position() or 0
             deviation = abs(leader_time - current_position)
             if deviation < self.sync_deviation_threshold_resume:
-                log_info(
-                    f"Sync achieved! Deviation: {deviation:.3f}s, resuming playback",
-                    component="sync",
-                )
+                if self.config.debug_mode:
+                    log_info(
+                        f"Sync achieved! Deviation: {deviation:.3f}s, resuming playback",
+                        component="sync",
+                    )
                 self.video_player.resume()
                 self.wait_for_sync = False
                 self.wait_after_sync = time.time()
             else:
                 # Still waiting for sync
                 if time.time() - self.sync_timer > self.sync_timeout_seconds:
-                    log_warning(
-                        f"Sync timeout after {self.sync_timeout_seconds}s, deviation still {deviation:.3f}s",
-                        component="sync",
-                    )
+                    if self.config.debug_mode:
+                        log_warning(
+                            f"Sync timeout after {self.sync_timeout_seconds}s, deviation still {deviation:.3f}s",
+                            component="sync",
+                        )
                     self.video_player.resume()
                     self.wait_for_sync = False
                     self.wait_after_sync = time.time()
@@ -239,7 +241,8 @@ class CollaboratorPi:
         )
 
         # Wait for sync to be established
-        log_info("Waiting for time sync...", component="sync")
+        if self.config.debug_mode:
+            log_info("Waiting for time sync...", component="sync")
         timeout = 10.0
         start_wait = time.time()
 
@@ -249,9 +252,11 @@ class CollaboratorPi:
             time.sleep(0.1)
 
         if not self.sync_tracker.is_synced():
-            log_warning("Starting without sync (timeout)", component="sync")
+            if self.config.debug_mode:
+                log_warning("Starting without sync (timeout)", component="sync")
         else:
-            log_info("Sync established", component="sync")
+            if self.config.debug_mode:
+                log_info("Sync established", component="sync")
 
         # Start playback
         self.start_playback()
@@ -313,7 +318,8 @@ class CollaboratorPi:
         # Get current video position
         video_position = self.video_player.get_position()
         if video_position is None:
-            log_warning("Could not get video position for sync check", component="sync")
+            if self.config.debug_mode:
+                log_warning("Could not get video position for sync check", component="sync")
             return
 
         # Calculate expected position with latency compensation
@@ -327,6 +333,14 @@ class CollaboratorPi:
 
         # Add to samples for median filtering
         self.deviation_samples.append(deviation)
+
+        # Debug mode: Show real-time deviation info
+        if self.config.debug_mode and len(self.deviation_samples) % 5 == 0:
+            # Show every 5th sample to avoid spam
+            log_info(
+                f"Sync monitor: video={video_position:.3f}s, expected={expected_position:.3f}s, deviation={deviation:.3f}s, samples={len(self.deviation_samples)}",
+                component="sync",
+            )
 
         # Only proceed if we have enough samples
         if len(self.deviation_samples) < self.deviation_samples_maxlen // 2:
@@ -357,10 +371,11 @@ class CollaboratorPi:
             if current_time - self.last_correction_time < self.sync_check_interval:
                 return
 
-            log_info(
-                f"Sync correction needed: {median_deviation:.3f}s deviation (threshold: {correction_threshold:.3f}s)",
-                component="sync",
-            )
+            if self.config.debug_mode:
+                log_info(
+                    f"Sync correction needed: deviation={median_deviation:.3f}s (raw={deviation:.3f}s, threshold={correction_threshold:.3f}s)",
+                    component="sync",
+                )
             print(f"🔄 Sync correction: {median_deviation:.3f}s deviation")
 
             # Apply correction (respect duration wrap)
@@ -382,14 +397,16 @@ class CollaboratorPi:
             self.deviation_samples.clear()
 
             # omxplayer-sync approach: pause, seek ahead, wait for sync
-            log_info(
-                f"Pausing for correction, seeking to {target_position:.3f}s (jump ahead: {self.sync_jump_ahead:.3f}s)",
-                component="sync",
-            )
+            if self.config.debug_mode:
+                log_info(
+                    f"Pausing for correction, seeking to {target_position:.3f}s (jump ahead: {self.sync_jump_ahead:.3f}s)",
+                    component="sync",
+                )
 
             # Pause playback during correction
             if not self.video_player.pause():
-                log_warning("Failed to pause for correction", component="sync")
+                if self.config.debug_mode:
+                    log_warning("Failed to pause for correction", component="sync")
                 return
 
             time.sleep(0.1)  # Brief pause for VLC to settle
@@ -400,22 +417,25 @@ class CollaboratorPi:
                 jump_ahead_position = jump_ahead_position % duration
 
             if self.video_player.set_position(jump_ahead_position):
-                log_info(
-                    f"Seek successful to {jump_ahead_position:.3f}s (target was {target_position:.3f}s)",
-                    component="sync",
-                )
+                if self.config.debug_mode:
+                    log_info(
+                        f"Seek successful to {jump_ahead_position:.3f}s (target was {target_position:.3f}s)",
+                        component="sync",
+                    )
                 # Enter wait-for-sync state
                 self.wait_for_sync = True
                 self.sync_timer = time.time()
                 self.last_correction_time = time.time()
 
                 # Log the expected sync behavior
-                log_info(
-                    f"Entering wait-for-sync state. Will resume when deviation < 0.1s",
-                    component="sync",
-                )
+                if self.config.debug_mode:
+                    log_info(
+                        f"Entering wait-for-sync state. Will resume when deviation < {self.sync_deviation_threshold_resume:.1f}s",
+                        component="sync",
+                    )
             else:
-                log_warning("Seek failed, resuming playback", component="sync")
+                if self.config.debug_mode:
+                    log_warning("Seek failed, resuming playback", component="sync")
                 self.video_player.resume()
 
     def run(self) -> None:
