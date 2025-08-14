@@ -202,31 +202,47 @@ class VLCVideoPlayer:
 
     def _restart_video_thread(self):
         """Restart video on separate thread to avoid VLC deadlock"""
-        print(f"🔄 Restarting video: pause() -> seek(0) -> play()")
+        print(f"🔄 Restarting video: set_media() -> play() -> set_time(0)")
 
-        # Pause instead of stop to keep window alive
+        # Re-attach media without stopping to keep window alive
         try:
-            print(f"  ⏸️ About to call pause()...")
-            self.vlc_player.pause()
-            print(f"  ✓ Paused player")
+            if self.vlc_media:
+                print(f"  📼 About to set_media(...) on existing player...")
+                self.vlc_player.set_media(self.vlc_media)
+                print(f"  ✓ Media set on player")
+            else:
+                print(f"  ⚠️ No media available to set on player")
         except Exception as e:
-            print(f"  ❌ pause() failed: {e}")
+            print(f"  ❌ set_media() failed: {e}")
 
-        # Seek to beginning
-        try:
-            print(f"  ⏪ About to seek to 0.0...")
-            self.vlc_player.set_position(0.0)
-            print(f"  ✓ Set position to 0.0")
-        except Exception as e:
-            print(f"  ❌ set_position() failed: {e}")
-
-        # Resume playback
+        # Start playback (reinitialize decoder/render path if needed)
         try:
             print(f"  ▶️ About to call play()...")
             result = self.vlc_player.play()
             print(f"  ✓ play() returned: {result}")
         except Exception as e:
             print(f"  ❌ play() failed: {e}")
+
+        # Force time to 0 to avoid end-frame latch; fallback to position if needed
+        try:
+            print(f"  ⏱️ Waiting 0.15s then setting time to 0ms...")
+            time.sleep(0.15)
+            try:
+                self.vlc_player.set_time(0)
+                print(f"  ✓ Set time to 0ms")
+            except Exception:
+                print(f"  ⚠️ set_time(0) failed, falling back to set_position(0.0)")
+                self.vlc_player.set_position(0.0)
+                print(f"  ✓ Set position to 0.0")
+        except Exception as e:
+            print(f"  ❌ time/position seek failed: {e}")
+
+        # Ensure fullscreen remains engaged after loop (window may recreate)
+        try:
+            if not self.debug_mode and not self.vlc_player.get_fullscreen():
+                self.vlc_player.set_fullscreen(True)
+        except Exception:
+            pass
 
         print(f"✅ Video loop #{self.loop_count} restart completed")
         log_info(f"Video loop #{self.loop_count} started", component="vlc")
