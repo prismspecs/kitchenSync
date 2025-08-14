@@ -59,6 +59,8 @@ class LeaderPi:
         )
         # Set video output for reliable display
         self.video_player.video_output = "x11"
+        # Reset hooks per loop (MIDI etc.)
+        self.video_player.loop_callback = self._on_video_loop
 
         # Initialize networking (wire tick_interval from config)
         self.sync_broadcaster = SyncBroadcaster(
@@ -116,6 +118,20 @@ class LeaderPi:
         pi_id = msg.get("device_id")  # Changed from pi_id
         if pi_id:
             self.collaborators.update_heartbeat(pi_id, msg.get("status", "ready"))
+
+    def _on_video_loop(self, loop_count: int) -> None:
+        """Per-loop reset: ensure MIDI is sane and scheduler re-arms as needed."""
+        try:
+            # All Notes Off on channels 1-16 (adjust if you use fewer)
+            for ch in range(1, 17):
+                self.midi_manager.send_control_change(ch, 123, 0)
+            # Optional: hard reset scheduler cue triggers (MIDI scheduler already loops by modulo)
+            self.midi_scheduler.triggered_cues.clear()
+            log_info(
+                f"Per-loop reset completed (loop #{loop_count})", component="leader"
+            )
+        except Exception as e:
+            log_warning(f"Per-loop reset error: {e}", component="leader")
 
     def start_system(self) -> None:
         """Start the synchronized playback system"""

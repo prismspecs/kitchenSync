@@ -7,6 +7,7 @@ Handles VLC video playback with sync capabilities
 import os
 import subprocess
 import time
+import threading
 from typing import Optional
 from core.logger import log_info, log_error, log_warning, snapshot_env, log_file_paths
 
@@ -46,6 +47,8 @@ class VLCVideoPlayer:
         self.enable_looping = True
         self.loop_callback = None
         self.video_output: Optional[str] = None
+        self._monitor_thread: Optional[threading.Thread] = None
+        self._monitor_stop_event: Optional[threading.Event] = None
 
         # Check VLC availability once at init
         if not VLC_PYTHON_AVAILABLE:
@@ -90,6 +93,20 @@ class VLCVideoPlayer:
     def stop_playback(self) -> None:
         """Stop video playback"""
         try:
+            # Stop monitor thread first
+            if self._monitor_stop_event is not None:
+                try:
+                    self._monitor_stop_event.set()
+                except Exception:
+                    pass
+            if self._monitor_thread is not None and self._monitor_thread.is_alive():
+                try:
+                    self._monitor_thread.join(timeout=1.0)
+                except Exception:
+                    pass
+            self._monitor_thread = None
+            self._monitor_stop_event = None
+
             if self.vlc_player:
                 self.vlc_player.stop()
                 log_info("Stopped VLC Python player", component="vlc")
@@ -163,29 +180,62 @@ class VLCVideoPlayer:
             log_error(f"Error resuming: {e}", component="vlc")
             return False
 
-    def _on_video_end(self, event):
-        """Handle video end event for looping"""
-        if self.enable_looping and self.vlc_player:
-            try:
-                self.loop_count += 1
-                log_info(
-                    f"Video ended, starting loop #{self.loop_count}", component="vlc"
-                )
+    def _restart_loop(self) -> None:
+        """Restart video from beginning and notify loop callback."""
+        if not self.enable_looping or not self.vlc_player:
+            return
+        try:
+            self.loop_count += 1
+            if self.loop_callback:
+                try:
+                    self.loop_callback(self.loop_count)
+                except Exception as e:
+                    log_error(f"Error in video loop callback: {e}", component="vlc")
 
-                # Notify callback before restarting (for MIDI sync)
-                if self.loop_callback:
+            # Reset to beginning and restart
+            self.set_position(0.0)
+            self.resume()
+            log_info(f"Restarted video loop #{self.loop_count}", component="vlc")
+        except Exception as e:
+            log_error(f"Error restarting loop: {e}", component="vlc")
+
+    def _start_monitoring(self) -> None:
+        """Start a background monitor to enforce reliable looping."""
+        if self._monitor_thread is not None and self._monitor_thread.is_alive():
+            return
+        self._monitor_stop_event = threading.Event()
+
+        def monitor_loop():
+            while self._monitor_stop_event and not self._monitor_stop_event.is_set():
+                try:
+                    if not self.vlc_player:
+                        break
+                    state = self.vlc_player.get_state()
+                    # get_position returns 0..1, or -1 if unknown
                     try:
-                        self.loop_callback(self.loop_count)
-                    except Exception as e:
-                        log_error(f"Error in video loop callback: {e}", component="vlc")
+                        pos = float(self.vlc_player.get_position())
+                    except Exception:
+                        pos = -1.0
 
-                # Reset to beginning and restart
-                self.vlc_player.set_position(0.0)
-                self.vlc_player.play()
+                    # Trigger loop if VLC reports end/stopped, or position is at tail
+                    if state in (vlc.State.Ended, vlc.State.Stopped):
+                        self._restart_loop()
+                    elif pos >= 0.995:
+                        # Small grace delay to ensure we are truly at end
+                        time.sleep(0.1)
+                        # Re-read position/state to avoid false positive
+                        try:
+                            pos2 = float(self.vlc_player.get_position())
+                        except Exception:
+                            pos2 = pos
+                        if pos2 >= 0.995:
+                            self._restart_loop()
+                except Exception:
+                    pass
+                time.sleep(0.2)
 
-                log_info(f"Video loop #{self.loop_count} started", component="vlc")
-            except Exception as e:
-                log_error(f"Error restarting video loop: {e}", component="vlc")
+        self._monitor_thread = threading.Thread(target=monitor_loop, daemon=True)
+        self._monitor_thread.start()
 
     def _start_with_python_vlc(self) -> bool:
         """Start video using VLC Python bindings"""
@@ -221,13 +271,9 @@ class VLCVideoPlayer:
 
             self.vlc_player.set_media(self.vlc_media)
 
-            # Set up looping event handler
+            # Start monitor-based looping (single mechanism)
             if self.enable_looping:
-                events = self.vlc_player.event_manager()
-                events.event_attach(
-                    vlc.EventType.MediaPlayerEndReached, self._on_video_end
-                )
-                log_info("Video looping enabled", component="vlc")
+                self._start_monitoring()
 
             # Start playback
             log_info("Starting VLC playback...", component="vlc")

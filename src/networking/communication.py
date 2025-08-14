@@ -143,10 +143,6 @@ class SyncReceiver:
 
                         if self.sync_callback:
                             self.sync_callback(leader_time)
-                        else:
-                            print(
-                                f"⚠️ Sync packet received but no callback: {leader_time:.3f}s"
-                            )
 
                 except json.JSONDecodeError:
                     continue
