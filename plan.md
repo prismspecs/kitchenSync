@@ -141,7 +141,7 @@ I am developing this on a separate computer than the one on which it will run. C
 
 - **Unified Video Engine**: Consolidated Python VLC approach for all nodes ensures consistent behavior
 - **Full A/V Synchronization**: Audio tracks are now properly synchronized across all nodes
-- **Configurable Audio Output**: Support for HDMI and headphone jack audio routing
+- **Configurable Audio Output**: Support for HDMI and headphone jack audio routing (OS-level configuration)
 - **Professional USB Handling**: Enterprise-grade drive detection and mounting
 - **Intelligent Sync**: Statistical median filtering prevents false corrections
 - **Plug-and-Play Design**: Zero-configuration deployment via USB drives
@@ -200,6 +200,11 @@ The system supports configurable audio output to accommodate different deploymen
 - **Configuration Key**: `audio_output` in config files
 - **Values**: `"hdmi"` or `"headphone"`
 
+**How It Works**
+- **VLC Level**: VLC outputs audio normally with `--aout=auto` (auto-detection)
+- **OS Level**: The `audio_output` setting is used by the operating system to route audio
+- **Raspberry Pi**: Audio routing is handled by ALSA/PulseAudio configuration, not VLC arguments
+
 **Default Behavior**
 - **Audio is now enabled by default** for full A/V synchronization
 - HDMI output is the default choice for most stage/projection setups
@@ -209,9 +214,11 @@ The system supports configurable audio output to accommodate different deploymen
 **Example Configuration**
 ```ini
 [DEFAULT]
-# Audio output selection
+# Audio output selection (OS-level routing, not VLC arguments)
 audio_output = hdmi  # or "headphone"
 ```
+
+**Note**: The `audio_output` configuration setting is intended for future OS-level audio routing implementation. Currently, VLC outputs audio normally and the OS handles routing based on system settings.
 
 ## Configuration Management Workflow
 
