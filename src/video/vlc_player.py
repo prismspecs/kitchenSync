@@ -108,6 +108,11 @@ class VLCVideoPlayer:
             return None
 
         try:
+            # Prefer millisecond time for precision
+            current_ms = self.vlc_player.get_time()
+            if current_ms >= 0:
+                return self._ms_to_seconds(current_ms)
+            # Fallback to ratio if time is unavailable
             position_ratio = self.vlc_player.get_position()
             length_ms = self.vlc_player.get_length()
             if position_ratio >= 0 and length_ms > 0:
@@ -122,11 +127,11 @@ class VLCVideoPlayer:
         if not self.vlc_player:
             return False
         try:
-            position_ratio = self._seconds_to_position(seconds)
-            if position_ratio >= 0:
-                self.vlc_player.set_position(position_ratio)
-                return True
-            return False
+            # Prefer millisecond time seek for precision
+            target_ms = int(max(0.0, seconds) * 1000.0)
+            # set_time returns int (0 on success in some versions). We'll treat no-exception as success.
+            self.vlc_player.set_time(target_ms)
+            return True
         except Exception as e:
             log_error(f"Error setting position: {e}", component="vlc")
             return False
@@ -302,8 +307,29 @@ class VLCVideoPlayer:
             "--codec=avcodec",  # Use avcodec for better hardware support
             # Video output optimization
             "--vout=gl",  # Use OpenGL video output for hardware acceleration
-            "--no-audio",  # Disable audio for video-only playback (reduces load)
         ]
+
+        # Optional: allow audio clock to stabilize media timing
+        try:
+            from src.config.manager import ConfigManager  # local import to avoid cycles
+
+            cm = ConfigManager()
+            enable_dummy_audio = cm.getboolean("enable_dummy_audio", False)
+        except Exception:
+            enable_dummy_audio = False
+
+        if enable_dummy_audio:
+            # Route audio to a dummy sink if present; avoid actual output load
+            # On many platforms, having an audio clock improves timekeeping
+            args.extend(
+                [
+                    "--aout=adummy",
+                    "--audio-replay-gain-mode=none",
+                ]
+            )
+        else:
+            # Keep previous behavior
+            args.append("--no-audio")
 
         # Add logging only if enabled (default: disabled for performance)
         if self.enable_vlc_logging:

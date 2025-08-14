@@ -105,9 +105,15 @@ class CollaboratorPi:
         """No-op: collaborator now auto-starts on timecode; no commands handled"""
         return
 
-    def _handle_sync(self, leader_time: float) -> None:
-        """Handle time sync from leader"""
-        local_time = time.time()
+    def _handle_sync(
+        self, leader_time: float, received_at: float | None = None
+    ) -> None:
+        """Handle time sync from leader
+
+        leader_time: the leader's broadcasted media/wall time in seconds
+        received_at: local receipt timestamp (seconds, time.time()); if None, computed now
+        """
+        local_time = received_at if received_at is not None else time.time()
         self.sync_tracker.record_sync(leader_time, local_time)
 
         # Auto-start playback on first valid sync

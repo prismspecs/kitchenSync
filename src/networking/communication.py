@@ -32,6 +32,10 @@ class SyncBroadcaster:
         self.is_running = False
         self.start_time = None
         self.sync_sock = None
+        # Optional provider that returns the leader's authoritative media time (seconds)
+        self.time_provider: Optional[Callable[[], float]] = None
+        # Optional provider that returns the leader's media duration (seconds)
+        self.duration_provider: Optional[Callable[[], float]] = None
 
     def setup_socket(self) -> None:
         """Initialize broadcast socket"""
@@ -52,12 +56,39 @@ class SyncBroadcaster:
         def broadcast_loop():
             while self.is_running:
                 if self.start_time:
-                    current_time = time.time() - self.start_time
+                    # Prefer media clock if provided; otherwise use wall clock since start
+                    try:
+                        if self.time_provider is not None:
+                            provided_time = self.time_provider()
+                            current_time = (
+                                float(provided_time)
+                                if provided_time is not None
+                                else (time.time() - self.start_time)
+                            )
+                            time_source = "media"
+                        else:
+                            current_time = time.time() - self.start_time
+                            time_source = "wall"
+                    except Exception:
+                        current_time = time.time() - self.start_time
+                        time_source = "wall"
+                    # Include optional duration for diagnostics
+                    try:
+                        leader_duration = (
+                            float(self.duration_provider())
+                            if self.duration_provider is not None
+                            else None
+                        )
+                    except Exception:
+                        leader_duration = None
+
                     payload = json.dumps(
                         {
                             "type": "sync",
                             "time": current_time,
                             "leader_id": self.leader_id,
+                            "source": time_source,
+                            "duration": leader_duration,
                         }
                     )
 
@@ -73,6 +104,14 @@ class SyncBroadcaster:
         thread = threading.Thread(target=broadcast_loop, daemon=True)
         thread.start()
         # print("Started time sync broadcasting")
+
+    def set_time_provider(self, provider: Optional[Callable[[], float]]) -> None:
+        """Set an optional provider returning the leader's media time in seconds"""
+        self.time_provider = provider
+
+    def set_duration_provider(self, provider: Optional[Callable[[], float]]) -> None:
+        """Set an optional provider returning the leader's media duration in seconds"""
+        self.duration_provider = provider
 
     def stop_broadcasting(self) -> None:
         """Stop broadcasting time sync"""
@@ -121,7 +160,12 @@ class SyncReceiver:
                         leader_time = msg.get("time", 0)
 
                         if self.sync_callback:
-                            self.sync_callback(leader_time)
+                            try:
+                                # Pass both leader_time and receive timestamp
+                                self.sync_callback(leader_time, self.last_sync_time)
+                            except TypeError:
+                                # Backward compatibility: callbacks expecting one arg
+                                self.sync_callback(leader_time)
 
                 except json.JSONDecodeError:
                     continue
