@@ -10,6 +10,7 @@ Usage:
 """
 
 import json
+import configparser
 import socket
 import time
 from datetime import datetime
@@ -17,22 +18,35 @@ from datetime import datetime
 
 def monitor_leader():
     """Simple monitor for leader sync broadcasts"""
+    # Try to read the port from leader_config.ini to avoid mismatches
     sync_port = 5005
-    
+    try:
+        cfg = configparser.ConfigParser()
+        if cfg.read("leader_config.ini"):
+            # Prefer KITCHENSYNC section, then DEFAULT
+            if cfg.has_section("KITCHENSYNC") and cfg.has_option(
+                "KITCHENSYNC", "sync_port"
+            ):
+                sync_port = cfg.getint("KITCHENSYNC", "sync_port", fallback=sync_port)
+            else:
+                sync_port = cfg.getint("DEFAULT", "sync_port", fallback=sync_port)
+    except Exception:
+        pass
+
     print("🔍 KitchenSync Network Test")
     print("=" * 40)
     print(f"Listening for leader broadcasts on port {sync_port}")
     print("Make sure the leader is running!")
     print("Press Ctrl+C to stop\n")
-    
+
     # Create UDP socket
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.bind(("", sync_port))
     sock.settimeout(1.0)
-    
+
     packet_count = 0
     start_time = time.time()
-    
+
     try:
         while True:
             try:
@@ -40,45 +54,47 @@ def monitor_leader():
                 data, addr = sock.recvfrom(1024)
                 packet_count += 1
                 current_time = time.time()
-                
+
                 # Parse the message
                 try:
                     msg = json.loads(data.decode())
                     msg_type = msg.get("type", "unknown")
-                    
+
                     # Show what we received
                     print(f"📡 Packet #{packet_count} from {addr[0]}")
                     print(f"   Type: {msg_type}")
                     print(f"   Time: {datetime.now().strftime('%H:%M:%S')}")
-                    
+
                     if msg_type == "sync":
-                        leader_time = msg.get('time', 0)
-                        leader_id = msg.get('leader_id', 'unknown')
+                        leader_time = msg.get("time", 0)
+                        leader_id = msg.get("leader_id", "unknown")
                         print(f"   Leader ID: {leader_id}")
                         print(f"   Leader time: {leader_time:.3f}s")
-                        
+
                         # Show timing info
                         uptime = current_time - start_time
                         print(f"   Uptime: {uptime:.1f}s")
                         print(f"   Packets received: {packet_count}")
-                    
+
                     print("   " + "-" * 30)
-                    
+
                 except json.JSONDecodeError:
                     print(f"⚠️  Invalid JSON from {addr[0]}")
                     print(f"   Raw data: {data[:100]}...")
                     print("   " + "-" * 30)
-                
+
             except socket.timeout:
                 # No data received, show status every 5 seconds
                 if int(time.time()) % 5 == 0:
                     uptime = time.time() - start_time
-                    print(f"⏳ Waiting... (uptime: {uptime:.0f}s, packets: {packet_count})")
-                
+                    print(
+                        f"⏳ Waiting... (uptime: {uptime:.0f}s, packets: {packet_count})"
+                    )
+
             except Exception as e:
                 print(f"❌ Error: {e}")
                 break
-    
+
     except KeyboardInterrupt:
         print("\n🛑 Stopping...")
     finally:
@@ -93,4 +109,3 @@ def monitor_leader():
 
 if __name__ == "__main__":
     monitor_leader()
-
