@@ -47,6 +47,10 @@ class VLCVideoPlayer:
         self.enable_looping = True
         self.loop_callback = None
         self.video_output: Optional[str] = None
+        # Preemptive loop state
+        self._preemptive_threshold_ms = 120
+        self._loop_guard_active = False
+        self._last_known_duration_ms = 0
 
         # Check VLC availability once at init
         if not VLC_PYTHON_AVAILABLE:
@@ -166,74 +170,88 @@ class VLCVideoPlayer:
 
     def _on_video_end(self, event):
         """Handle video end event for looping"""
-        # Loop trigger fired by VLC
-        log_info(f"MediaPlayerEndReached event fired: {event}", component="vlc")
-
-        if self.enable_looping and self.vlc_player:
-            try:
-                self.loop_count += 1
-                # Track loop count
-                log_info(
-                    f"Video ended, starting loop #{self.loop_count}", component="vlc"
-                )
-
-                # Notify callback before restarting (for MIDI sync)
-                if self.loop_callback:
-                    try:
-                        self.loop_callback(self.loop_count)
-                    except Exception as e:
-                        log_error(f"Error in video loop callback: {e}", component="vlc")
-
-                        # Schedule restart on separate thread to avoid VLC deadlock
-                # Avoid heavy control on VLC event thread
-                restart_thread = threading.Thread(
-                    target=self._restart_video_thread, daemon=True
-                )
-                restart_thread.start()
-
-            except Exception as e:
-                print(f"❌ Error in _on_video_end: {e}")
-                log_error(f"Error restarting video loop: {e}", component="vlc")
-        else:
-            pass
+        # We now preemptively loop before Ended to avoid window teardown
+        return
 
     def _restart_video_thread(self):
         """Restart video on separate thread to avoid VLC deadlock"""
-        # Smooth restart without tearing down window
-
-        # Re-attach media without stopping to keep window alive
+        # Deprecated by preemptive looping (kept for safety fallback)
         try:
-            if self.vlc_media:
-                self.vlc_player.set_media(self.vlc_media)
-            else:
-                print(f"  ⚠️ No media available to set on player")
-        except Exception as e:
-            print(f"  ❌ set_media() failed: {e}")
-
-        # Start playback (reinitialize decoder/render path if needed)
+            self.vlc_player.set_time(0)
+        except Exception:
+            try:
+                self.vlc_player.set_position(0.0)
+            except Exception:
+                pass
         try:
-            result = self.vlc_player.play()
-        except Exception as e:
-            print(f"  ❌ play() failed: {e}")
+            self.vlc_player.play()
+        except Exception:
+            pass
+        log_info(f"Video loop #{self.loop_count} started", component="vlc")
 
-        # Force time to 0 to avoid end-frame latch; fallback to position if needed
+    def _on_time_changed(self, event):
+        """Preemptively loop just before end to avoid Ended state."""
+        if not self.enable_looping or not self.vlc_player:
+            return
         try:
+            # Cache duration
+            if self._last_known_duration_ms <= 0:
+                length_ms = self.vlc_player.get_length()
+                if length_ms and length_ms > 0:
+                    self._last_known_duration_ms = length_ms
+            length_ms = self._last_known_duration_ms or self.vlc_player.get_length()
+            if not length_ms or length_ms <= 0:
+                return
+
+            current_ms = self.vlc_player.get_time()
+            if current_ms is None or current_ms < 0:
+                return
+
+            # Reset guard after wrap to the beginning
+            if self._loop_guard_active and current_ms < self._preemptive_threshold_ms:
+                self._loop_guard_active = False
+                return
+
+            remaining_ms = length_ms - current_ms
+            if (
+                not self._loop_guard_active
+            ) and remaining_ms <= self._preemptive_threshold_ms:
+                self._loop_guard_active = True
+                # Perform loop on a thread to keep handler light
+                threading.Thread(
+                    target=self._perform_preemptive_loop, daemon=True
+                ).start()
+        except Exception:
+            return
+
+    def _perform_preemptive_loop(self):
+        """Execute loop before reaching Ended to keep window persistent."""
+        try:
+            self.loop_count += 1
+            if self.loop_callback:
+                try:
+                    self.loop_callback(self.loop_count)
+                except Exception as e:
+                    log_error(f"Error in video loop callback: {e}", component="vlc")
+
+            # Seek to start while still playing
             try:
                 self.vlc_player.set_time(0)
             except Exception:
-                self.vlc_player.set_position(0.0)
-        except Exception:
-            pass
+                try:
+                    self.vlc_player.set_position(0.0)
+                except Exception:
+                    pass
 
-        # Ensure fullscreen remains engaged after loop (window may recreate)
-        try:
-            if not self.debug_mode and not self.vlc_player.get_fullscreen():
-                self.vlc_player.set_fullscreen(True)
-        except Exception:
-            pass
+            # Ensure playback continues
+            try:
+                self.vlc_player.play()
+            except Exception:
+                pass
 
-        # Loop restart completed
-        log_info(f"Video loop #{self.loop_count} started", component="vlc")
+            log_info(f"Video loop #{self.loop_count} started", component="vlc")
+        except Exception as e:
+            log_error(f"Preemptive loop error: {e}", component="vlc")
 
     def _start_with_python_vlc(self) -> bool:
         """Start video using VLC Python bindings"""
@@ -269,14 +287,17 @@ class VLCVideoPlayer:
 
             self.vlc_player.set_media(self.vlc_media)
 
-            # Set up looping event handler
+            # Set up preemptive looping via time-changed event
             if self.enable_looping:
                 events = self.vlc_player.event_manager()
                 if events:
                     events.event_attach(
-                        vlc.EventType.MediaPlayerEndReached, self._on_video_end
+                        vlc.EventType.MediaPlayerTimeChanged, self._on_time_changed
                     )
-                    log_info("Video looping event handler attached", component="vlc")
+                    log_info(
+                        "Preemptive loop handler attached (TimeChanged)",
+                        component="vlc",
+                    )
                 else:
                     log_error("Failed to get VLC event manager", component="vlc")
 
