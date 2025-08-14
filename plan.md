@@ -97,6 +97,7 @@ I am developing this on a separate computer than the one on which it will run. C
 - **Wall-clock time synchronization**: Leader broadcasts elapsed wall time since start, ensuring all nodes advance at the same rate rather than trying to match absolute video positions
 - **Anti-feedback sync**: Deviation samples cleared before seeking to prevent correction loops
 - **Outlier filtering**: Trimmed median calculation removes extreme measurements that could trigger false corrections
+- **omxplayer-sync inspired approach**: Pause during correction, seek ahead to compensate for latency, wait-for-sync state management, and grace periods to prevent rapid re-corrections
 
 **Network Architecture**
 

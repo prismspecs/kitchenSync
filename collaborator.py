@@ -87,6 +87,13 @@ class CollaboratorPi:
         self.last_correction_time = 0
         self.video_start_time = None
 
+        # Sync state management (based on omxplayer-sync approach)
+        self.wait_for_sync = False
+        self.wait_after_sync = False
+        self.sync_timer = 0
+        self.sync_grace_time = self.config.getfloat("sync_grace_time", 3.0)
+        self.sync_jump_ahead = self.config.getfloat("sync_jump_ahead", 0.5)
+
         # Latency/seek tuning
         # Accounts for network transit + decode/display pipeline latency
         self.latency_compensation = self.config.getfloat("latency_compensation", 0.15)
@@ -137,6 +144,26 @@ class CollaboratorPi:
             time_since_start = time.time() - self.video_start_time
             if time_since_start > 2.0:  # Wait 2 seconds before sync corrections
                 self._check_video_sync(leader_time)
+
+        # Handle omxplayer-sync style wait states
+        if self.wait_for_sync:
+            # We're waiting for deviation to become small enough after a seek
+            deviation = abs(leader_time - self.video_player.get_position() or 0)
+            if deviation < 0.1:  # Within 100ms, we're synced
+                log_info("Sync achieved, resuming playback", component="sync")
+                self.video_player.resume()
+                self.wait_for_sync = False
+                self.wait_after_sync = time.time()
+            else:
+                # Still waiting for sync
+                return
+
+        if self.wait_after_sync:
+            # Grace period after correction - don't allow new corrections
+            if (time.time() - self.wait_after_sync) > self.sync_grace_time:
+                self.wait_after_sync = False
+            else:
+                return
 
     def _handle_start_command(self, msg: dict, addr: tuple) -> None:
         """Handle start command from leader"""
@@ -305,41 +332,35 @@ class CollaboratorPi:
             # The old samples are from before the correction and will skew future measurements
             self.deviation_samples.clear()
 
-            # Try multiple approaches for seeking
-            seek_success = False
-            try:
-                # Method 1: Direct position set
-                if self.video_player.set_position(target_position):
-                    time.sleep(self.seek_settle_time)
-                    seek_success = True
-                    log_info(
-                        f"Seek successful to {target_position:.3f}s (lead {correction_lead:+.3f}s)",
-                        component="sync",
-                    )
-                else:
-                    log_warning(
-                        "Position set failed, trying pause/seek/resume",
-                        component="sync",
-                    )
-                    # Method 2: Pause, seek, resume for stubborn hardware decoders
-                    self.video_player.pause()
-                    time.sleep(self.seek_settle_time)
-                    if self.video_player.set_position(target_position):
-                        time.sleep(self.seek_settle_time)
-                        self.video_player.resume()
-                        seek_success = True
-                        log_info(
-                            f"Pause/seek/resume successful to {target_position:.3f}s (lead {correction_lead:+.3f}s)",
-                            component="sync",
-                        )
-            except Exception as e:
-                log_error(f"Seek failed: {e}", component="sync")
+            # omxplayer-sync approach: pause, seek ahead, wait for sync
+            log_info(
+                f"Pausing for correction, seeking to {target_position:.3f}s (jump ahead: {self.sync_jump_ahead:.3f}s)",
+                component="sync",
+            )
 
-            if seek_success:
-                self.last_correction_time = current_time
-                # Deviation samples already cleared before seeking
+            # Pause playback during correction
+            if not self.video_player.pause():
+                log_warning("Failed to pause for correction", component="sync")
+                return
+
+            time.sleep(0.1)  # Brief pause for VLC to settle
+
+            # Seek to target + jump ahead (like omxplayer-sync)
+            jump_ahead_position = target_position + self.sync_jump_ahead
+            if duration and duration > 0:
+                jump_ahead_position = jump_ahead_position % duration
+
+            if self.video_player.set_position(jump_ahead_position):
+                log_info(
+                    f"Seek successful to {jump_ahead_position:.3f}s (target was {target_position:.3f}s)",
+                    component="sync",
+                )
+                # Enter wait-for-sync state
+                self.wait_for_sync = True
+                self.sync_timer = time.time()
+                self.last_correction_time = time.time()
             else:
-                log_warning("All seek methods failed", component="sync")
+                log_warning("Seek failed, resuming playback", component="sync")
 
     def run(self) -> None:
         """Main run loop"""
