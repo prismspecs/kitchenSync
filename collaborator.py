@@ -412,6 +412,7 @@ class CollaboratorPi:
                 )
                 if self.config.debug_mode:
                     print(f"   ✅ Seek successful! Entering wait-for-sync state...")
+
                 # Enter wait-for-sync state
                 self.wait_for_sync = True
                 self.sync_timer = time.time()
