@@ -213,9 +213,7 @@ class LeaderPi:
         # Use media clock if available so collaborators follow actual video time
         def media_time_provider():
             try:
-                # Broadcast wall-clock time since start, but sync it to video position
-                # This ensures both leader and collaborators advance at the same rate
-                return time.time() - self.system_state.start_time
+                return self.video_player.get_position()
             except Exception:
                 return None
 
