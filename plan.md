@@ -95,6 +95,8 @@ I am developing this on a separate computer than the one on which it will run. C
 - Configurable latency compensation to counter network/compute lag
 - Seek settle timing to allow decoder/display to catch up after seeks
 - **Wall-clock time synchronization**: Leader broadcasts elapsed wall time since start, ensuring all nodes advance at the same rate rather than trying to match absolute video positions
+- **Anti-feedback sync**: Deviation samples cleared before seeking to prevent correction loops
+- **Outlier filtering**: Trimmed median calculation removes extreme measurements that could trigger false corrections
 
 **Network Architecture**
 

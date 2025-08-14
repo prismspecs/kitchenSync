@@ -256,9 +256,20 @@ class CollaboratorPi:
         if len(self.deviation_samples) < 5:
             return
 
-        # Calculate median deviation
+        # Calculate median deviation with outlier filtering
         sorted_deviations = sorted(self.deviation_samples)
-        median_deviation = sorted_deviations[len(sorted_deviations) // 2]
+        # Use trimmed mean (remove top/bottom 20% to filter outliers)
+        trim_count = max(1, len(sorted_deviations) // 5)
+        trimmed_deviations = (
+            sorted_deviations[trim_count:-trim_count]
+            if len(sorted_deviations) > 2 * trim_count
+            else sorted_deviations
+        )
+        median_deviation = (
+            trimmed_deviations[len(trimmed_deviations) // 2]
+            if trimmed_deviations
+            else 0.0
+        )
 
         # Check if correction is needed
         # Use configured deviation_threshold directly (no hard 1.0s floor)
@@ -289,6 +300,10 @@ class CollaboratorPi:
             target_position = expected_position + correction_lead
             if duration and duration > 0:
                 target_position = target_position % duration
+
+            # Clear old deviation samples BEFORE seeking to prevent feedback loop
+            # The old samples are from before the correction and will skew future measurements
+            self.deviation_samples.clear()
 
             # Try multiple approaches for seeking
             seek_success = False
@@ -322,7 +337,7 @@ class CollaboratorPi:
 
             if seek_success:
                 self.last_correction_time = current_time
-                self.deviation_samples.clear()
+                # Deviation samples already cleared before seeking
             else:
                 log_warning("All seek methods failed", component="sync")
 
