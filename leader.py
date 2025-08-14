@@ -56,7 +56,6 @@ class LeaderPi:
             debug_mode=self.config.debug_mode,
             enable_vlc_logging=self.config.enable_vlc_logging,
             vlc_log_level=self.config.vlc_log_level,
-            enable_fullscreen_enforcement=not self.config.debug_mode,  # Optimize: disable enforcement in debug mode
         )
 
         # Initialize networking (wire tick_interval from config)

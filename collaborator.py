@@ -10,7 +10,6 @@ import threading
 import time
 from collections import deque
 from pathlib import Path
-from typing import Optional
 
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent / "src"))
@@ -24,29 +23,32 @@ from core.logger import log_info, log_warning, log_error, enable_system_logging
 
 
 # =============================================================================
-# SYNCHRONIZATION PARAMETERS - Optimized values for sync behavior
+# SYNCHRONIZATION PARAMETERS - Edit these values to tune sync behavior
 # =============================================================================
 
+# Constants for sync logic - these control the basic behavior of the sync system
+DEVIATION_SAMPLES_MAXLEN = 20  # How many timing samples to keep for median filtering
+INITIAL_SYNC_WAIT_SECONDS = (
+    2.0  # Grace period after startup before sync corrections begin
+)
+SYNC_TIMEOUT_SECONDS = 10.0  # Max time to wait for sync after a seek operation
+SYNC_DEVIATION_THRESHOLD_RESUME = (
+    0.1  # Deviation (seconds) required to resume after seek
+)
+HEARTBEAT_INTERVAL_SECONDS = 2.0  # How often to send status updates to leader
+REREGISTER_INTERVAL_SECONDS = 60.0  # How often to re-register with leader
 
-class SyncConfig:
-    """Centralized sync configuration with optimized defaults"""
-
-    # Core sync constants
-    DEVIATION_SAMPLES_MAXLEN = 20
-    INITIAL_SYNC_WAIT_SECONDS = 2.0
-    SYNC_TIMEOUT_SECONDS = 10.0
-    SYNC_DEVIATION_THRESHOLD_RESUME = 0.1
-    HEARTBEAT_INTERVAL_SECONDS = 2.0
-    REREGISTER_INTERVAL_SECONDS = 60.0
-
-    # Default sync settings (can be overridden in config file)
-    DEFAULT_SYNC_CHECK_INTERVAL = 5.0
-    DEFAULT_DEVIATION_THRESHOLD = 0.2
-    DEFAULT_SYNC_GRACE_TIME = 5.0
-    DEFAULT_SYNC_JUMP_AHEAD = 3.0
-    DEFAULT_LATENCY_COMPENSATION = 0.0  # Disabled - may cause issues
-    DEFAULT_SEEK_SETTLE_TIME = 0.1
-
+# Default sync settings - these are tunable parameters that affect sync quality
+# (Can be overridden in config file)
+DEFAULT_SYNC_TOLERANCE = 1.0  # General sync tolerance (not currently used)
+DEFAULT_SYNC_CHECK_INTERVAL = 5.0  # Min time between corrections
+DEFAULT_DEVIATION_THRESHOLD = 0.2  # Error threshold to trigger correction
+DEFAULT_SYNC_GRACE_TIME = 5.0  # Cooldown period after correction
+DEFAULT_SYNC_JUMP_AHEAD = 3.0  # How far ahead to seek for corrections
+DEFAULT_LATENCY_COMPENSATION = (
+    0.0  # Network/processing delay offset (DISABLED - may cause issues)
+)
+DEFAULT_SEEK_SETTLE_TIME = 0.1  # VLC settling time after seek
 
 # =============================================================================
 
@@ -73,7 +75,6 @@ class CollaboratorPi:
             debug_mode=self.config.debug_mode,
             enable_vlc_logging=self.config.enable_vlc_logging,
             vlc_log_level=self.config.vlc_log_level,
-            enable_fullscreen_enforcement=not self.config.debug_mode,  # Optimize: disable enforcement in debug mode
         )
         log_info(
             "Collaborator using Python VLC for precise sync control",
@@ -105,41 +106,37 @@ class CollaboratorPi:
             component="collaborator",
         )
 
-    def _debug_print(self, message: str) -> None:
-        """Print message only if debug mode is enabled"""
-        if self.config.debug_mode:
-            print(message)
-
     def _initialize_sync_parameters(self):
         """Initialize synchronization parameters from config and set initial state."""
-        # Use SyncConfig constants for easy editing
-        self.deviation_samples_maxlen = SyncConfig.DEVIATION_SAMPLES_MAXLEN
-        self.initial_sync_wait_seconds = SyncConfig.INITIAL_SYNC_WAIT_SECONDS
-        self.sync_timeout_seconds = SyncConfig.SYNC_TIMEOUT_SECONDS
-        self.sync_deviation_threshold_resume = (
-            SyncConfig.SYNC_DEVIATION_THRESHOLD_RESUME
-        )
-        self.heartbeat_interval_seconds = SyncConfig.HEARTBEAT_INTERVAL_SECONDS
-        self.reregister_interval_seconds = SyncConfig.REREGISTER_INTERVAL_SECONDS
+        # Use constants defined at top of file for easy editing
+        self.deviation_samples_maxlen = DEVIATION_SAMPLES_MAXLEN
+        self.initial_sync_wait_seconds = INITIAL_SYNC_WAIT_SECONDS
+        self.sync_timeout_seconds = SYNC_TIMEOUT_SECONDS
+        self.sync_deviation_threshold_resume = SYNC_DEVIATION_THRESHOLD_RESUME
+        self.heartbeat_interval_seconds = HEARTBEAT_INTERVAL_SECONDS
+        self.reregister_interval_seconds = REREGISTER_INTERVAL_SECONDS
 
-        # Load sync settings from config with defaults from SyncConfig
+        # Load sync settings from config with defaults from constants
+        self.sync_tolerance = self.config.getfloat(
+            "sync_tolerance", DEFAULT_SYNC_TOLERANCE
+        )
         self.sync_check_interval = self.config.getfloat(
-            "sync_check_interval", SyncConfig.DEFAULT_SYNC_CHECK_INTERVAL
+            "sync_check_interval", DEFAULT_SYNC_CHECK_INTERVAL
         )
         self.deviation_threshold = self.config.getfloat(
-            "deviation_threshold", SyncConfig.DEFAULT_DEVIATION_THRESHOLD
+            "deviation_threshold", DEFAULT_DEVIATION_THRESHOLD
         )
         self.sync_grace_time = self.config.getfloat(
-            "sync_grace_time", SyncConfig.DEFAULT_SYNC_GRACE_TIME
+            "sync_grace_time", DEFAULT_SYNC_GRACE_TIME
         )
         self.sync_jump_ahead = self.config.getfloat(
-            "sync_jump_ahead", SyncConfig.DEFAULT_SYNC_JUMP_AHEAD
+            "sync_jump_ahead", DEFAULT_SYNC_JUMP_AHEAD
         )
         self.latency_compensation = self.config.getfloat(
-            "latency_compensation", SyncConfig.DEFAULT_LATENCY_COMPENSATION
+            "latency_compensation", DEFAULT_LATENCY_COMPENSATION
         )
         self.seek_settle_time = self.config.getfloat(
-            "seek_settle_time", SyncConfig.DEFAULT_SEEK_SETTLE_TIME
+            "seek_settle_time", DEFAULT_SEEK_SETTLE_TIME
         )
 
         # Video sync state
@@ -268,8 +265,7 @@ class CollaboratorPi:
         """Handle schedule update from leader"""
         schedule = msg.get("schedule", [])
         self.midi_scheduler.load_schedule(schedule)
-        # Only show schedule updates in debug mode
-        self._debug_print(f"Updated schedule: {len(schedule)} cues")
+        print(f"Updated schedule: {len(schedule)} cues")
 
     def start_playback(self) -> None:
         """Start video and MIDI playback"""
@@ -365,8 +361,7 @@ class CollaboratorPi:
                 f"Sync correction needed: {median_deviation:.3f}s deviation (threshold: {correction_threshold:.3f}s)",
                 component="sync",
             )
-            # Only show sync corrections in debug mode
-            self._debug_print(f"🔄 Sync correction: {median_deviation:.3f}s deviation")
+            print(f"🔄 Sync correction: {median_deviation:.3f}s deviation")
 
             # Apply correction (respect duration wrap)
             # Nudge toward/away from leader to overcome actuation lag
