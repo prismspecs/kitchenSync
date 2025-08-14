@@ -57,7 +57,8 @@ class LeaderPi:
             enable_vlc_logging=self.config.enable_vlc_logging,
             vlc_log_level=self.config.vlc_log_level,
         )
-        # Use default video output (GL). Override only if environment requires it.
+        # Force X11 video output for reliable fullscreen on Pi (Wayland can be flaky)
+        self.video_player.video_output = "x11"
         # Reset hooks per loop (MIDI etc.)
         self.video_player.loop_callback = self._on_video_loop
 

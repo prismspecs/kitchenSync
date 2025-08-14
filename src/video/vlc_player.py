@@ -249,6 +249,13 @@ class VLCVideoPlayer:
             except Exception:
                 pass
 
+            # Reassert fullscreen if necessary
+            try:
+                if not self.debug_mode and not self.vlc_player.get_fullscreen():
+                    self.vlc_player.set_fullscreen(True)
+            except Exception:
+                pass
+
             log_info(f"Video loop #{self.loop_count} started", component="vlc")
         except Exception as e:
             log_error(f"Preemptive loop error: {e}", component="vlc")
