@@ -197,16 +197,17 @@ class VLCVideoPlayer:
                 except Exception as e:
                     log_error(f"Error in video loop callback: {e}", component="vlc")
 
-            # Robust restart sequence for Ended/near-end states
+            # Flicker-free restart: avoid stop(); pause → seek → resume
+            # If player is in Ended state, re-attach media first
             try:
-                self.vlc_player.stop()
+                if self.vlc_player.get_state() == vlc.State.Ended and self.vlc_media:
+                    self.vlc_player.set_media(self.vlc_media)
             except Exception:
                 pass
-            time.sleep(0.05)
+
+            # Pause before seeking back to 0
             try:
-                if self.vlc_media:
-                    # Ensure media is set again for some backends after Ended
-                    self.vlc_player.set_media(self.vlc_media)
+                self.vlc_player.set_pause(1)
             except Exception:
                 pass
 
@@ -224,22 +225,20 @@ class VLCVideoPlayer:
                 except Exception:
                     pass
 
-            # Start playback again
-            result = None
+            # Resume playback without tearing
             try:
-                result = self.vlc_player.play()
-            except Exception as e:
-                log_error(f"play() failed during loop restart: {e}", component="vlc")
-            if result not in (None, 0):
-                log_warning(
-                    f"VLC play() returned {result} on loop restart", component="vlc"
-                )
+                self.vlc_player.set_pause(0)
+            except Exception:
+                try:
+                    self.vlc_player.play()
+                except Exception:
+                    pass
 
-            # Re-assert fullscreen in production
+            # Re-assert fullscreen in production (no toggle flicker)
             try:
                 if not self.debug_mode:
-                    time.sleep(0.2)
-                    self.vlc_player.set_fullscreen(True)
+                    if not self.vlc_player.get_fullscreen():
+                        self.vlc_player.set_fullscreen(True)
             except Exception:
                 pass
 
@@ -268,19 +267,12 @@ class VLCVideoPlayer:
                     except Exception:
                         pos = -1.0
 
-                    # Trigger loop if VLC reports end/stopped, or position is at tail
+                    # Trigger loop if VLC reports end/stopped, or preempt near tail
                     if state in (vlc.State.Ended, vlc.State.Stopped):
                         self._restart_loop()
-                    elif pos >= 0.995:
-                        # Small grace delay to ensure we are truly at end
-                        time.sleep(0.1)
-                        # Re-read position/state to avoid false positive
-                        try:
-                            pos2 = float(self.vlc_player.get_position())
-                        except Exception:
-                            pos2 = pos
-                        if pos2 >= 0.995:
-                            self._restart_loop()
+                    elif pos >= 0.98:
+                        # Preemptive loop to avoid hitting Ended and window tear
+                        self._restart_loop()
                 except Exception:
                     pass
                 time.sleep(0.2)
