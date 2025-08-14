@@ -165,9 +165,13 @@ class VLCVideoPlayer:
 
     def _on_video_end(self, event):
         """Handle video end event for looping"""
+        print(f"🔥 _on_video_end EVENT FIRED! Event: {event}")
+        log_info(f"MediaPlayerEndReached event fired: {event}", component="vlc")
+
         if self.enable_looping and self.vlc_player:
             try:
                 self.loop_count += 1
+                print(f"🔄 Processing loop #{self.loop_count}")
                 log_info(
                     f"Video ended, starting loop #{self.loop_count}", component="vlc"
                 )
@@ -175,17 +179,25 @@ class VLCVideoPlayer:
                 # Notify callback before restarting (for MIDI sync)
                 if self.loop_callback:
                     try:
+                        print(f"🎵 Calling loop callback for loop #{self.loop_count}")
                         self.loop_callback(self.loop_count)
                     except Exception as e:
                         log_error(f"Error in video loop callback: {e}", component="vlc")
 
                 # Reset to beginning and restart
+                print(f"🔄 Restarting video: set_position(0.0) + play()")
                 self.vlc_player.set_position(0.0)
                 self.vlc_player.play()
 
+                print(f"✅ Video loop #{self.loop_count} restart completed")
                 log_info(f"Video loop #{self.loop_count} started", component="vlc")
             except Exception as e:
+                print(f"❌ Error in _on_video_end: {e}")
                 log_error(f"Error restarting video loop: {e}", component="vlc")
+        else:
+            print(
+                f"⚠️ Loop skipped: enable_looping={self.enable_looping}, vlc_player={bool(self.vlc_player)}"
+            )
 
     def _start_with_python_vlc(self) -> bool:
         """Start video using VLC Python bindings"""
@@ -223,11 +235,17 @@ class VLCVideoPlayer:
 
             # Set up looping event handler
             if self.enable_looping:
+                print(f"🔧 Setting up MediaPlayerEndReached event handler...")
                 events = self.vlc_player.event_manager()
-                events.event_attach(
-                    vlc.EventType.MediaPlayerEndReached, self._on_video_end
-                )
-                log_info("Video looping enabled", component="vlc")
+                if events:
+                    events.event_attach(
+                        vlc.EventType.MediaPlayerEndReached, self._on_video_end
+                    )
+                    print(f"✅ Event handler attached successfully")
+                    log_info("Video looping event handler attached", component="vlc")
+                else:
+                    print(f"❌ Failed to get event manager")
+                    log_error("Failed to get VLC event manager", component="vlc")
 
             # Start playback
             log_info("Starting VLC playback...", component="vlc")
