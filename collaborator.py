@@ -56,10 +56,12 @@ DEFAULT_SEEK_SETTLE_TIME = 0.1  # VLC settling time after seek
 class CollaboratorPi:
     """Refactored Collaborator Pi with clean separation of concerns"""
 
-    def __init__(self, config_file: str = "collaborator_config.ini", debug_override: bool = False):
+    def __init__(
+        self, config_file: str = "collaborator_config.ini", debug_override: bool = False
+    ):
         # Initialize configuration
         self.config = ConfigManager(config_file)
-        
+
         # Apply debug override before any other initialization
         if debug_override:
             self.config.config["KITCHENSYNC"]["debug"] = "true"
@@ -180,22 +182,33 @@ class CollaboratorPi:
         self.system_state.current_time = leader_time
 
         # Debug mode: Show real-time deviation on every sync message
-        if self.config.debug_mode and self.system_state.is_running and self.video_start_time:
+        if self.config.debug_mode:
             self.sync_message_count += 1
-            # Show deviation info every 10 messages (about every 0.2 seconds at 50Hz)
-            # Change this number to adjust frequency: 5=0.1s, 10=0.2s, 25=0.5s, 50=1.0s
+
+            # Show basic sync info every 10 messages (about every 0.2 seconds at 50Hz)
             if self.sync_message_count % 10 == 0:
-                video_position = self.video_player.get_position()
-                if video_position is not None:
-                    # Calculate expected position with latency compensation
-                    duration = self.video_player.get_duration()
-                    expected_position = leader_time + self.latency_compensation
-                    if duration and duration > 0:
-                        expected_position = expected_position % duration
-                    
-                    current_deviation = video_position - expected_position
+                if self.system_state.is_running and self.video_start_time:
+                    video_position = self.video_player.get_position()
+                    if video_position is not None:
+                        # Calculate expected position with latency compensation
+                        duration = self.video_player.get_duration()
+                        expected_position = leader_time + self.latency_compensation
+                        if duration and duration > 0:
+                            expected_position = expected_position % duration
+
+                        current_deviation = video_position - expected_position
+                        log_info(
+                            f"📊 Sync: leader={leader_time:.3f}s → video={video_position:.3f}s → deviation={current_deviation:+.3f}s",
+                            component="sync",
+                        )
+                    else:
+                        log_info(
+                            f"📊 Sync: leader={leader_time:.3f}s → video=<not ready>",
+                            component="sync",
+                        )
+                else:
                     log_info(
-                        f"📊 Sync: leader={leader_time:.3f}s → video={video_position:.3f}s → deviation={current_deviation:+.3f}s",
+                        f"📊 Sync: leader={leader_time:.3f}s → playback=<not started>",
                         component="sync",
                     )
 
@@ -345,7 +358,9 @@ class CollaboratorPi:
         video_position = self.video_player.get_position()
         if video_position is None:
             if self.config.debug_mode:
-                log_warning("Could not get video position for sync check", component="sync")
+                log_warning(
+                    "Could not get video position for sync check", component="sync"
+                )
             return
 
         # Calculate expected position with latency compensation

@@ -39,7 +39,7 @@ class LeaderPi:
     def __init__(self, debug_override: bool = False):
         # Initialize configuration
         self.config = ConfigManager("leader_config.ini")
-        
+
         # Apply debug override before any other initialization
         if debug_override:
             self.config.config["KITCHENSYNC"]["debug"] = "true"
