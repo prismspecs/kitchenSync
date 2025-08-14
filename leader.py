@@ -211,23 +211,8 @@ class LeaderPi:
         # Use media clock if available so collaborators follow actual video time
         def media_time_provider():
             try:
-                video_pos = self.video_player.get_position()
-                if video_pos is not None:
-                    log_info(
-                        f"📺 Broadcasting video position: {video_pos:.3f}s",
-                        component="sync_broadcast",
-                    )
-                else:
-                    log_warning(
-                        "🚫 Video position unavailable, will use wall time",
-                        component="sync_broadcast",
-                    )
-                return video_pos
-            except Exception as e:
-                log_warning(
-                    f"❌ Error getting video position: {e}, will use wall time",
-                    component="sync_broadcast",
-                )
+                return self.video_player.get_position()
+            except Exception:
                 return None
 
         self.sync_broadcaster.set_time_provider(media_time_provider)

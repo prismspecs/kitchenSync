@@ -123,32 +123,23 @@ class CollaboratorPi:
     ) -> None:
         """Handle time sync from leader
 
-        leader_time: the leader's broadcasted video position in seconds
+        leader_time: the leader's broadcasted media/wall time in seconds
         received_at: local receipt timestamp (seconds, time.time()); if None, computed now
         """
         local_time = received_at if received_at is not None else time.time()
         self.sync_tracker.record_sync(leader_time, local_time)
 
-        # Debug: Log what we received from leader
-        log_info(
-            f"📡 Received sync: leader_video_pos={leader_time:.3f}s",
-            component="sync_debug",
-        )
-
         # Auto-start playback on first valid sync
         if not self.system_state.is_running:
+            self.start_playback()
+            # Don't attempt immediate seeking - let video stabilize first
             log_info(
-                f"🎬 Auto-starting playback, seeking to leader video position: {leader_time:.3f}s",
+                f"Auto-started from sync, leader time: {leader_time:.3f}s",
                 component="collaborator",
             )
-            self.start_playback(initial_position=leader_time)
-            # Set a longer initial grace period before sync corrections
-            self.video_start_time = (
-                time.time() - 2.5
-            )  # Add delay to allow initial seek to settle
-            return
 
-        # Update system time (for MIDI scheduling, not video sync)
+        # Update system time and maintain sync
+        # leader_time is now wall-clock time since start, so we can use it directly
         self.system_state.current_time = leader_time
 
         # Process MIDI cues (safe no-op if no schedule)
@@ -157,36 +148,27 @@ class CollaboratorPi:
         # Check video sync (only if we've been running for a bit)
         if self.system_state.is_running and self.video_start_time:
             time_since_start = time.time() - self.video_start_time
-            if time_since_start > 5.0:  # Wait 5 seconds before sync corrections
+            if time_since_start > 2.0:  # Wait 2 seconds before sync corrections
                 self._check_video_sync(leader_time)
 
         # Handle omxplayer-sync style wait states
         if self.wait_for_sync:
-            # We're waiting for leader time to catch up to our seek-ahead position
-            # Check if leader time has caught up to where we seeked ahead
-            time_since_seek = time.time() - self.sync_timer
+            # We're waiting for deviation to become small enough after a seek
             current_position = self.video_player.get_position() or 0
-
-            log_info(
-                f"⏳ Wait-for-sync: leader={leader_time:.3f}s, our_pos={current_position:.3f}s, "
-                f"diff={abs(leader_time - current_position):.3f}s, wait_time={time_since_seek:.1f}s",
-                component="sync_debug",
-            )
-
-            # omxplayer-sync logic: if leader time catches up to our position, resume
-            if abs(leader_time - current_position) < 0.1:
+            deviation = abs(leader_time - current_position)
+            if deviation < 0.1:  # Within 100ms, we're synced
                 log_info(
-                    f"✅ Leader caught up! Resuming playback. Time since seek: {time_since_seek:.2f}s",
+                    f"Sync achieved! Deviation: {deviation:.3f}s, resuming playback",
                     component="sync",
                 )
                 self.video_player.resume()
                 self.wait_for_sync = False
                 self.wait_after_sync = time.time()
             else:
-                # Still waiting - timeout after 10 seconds
-                if time_since_seek > 10:
+                # Still waiting for sync
+                if time.time() - self.sync_timer > 10:  # Timeout after 10s
                     log_warning(
-                        f"⚠️ Wait timeout after {time_since_seek:.1f}s, forcing resume",
+                        f"Sync timeout after 10s, deviation still {deviation:.3f}s",
                         component="sync",
                     )
                     self.video_player.resume()
@@ -196,15 +178,9 @@ class CollaboratorPi:
 
         if self.wait_after_sync:
             # Grace period after correction - don't allow new corrections
-            grace_remaining = self.sync_grace_time - (time.time() - self.wait_after_sync)
-            if grace_remaining <= 0:
+            if (time.time() - self.wait_after_sync) > self.sync_grace_time:
                 self.wait_after_sync = False
-                log_info("⏰ Grace period ended, sync monitoring resumed", component="sync")
             else:
-                log_info(
-                    f"🛡️ Grace period: {grace_remaining:.1f}s remaining",
-                    component="sync_debug",
-                )
                 return
 
     def _handle_start_command(self, msg: dict, addr: tuple) -> None:
@@ -260,7 +236,7 @@ class CollaboratorPi:
         self.midi_scheduler.load_schedule(schedule)
         print(f"Updated schedule: {len(schedule)} cues")
 
-    def start_playback(self, initial_position: float | None = None) -> None:
+    def start_playback(self) -> None:
         """Start video and MIDI playback"""
         log_info("Starting playback...", component="collaborator")
 
@@ -272,20 +248,6 @@ class CollaboratorPi:
         if self.video_player.video_path:
             log_info("Starting video...", component="video")
             self.video_player.start_playback()
-
-            # If an initial position is provided, seek to it after a short delay
-            if initial_position is not None:
-
-                def delayed_seek():
-                    time.sleep(2.5)  # Wait for VLC to initialize
-                    target_pos = initial_position + self.latency_compensation
-                    log_info(
-                        f"Performing initial seek to {target_pos:.3f}s (initial sync)",
-                        component="sync",
-                    )
-                    self.video_player.set_position(target_pos)
-
-                threading.Thread(target=delayed_seek, daemon=True).start()
 
         # Start MIDI playback with video duration for looping
         video_duration = self.video_player.get_duration()
@@ -320,38 +282,25 @@ class CollaboratorPi:
         # Get current video position
         video_position = self.video_player.get_position()
         if video_position is None:
-            log_warning("❌ Could not get video position for sync check", component="sync")
+            log_warning("Could not get video position for sync check", component="sync")
             return
 
-        # Calculate deviation (our video position vs leader's video position)
+        # Calculate expected position with latency compensation
+        # Wrap to video duration if known
         duration = self.video_player.get_duration()
-        
-        # Simple direct comparison - leader_time should be video position
-        deviation = video_position - leader_time
-
-        # Handle video looping if we know the duration
+        expected_position = leader_time + self.latency_compensation
         if duration and duration > 0:
-            # Normalize deviation to handle video loops
-            while deviation > duration / 2:
-                deviation -= duration
-            while deviation < -duration / 2:
-                deviation += duration
+            expected_position = expected_position % duration
+
+        deviation = video_position - expected_position
 
         # Add to samples for median filtering
         self.deviation_samples.append(deviation)
 
-        log_info(
-            f"🎯 Sync check: leader_video={leader_time:.3f}s, our_video={video_position:.3f}s, "
-            f"raw_deviation={deviation:.3f}s, samples={len(self.deviation_samples)}",
-            component="sync_debug",
-        )
-
         # Only proceed if we have enough samples
-        if len(self.deviation_samples) < 8:  # Adjusted: more samples needed for frequent sync
-            log_info(
-                f"📊 Collecting samples: {len(self.deviation_samples)}/8",
-                component="sync_debug",
-            )
+        if (
+            len(self.deviation_samples) < 8
+        ):  # Adjusted: more samples needed for frequent sync
             return
 
         # Calculate median deviation with outlier filtering
@@ -369,65 +318,75 @@ class CollaboratorPi:
             else 0.0
         )
 
-        log_info(
-            f"📈 Deviation analysis: raw={deviation:.3f}s, median={median_deviation:.3f}s, "
-            f"threshold={self.deviation_threshold:.3f}s",
-            component="sync_debug",
-        )
-
-        # Check if correction is needed - use omxplayer-sync logic
+        # Check if correction is needed
+        # Use configured deviation_threshold directly (no hard 1.0s floor)
         correction_threshold = self.deviation_threshold
         if abs(median_deviation) > correction_threshold:
             current_time = time.time()
 
             # Avoid corrections too close together
             if current_time - self.last_correction_time < self.sync_check_interval:
-                log_info(
-                    f"🚫 Skipping correction, too soon (last was {current_time - self.last_correction_time:.1f}s ago)",
-                    component="sync_debug",
-                )
                 return
 
             log_info(
-                f"🔧 Large deviation detected: {median_deviation:.3f}s (threshold: {correction_threshold:.3f}s)",
+                f"Sync correction needed: {median_deviation:.3f}s deviation (threshold: {correction_threshold:.3f}s)",
                 component="sync",
             )
             print(f"🔄 Sync correction: {median_deviation:.3f}s deviation")
 
-            # omxplayer-sync approach: pause, seek to leader + jump ahead, wait for leader to catch up
-            log_info("⏸️ Pausing for sync correction...", component="sync")
-            
-            # Pause playback during correction
-            if not self.video_player.pause():
-                log_warning("❌ Failed to pause for correction", component="sync")
-                return
+            # Apply correction (respect duration wrap)
+            # Nudge toward/away from leader to overcome actuation lag
+            correction_lead = 0.0
+            if median_deviation < 0:
+                # Video is behind → seek slightly ahead
+                correction_lead = self.latency_compensation
+            elif median_deviation > 0:
+                # Video is ahead → seek slightly behind
+                correction_lead = -self.latency_compensation
 
-            time.sleep(0.1)  # Brief pause for VLC to settle
-
-            # Seek to leader position + jump ahead (omxplayer-sync method)
-            target_position = leader_time + self.sync_jump_ahead
+            target_position = expected_position + correction_lead
             if duration and duration > 0:
                 target_position = target_position % duration
 
             # Clear old deviation samples BEFORE seeking to prevent feedback loop
+            # The old samples are from before the correction and will skew future measurements
             self.deviation_samples.clear()
 
-            if self.video_player.set_position(target_position):
+            # omxplayer-sync approach: pause, seek ahead, wait for sync
+            log_info(
+                f"Pausing for correction, seeking to {target_position:.3f}s (jump ahead: {self.sync_jump_ahead:.3f}s)",
+                component="sync",
+            )
+
+            # Pause playback during correction
+            if not self.video_player.pause():
+                log_warning("Failed to pause for correction", component="sync")
+                return
+
+            time.sleep(0.1)  # Brief pause for VLC to settle
+
+            # Seek to target + jump ahead (like omxplayer-sync)
+            jump_ahead_position = target_position + self.sync_jump_ahead
+            if duration and duration > 0:
+                jump_ahead_position = jump_ahead_position % duration
+
+            if self.video_player.set_position(jump_ahead_position):
                 log_info(
-                    f"🎯 Seeked ahead to {target_position:.3f}s (leader: {leader_time:.3f}s + {self.sync_jump_ahead:.3f}s jump)",
+                    f"Seek successful to {jump_ahead_position:.3f}s (target was {target_position:.3f}s)",
                     component="sync",
                 )
-                # Enter wait-for-sync state - wait for leader to catch up
+                # Enter wait-for-sync state
                 self.wait_for_sync = True
                 self.sync_timer = time.time()
                 self.last_correction_time = time.time()
 
+                # Log the expected sync behavior
                 log_info(
-                    f"⏳ Entering wait-for-sync state. Waiting for leader to reach our position...",
+                    f"Entering wait-for-sync state. Will resume when deviation < 0.1s",
                     component="sync",
                 )
             else:
-                log_warning("❌ Seek failed, resuming playback", component="sync")
+                log_warning("Seek failed, resuming playback", component="sync")
                 self.video_player.resume()
 
     def run(self) -> None:
