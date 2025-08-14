@@ -40,7 +40,6 @@ class SyncConfig:
     REREGISTER_INTERVAL_SECONDS = 60.0
 
     # Default sync settings (can be overridden in config file)
-    DEFAULT_SYNC_TOLERANCE = 1.0  # Not currently used
     DEFAULT_SYNC_CHECK_INTERVAL = 5.0
     DEFAULT_DEVIATION_THRESHOLD = 0.2
     DEFAULT_SYNC_GRACE_TIME = 5.0
@@ -106,6 +105,11 @@ class CollaboratorPi:
             component="collaborator",
         )
 
+    def _debug_print(self, message: str) -> None:
+        """Print message only if debug mode is enabled"""
+        if self.config.debug_mode:
+            print(message)
+
     def _initialize_sync_parameters(self):
         """Initialize synchronization parameters from config and set initial state."""
         # Use SyncConfig constants for easy editing
@@ -119,9 +123,6 @@ class CollaboratorPi:
         self.reregister_interval_seconds = SyncConfig.REREGISTER_INTERVAL_SECONDS
 
         # Load sync settings from config with defaults from SyncConfig
-        self.sync_tolerance = self.config.getfloat(
-            "sync_tolerance", SyncConfig.DEFAULT_SYNC_TOLERANCE
-        )
         self.sync_check_interval = self.config.getfloat(
             "sync_check_interval", SyncConfig.DEFAULT_SYNC_CHECK_INTERVAL
         )
@@ -267,7 +268,8 @@ class CollaboratorPi:
         """Handle schedule update from leader"""
         schedule = msg.get("schedule", [])
         self.midi_scheduler.load_schedule(schedule)
-        print(f"Updated schedule: {len(schedule)} cues")
+        # Only show schedule updates in debug mode
+        self._debug_print(f"Updated schedule: {len(schedule)} cues")
 
     def start_playback(self) -> None:
         """Start video and MIDI playback"""
@@ -363,7 +365,8 @@ class CollaboratorPi:
                 f"Sync correction needed: {median_deviation:.3f}s deviation (threshold: {correction_threshold:.3f}s)",
                 component="sync",
             )
-            print(f"🔄 Sync correction: {median_deviation:.3f}s deviation")
+            # Only show sync corrections in debug mode
+            self._debug_print(f"🔄 Sync correction: {median_deviation:.3f}s deviation")
 
             # Apply correction (respect duration wrap)
             # Nudge toward/away from leader to overcome actuation lag
