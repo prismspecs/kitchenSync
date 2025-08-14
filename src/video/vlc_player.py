@@ -8,7 +8,7 @@ import os
 import threading
 import subprocess
 import time
-from typing import Optional
+from typing import Optional, Callable
 from core.logger import log_info, log_error, log_warning, snapshot_env, log_file_paths
 
 # Try to import VLC Python bindings
@@ -36,21 +36,34 @@ class VLCVideoPlayer:
         vlc_log_level: int = 0,
         enable_fullscreen_enforcement: bool = True,
     ):
+        # Configuration
         self.debug_mode = debug_mode
         self.enable_vlc_logging = enable_vlc_logging
         self.vlc_log_level = vlc_log_level
         self.enable_fullscreen_enforcement = enable_fullscreen_enforcement
-        self.vlc_instance = None
-        self.vlc_player = None
-        self.vlc_media = None
-        self.video_path = None
+
+        # VLC components
+        self.vlc_instance: Optional[vlc.Instance] = None
+        self.vlc_player: Optional[vlc.MediaPlayer] = None
+        self.vlc_media: Optional[vlc.Media] = None
+
+        # Video state
+        self.video_path: Optional[str] = None
         self.is_playing = False
         self.loop_count = 0
         self.enable_looping = True
-        self.loop_callback = None
+        self.loop_callback: Optional[Callable[[int], None]] = None
         self.video_output: Optional[str] = None
-        self.fullscreen_enforcement_thread = None
+
+        # Fullscreen enforcement
+        self.fullscreen_enforcement_thread: Optional[threading.Thread] = None
         self.should_be_fullscreen = False
+
+        # Performance optimizations - cache frequently accessed values
+        self._cached_duration: Optional[float] = None
+        self._last_position_check = 0.0
+        self._cached_position: Optional[float] = None
+        self._position_cache_timeout = 0.05  # 50ms cache for position
 
         # Check VLC availability once at init
         if not VLC_PYTHON_AVAILABLE:
@@ -151,6 +164,10 @@ class VLCVideoPlayer:
             self.should_be_fullscreen = False
             self.is_playing = False
 
+            # Clear position cache
+            self._cached_position = None
+            self._last_position_check = 0.0
+
             if self.vlc_player:
                 self.vlc_player.stop()
                 log_info("Stopped VLC Python player", component="vlc")
@@ -162,20 +179,35 @@ class VLCVideoPlayer:
             log_error(f"Error stopping video: {e}", component="vlc")
 
     def get_position(self) -> Optional[float]:
-        """Get current playback position in seconds"""
+        """Get current playback position in seconds with caching for performance"""
         if not self.is_playing or not self.vlc_player:
             return None
+
+        # Use cached position if recent enough (performance optimization)
+        current_time = time.time()
+        if (
+            current_time - self._last_position_check
+        ) < self._position_cache_timeout and self._cached_position is not None:
+            return self._cached_position
 
         try:
             # Prefer millisecond time for precision
             current_ms = self.vlc_player.get_time()
             if current_ms >= 0:
-                return self._ms_to_seconds(current_ms)
+                position = self._ms_to_seconds(current_ms)
+                self._cached_position = position
+                self._last_position_check = current_time
+                return position
+
             # Fallback to ratio if time is unavailable
             position_ratio = self.vlc_player.get_position()
             length_ms = self.vlc_player.get_length()
             if position_ratio >= 0 and length_ms > 0:
-                return (position_ratio * length_ms) / 1000.0
+                position = (position_ratio * length_ms) / 1000.0
+                self._cached_position = position
+                self._last_position_check = current_time
+                return position
+
             return None
         except Exception as e:
             log_error(f"Error getting position: {e}", component="vlc")
@@ -186,6 +218,10 @@ class VLCVideoPlayer:
         if not self.vlc_player:
             return False
         try:
+            # Clear position cache since we're seeking
+            self._cached_position = None
+            self._last_position_check = 0.0
+
             # Prefer millisecond time seek for precision
             target_ms = int(max(0.0, seconds) * 1000.0)
             # set_time returns int (0 on success in some versions). We'll treat no-exception as success.
@@ -196,12 +232,20 @@ class VLCVideoPlayer:
             return False
 
     def get_duration(self) -> Optional[float]:
-        """Get video duration in seconds"""
+        """Get video duration in seconds with caching for performance"""
         if not self.vlc_player:
             return None
+
+        # Use cached duration if available (duration doesn't change)
+        if self._cached_duration is not None:
+            return self._cached_duration
+
         try:
             length_ms = self.vlc_player.get_length()
-            return self._ms_to_seconds(length_ms) if length_ms > 0 else None
+            if length_ms > 0:
+                self._cached_duration = self._ms_to_seconds(length_ms)
+                return self._cached_duration
+            return None
         except Exception as e:
             log_error(f"Error getting duration: {e}", component="vlc")
             return None
