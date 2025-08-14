@@ -80,8 +80,8 @@ class CollaboratorPi:
         self.sync_tolerance = self.config.getfloat("sync_tolerance", 1.0)
         self.sync_check_interval = self.config.getfloat("sync_check_interval", 5.0)
         self.deviation_threshold = self.config.getfloat(
-            "deviation_threshold", 0.05
-        )  # Match omxplayer-sync: 50ms
+            "deviation_threshold", 0.2
+        )  # Reverted: 0.05s was too tight, causing overcorrection
         # old defaults: sync_tolerance=1.0, sync_check_interval=5.0, deviation_threshold=0.5s
 
         # Video sync state
