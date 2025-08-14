@@ -58,7 +58,7 @@ class LeaderPi:
             vlc_log_level=self.config.vlc_log_level,
         )
         # Set video output for reliable display
-        self.video_player.video_output = "x11"
+        # self.video_player.video_output = "x11"
         # Reset hooks per loop (MIDI etc.)
         self.video_player.loop_callback = self._on_video_loop
 
