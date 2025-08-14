@@ -92,6 +92,8 @@ I am developing this on a separate computer than the one on which it will run. C
 - Configurable thresholds and grace periods
 - Real-time position tracking and drift compensation
 - Consistent seeking behavior across all Pis
+ - Configurable latency compensation to counter network/compute lag
+ - Seek settle timing to allow decoder/display to catch up after seeks
 
 **Network Architecture**
 
@@ -511,7 +513,7 @@ This is the mark of professional programming vs. superficial patching.
 - Do not change display modes without explicit instruction. Defaults:
   - Collaborators: always launch video fullscreen in production (debug=false).
   - Leader: fullscreen unless explicitly running in debug mode.
-- Do not switch video outputs (e.g., `--vout`) or windowing backends unless requested and documented.
+- Do not switch video outputs (e.g., `--vout`) or windowing backends unless requested and documented.g
 
 ## future necessities
 

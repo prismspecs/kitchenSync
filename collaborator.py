@@ -87,6 +87,12 @@ class CollaboratorPi:
         self.last_correction_time = 0
         self.video_start_time = None
 
+        # Latency/seek tuning
+        # Accounts for network transit + decode/display pipeline latency
+        self.latency_compensation = self.config.getfloat("latency_compensation", 0.15)
+        # Small delay for VLC to settle after a seek (seconds)
+        self.seek_settle_time = self.config.getfloat("seek_settle_time", 0.1)
+
         # Setup command handlers
         self._setup_command_handlers()
 
@@ -227,11 +233,12 @@ class CollaboratorPi:
             log_warning("Could not get video position for sync check", component="sync")
             return
 
-        # Calculate expected position (wrap to video duration if known)
+        # Calculate expected position with latency compensation
+        # Wrap to video duration if known
         duration = self.video_player.get_duration()
-        expected_position = leader_time
+        expected_position = leader_time + self.latency_compensation
         if duration and duration > 0:
-            expected_position = leader_time % duration
+            expected_position = expected_position % duration
 
         deviation = video_position - expected_position
 
@@ -263,16 +270,29 @@ class CollaboratorPi:
             print(f"🔄 Sync correction: {median_deviation:.3f}s deviation")
 
             # Apply correction (respect duration wrap)
-            target_position = expected_position
+            # Nudge toward/away from leader to overcome actuation lag
+            correction_lead = 0.0
+            if median_deviation < 0:
+                # Video is behind → seek slightly ahead
+                correction_lead = self.latency_compensation
+            elif median_deviation > 0:
+                # Video is ahead → seek slightly behind
+                correction_lead = -self.latency_compensation
+
+            target_position = expected_position + correction_lead
+            if duration and duration > 0:
+                target_position = target_position % duration
 
             # Try multiple approaches for seeking
             seek_success = False
             try:
                 # Method 1: Direct position set
                 if self.video_player.set_position(target_position):
+                    time.sleep(self.seek_settle_time)
                     seek_success = True
                     log_info(
-                        f"Seek successful to {target_position:.3f}s", component="sync"
+                        f"Seek successful to {target_position:.3f}s (lead {correction_lead:+.3f}s)",
+                        component="sync",
                     )
                 else:
                     log_warning(
@@ -281,13 +301,13 @@ class CollaboratorPi:
                     )
                     # Method 2: Pause, seek, resume for stubborn hardware decoders
                     self.video_player.pause()
-                    time.sleep(0.1)
+                    time.sleep(self.seek_settle_time)
                     if self.video_player.set_position(target_position):
-                        time.sleep(0.1)
+                        time.sleep(self.seek_settle_time)
                         self.video_player.resume()
                         seek_success = True
                         log_info(
-                            f"Pause/seek/resume successful to {target_position:.3f}s",
+                            f"Pause/seek/resume successful to {target_position:.3f}s (lead {correction_lead:+.3f}s)",
                             component="sync",
                         )
             except Exception as e:
