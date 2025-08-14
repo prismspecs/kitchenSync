@@ -48,7 +48,7 @@ class VLCVideoPlayer:
         self.loop_callback = None
         self.video_output: Optional[str] = None
         # Preemptive loop state
-        self._preemptive_threshold_ms = 250
+        self._preemptive_threshold_ms = 500
         self._loop_guard_active = False
         self._last_known_duration_ms = 0
         self._last_loop_time_wall = 0.0
@@ -170,9 +170,17 @@ class VLCVideoPlayer:
             return False
 
     def _on_video_end(self, event):
-        """Handle video end event for looping"""
-        # We now preemptively loop before Ended to avoid window teardown
-        return
+        """Fallback: if we do reach Ended, loop without tearing down window."""
+        if not self.enable_looping or not self.vlc_player:
+            return
+        now = time.time()
+        # Cooldown: avoid double loop triggers
+        if now - self._last_loop_time_wall < 0.5:
+            return
+        self._last_loop_time_wall = now
+        self._loop_guard_active = True
+        # Perform loop on a thread to avoid event-thread control
+        threading.Thread(target=self._perform_preemptive_loop, daemon=True).start()
 
     def _restart_video_thread(self):
         """Restart video on separate thread to avoid VLC deadlock"""
@@ -197,7 +205,7 @@ class VLCVideoPlayer:
         try:
             # Cooldown to avoid rapid re-triggers
             now = time.time()
-            if now - self._last_loop_time_wall < 0.2:
+            if now - self._last_loop_time_wall < 0.5:
                 return
             # Cache duration
             if self._last_known_duration_ms <= 0:
