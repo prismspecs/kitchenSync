@@ -208,14 +208,8 @@ class LeaderPi:
                 f.write("=" * 40 + "\n\n")
 
         # Start networking
-        # Use media clock if available so collaborators follow actual video time
-        def media_time_provider():
-            try:
-                return self.video_player.get_position()
-            except Exception:
-                return None
-
-        self.sync_broadcaster.set_time_provider(media_time_provider)
+        # Use wall clock time since start, NOT video position
+        # The collaborators need consistent time progression, not video position
         self.sync_broadcaster.set_duration_provider(self.video_player.get_duration)
         self.sync_broadcaster.start_broadcasting(self.system_state.start_time)
         self.command_manager.start_listening()
