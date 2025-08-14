@@ -58,7 +58,7 @@ class LeaderPi:
             vlc_log_level=self.config.vlc_log_level,
         )
         # Set video output for reliable display
-        # self.video_player.video_output = "x11"
+        self.video_player.video_output = "x11"
 
         # Initialize networking (wire tick_interval from config)
         self.sync_broadcaster = SyncBroadcaster(
