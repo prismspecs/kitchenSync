@@ -45,8 +45,7 @@ class CollaboratorPi:
             enable_vlc_logging=self.config.enable_vlc_logging,
             vlc_log_level=self.config.vlc_log_level,
         )
-        # Set video output for reliable display
-        self.video_player.video_output = "x11"
+        # Use default video output (GL). Override only if environment requires it.
         log_info(
             "Collaborator using Python VLC for precise sync control",
             component="collaborator",
@@ -181,7 +180,7 @@ class CollaboratorPi:
         """Handle schedule update from leader"""
         schedule = msg.get("schedule", [])
         self.midi_scheduler.load_schedule(schedule)
-        print(f"Updated schedule: {len(schedule)} cues")
+        # Schedule size info is available via logs if needed
 
     def start_playback(self) -> None:
         """Start video and MIDI playback"""

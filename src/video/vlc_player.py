@@ -166,13 +166,13 @@ class VLCVideoPlayer:
 
     def _on_video_end(self, event):
         """Handle video end event for looping"""
-        print(f"🔥 _on_video_end EVENT FIRED! Event: {event}")
+        # Loop trigger fired by VLC
         log_info(f"MediaPlayerEndReached event fired: {event}", component="vlc")
 
         if self.enable_looping and self.vlc_player:
             try:
                 self.loop_count += 1
-                print(f"🔄 Processing loop #{self.loop_count}")
+                # Track loop count
                 log_info(
                     f"Video ended, starting loop #{self.loop_count}", component="vlc"
                 )
@@ -180,13 +180,12 @@ class VLCVideoPlayer:
                 # Notify callback before restarting (for MIDI sync)
                 if self.loop_callback:
                     try:
-                        print(f"🎵 Calling loop callback for loop #{self.loop_count}")
                         self.loop_callback(self.loop_count)
                     except Exception as e:
                         log_error(f"Error in video loop callback: {e}", component="vlc")
 
                         # Schedule restart on separate thread to avoid VLC deadlock
-                print(f"🔄 Scheduling video restart on separate thread...")
+                # Avoid heavy control on VLC event thread
                 restart_thread = threading.Thread(
                     target=self._restart_video_thread, daemon=True
                 )
@@ -196,20 +195,16 @@ class VLCVideoPlayer:
                 print(f"❌ Error in _on_video_end: {e}")
                 log_error(f"Error restarting video loop: {e}", component="vlc")
         else:
-            print(
-                f"⚠️ Loop skipped: enable_looping={self.enable_looping}, vlc_player={bool(self.vlc_player)}"
-            )
+            pass
 
     def _restart_video_thread(self):
         """Restart video on separate thread to avoid VLC deadlock"""
-        print(f"🔄 Restarting video: set_media() -> play() -> set_time(0)")
+        # Smooth restart without tearing down window
 
         # Re-attach media without stopping to keep window alive
         try:
             if self.vlc_media:
-                print(f"  📼 About to set_media(...) on existing player...")
                 self.vlc_player.set_media(self.vlc_media)
-                print(f"  ✓ Media set on player")
             else:
                 print(f"  ⚠️ No media available to set on player")
         except Exception as e:
@@ -217,25 +212,18 @@ class VLCVideoPlayer:
 
         # Start playback (reinitialize decoder/render path if needed)
         try:
-            print(f"  ▶️ About to call play()...")
             result = self.vlc_player.play()
-            print(f"  ✓ play() returned: {result}")
         except Exception as e:
             print(f"  ❌ play() failed: {e}")
 
         # Force time to 0 to avoid end-frame latch; fallback to position if needed
         try:
-            print(f"  ⏱️ Waiting 0.15s then setting time to 0ms...")
-            time.sleep(0.15)
             try:
                 self.vlc_player.set_time(0)
-                print(f"  ✓ Set time to 0ms")
             except Exception:
-                print(f"  ⚠️ set_time(0) failed, falling back to set_position(0.0)")
                 self.vlc_player.set_position(0.0)
-                print(f"  ✓ Set position to 0.0")
-        except Exception as e:
-            print(f"  ❌ time/position seek failed: {e}")
+        except Exception:
+            pass
 
         # Ensure fullscreen remains engaged after loop (window may recreate)
         try:
@@ -244,7 +232,7 @@ class VLCVideoPlayer:
         except Exception:
             pass
 
-        print(f"✅ Video loop #{self.loop_count} restart completed")
+        # Loop restart completed
         log_info(f"Video loop #{self.loop_count} started", component="vlc")
 
     def _start_with_python_vlc(self) -> bool:
@@ -283,16 +271,13 @@ class VLCVideoPlayer:
 
             # Set up looping event handler
             if self.enable_looping:
-                print(f"🔧 Setting up MediaPlayerEndReached event handler...")
                 events = self.vlc_player.event_manager()
                 if events:
                     events.event_attach(
                         vlc.EventType.MediaPlayerEndReached, self._on_video_end
                     )
-                    print(f"✅ Event handler attached successfully")
                     log_info("Video looping event handler attached", component="vlc")
                 else:
-                    print(f"❌ Failed to get event manager")
                     log_error("Failed to get VLC event manager", component="vlc")
 
             # Start playback
