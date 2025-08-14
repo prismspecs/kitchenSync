@@ -309,32 +309,9 @@ class VLCVideoPlayer:
             "--vout=gl",  # Use OpenGL video output for hardware acceleration
         ]
 
-        # Get audio configuration
-        try:
-            from src.config.manager import ConfigManager  # local import to avoid cycles
-
-            cm = ConfigManager()
-            enable_dummy_audio = cm.getboolean("enable_dummy_audio", False)
-        except Exception:
-            enable_dummy_audio = False
-
-        if enable_dummy_audio:
-            # Route audio to a dummy sink if present; avoid actual output load
-            # On many platforms, having an audio clock improves timekeeping
-            args.extend(
-                [
-                    "--aout=adummy",
-                    "--audio-replay-gain-mode=none",
-                ]
-            )
-        else:
-            # Enable normal audio output - OS handles routing (HDMI vs. headphone jack)
-            # The audio_output config setting is used by the OS, not VLC
-            args.extend(
-                [
-                    "--aout=auto",  # Let VLC auto-detect best audio output
-                ]
-            )
+        # VLC outputs audio normally - no audio routing arguments needed
+        # Audio will be synchronized across all nodes using the system's default audio output
+        pass
 
         # Add logging only if enabled (default: disabled for performance)
         if self.enable_vlc_logging:

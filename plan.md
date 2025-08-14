@@ -201,24 +201,24 @@ The system supports configurable audio output to accommodate different deploymen
 - **Values**: `"hdmi"` or `"headphone"`
 
 **How It Works**
-- **VLC Level**: VLC outputs audio normally with `--aout=auto` (auto-detection)
-- **OS Level**: The `audio_output` setting is used by the operating system to route audio
-- **Raspberry Pi**: Audio routing is handled by ALSA/PulseAudio configuration, not VLC arguments
+- **VLC Level**: VLC outputs audio normally without any audio routing arguments
+- **OS Level**: Audio routing is handled by the Raspberry Pi's system settings
+- **Raspberry Pi**: Use `raspi-config` or ALSA settings to configure HDMI vs. headphone jack output
 
 **Default Behavior**
 - **Audio is now enabled by default** for full A/V synchronization
-- HDMI output is the default choice for most stage/projection setups
+- VLC outputs audio normally using the system's default audio output
 - Audio tracks from synchronized videos play through the selected output
 - The system properly synchronizes both video and audio across all nodes
 
 **Example Configuration**
 ```ini
 [DEFAULT]
-# Audio output selection (OS-level routing, not VLC arguments)
-audio_output = hdmi  # or "headphone"
+# Audio output selection (reserved for future implementation)
+audio_output = hdmi  # or "headphone" or "both"
 ```
 
-**Note**: The `audio_output` configuration setting is intended for future OS-level audio routing implementation. Currently, VLC outputs audio normally and the OS handles routing based on system settings.
+**Note**: The `audio_output` configuration setting is reserved for future implementation. Currently, VLC outputs audio normally and the OS handles routing based on system settings. To change audio output (HDMI vs. headphone jack), use `raspi-config` → System Options → Audio → Force HDMI or Force 3.5mm jack.
 
 ## Configuration Management Workflow
 
@@ -561,7 +561,7 @@ The KitchenSync leader system is fully operational with:
 
 - **VLC video playback**: Stable playback with window positioning on left side
 - **Full audio support**: Audio tracks are now enabled and synchronized across all nodes
-- **Configurable audio output**: HDMI (default) or headphone jack selection via config
+- **Simple audio output**: VLC outputs audio normally, OS handles routing (HDMI/headphone jack)
 - **HTML debug overlay**: Live-updating interface positioned on right side  
 - **Real-time monitoring**: Video timing, VLC status, and system health
 - **Systemd auto-start**: Reliable boot-time initialization

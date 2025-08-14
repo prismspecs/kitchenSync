@@ -136,8 +136,6 @@ class ConfigManager:
             "vlc_log_level": "0",  # 0=errors only, 1=warnings, 2=info, 3=debug
             # Networking / sync
             "tick_interval": "0.1",  # seconds between leader sync broadcasts
-            # Media clock stabilization
-            "enable_dummy_audio": "false",  # some platforms need audio clock to keep A/V time stable
             # Audio output selection
             "audio_output": "hdmi",  # hdmi or headphone
         }
