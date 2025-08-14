@@ -21,13 +21,13 @@ class MockMidiOut:
     """Mock MIDI output for testing/simulation"""
 
     def open_port(self, port: int = 0) -> None:
-        print(f"MIDI: Opened mock port {port}")
+        pass
 
     def send_message(self, message: List[int]) -> None:
-        print(f"MIDI: {message}")
+        pass
 
     def close_port(self) -> None:
-        print("MIDI: Closed mock port")
+        pass
 
     def get_port_count(self) -> int:
         return 1
@@ -62,13 +62,18 @@ class MidiManager:
             self.midi_out.open_port(self.port)
 
             if self.use_mock:
-                print(f"✓ MIDI mock output initialized on port {self.port}")
+                log_info(
+                    f"MIDI mock output initialized on port {self.port}",
+                    component="midi",
+                )
             else:
-                print(f"✓ MIDI output initialized on port {self.port}")
+                log_info(
+                    f"MIDI output initialized on port {self.port}", component="midi"
+                )
 
         except Exception as e:
-            print(f"⚠️ MIDI setup failed: {e}")
-            print("Falling back to simulation mode")
+            log_warning(f"MIDI setup failed: {e}", component="midi")
+            log_warning("Falling back to simulation mode", component="midi")
             self.midi_out = MockMidiOut()
             self.midi_out.open_port(self.port)
 
@@ -82,7 +87,7 @@ class MidiManager:
 
             message = [0x90 | channel, note, velocity]
             self.midi_out.send_message(message)
-            print(f"🎵 MIDI Note ON: Ch{channel+1} Note{note} Vel{velocity}")
+            # no stdout spam in production
 
         except Exception as e:
             print(f"Error sending note on: {e}")
@@ -95,7 +100,7 @@ class MidiManager:
 
             message = [0x80 | channel, note, 0]
             self.midi_out.send_message(message)
-            print(f"🎵 MIDI Note OFF: Ch{channel+1} Note{note}")
+            # no stdout spam in production
 
         except Exception as e:
             print(f"Error sending note off: {e}")
@@ -109,7 +114,7 @@ class MidiManager:
 
             message = [0xB0 | channel, control, value]
             self.midi_out.send_message(message)
-            print(f"🎛️ MIDI CC: Ch{channel+1} CC{control}={value}")
+            # no stdout spam in production
 
         except Exception as e:
             print(f"Error sending control change: {e}")
@@ -129,14 +134,14 @@ class MidiManager:
                 cue.get("channel", 1), cue.get("control", 0), cue.get("value", 0)
             )
         else:
-            print(f"⚠️ Unknown MIDI cue type: {cue_type}")
+            log_warning(f"Unknown MIDI cue type: {cue_type}", component="midi")
 
     def cleanup(self) -> None:
         """Clean up MIDI resources"""
         try:
             if self.midi_out:
                 self.midi_out.close_port()
-                print("🛑 MIDI output closed")
+                log_info("MIDI output closed", component="midi")
         except Exception as e:
             print(f"Error closing MIDI: {e}")
 
