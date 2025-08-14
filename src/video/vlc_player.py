@@ -46,8 +46,6 @@ class VLCVideoPlayer:
         self.enable_looping = True
         self.loop_callback = None
         self.video_output: Optional[str] = None
-        self._last_position_time = 0.0
-        self._position_check_interval = 0.5  # Check every 500ms
 
         # Check VLC availability once at init
         if not VLC_PYTHON_AVAILABLE:
@@ -165,46 +163,29 @@ class VLCVideoPlayer:
             log_error(f"Error resuming: {e}", component="vlc")
             return False
 
-    def _start_position_monitoring(self):
-        """Start monitoring video position to detect VLC native loops"""
-        import threading
+    def _on_video_end(self, event):
+        """Handle video end event for looping"""
+        if self.enable_looping and self.vlc_player:
+            try:
+                self.loop_count += 1
+                log_info(
+                    f"Video ended, starting loop #{self.loop_count}", component="vlc"
+                )
 
-        def position_monitor():
-            while self.is_playing:
-                try:
-                    if not self.vlc_player:
-                        break
+                # Notify callback before restarting (for MIDI sync)
+                if self.loop_callback:
+                    try:
+                        self.loop_callback(self.loop_count)
+                    except Exception as e:
+                        log_error(f"Error in video loop callback: {e}", component="vlc")
 
-                    current_time = (
-                        self.vlc_player.get_time() / 1000.0
-                    )  # Convert to seconds
-                    if current_time >= 0:
-                        # Detect loop: time went backwards significantly
-                        if self._last_position_time > 1.0 and current_time < 1.0:
-                            self.loop_count += 1
-                            log_info(
-                                f"Detected VLC native loop #{self.loop_count}",
-                                component="vlc",
-                            )
+                # Reset to beginning and restart
+                self.vlc_player.set_position(0.0)
+                self.vlc_player.play()
 
-                            # Notify callback for MIDI reset
-                            if self.loop_callback:
-                                try:
-                                    self.loop_callback(self.loop_count)
-                                except Exception as e:
-                                    log_error(
-                                        f"Error in video loop callback: {e}",
-                                        component="vlc",
-                                    )
-
-                        self._last_position_time = current_time
-
-                    time.sleep(self._position_check_interval)
-                except Exception:
-                    pass
-
-        monitor_thread = threading.Thread(target=position_monitor, daemon=True)
-        monitor_thread.start()
+                log_info(f"Video loop #{self.loop_count} started", component="vlc")
+            except Exception as e:
+                log_error(f"Error restarting video loop: {e}", component="vlc")
 
     def _start_with_python_vlc(self) -> bool:
         """Start video using VLC Python bindings"""
@@ -240,10 +221,13 @@ class VLCVideoPlayer:
 
             self.vlc_player.set_media(self.vlc_media)
 
-            # Start position monitoring for loop detection (VLC native repeat)
+            # Set up looping event handler
             if self.enable_looping:
-                self._start_position_monitoring()
-                log_info("Video looping enabled (native VLC repeat)", component="vlc")
+                events = self.vlc_player.event_manager()
+                events.event_attach(
+                    vlc.EventType.MediaPlayerEndReached, self._on_video_end
+                )
+                log_info("Video looping enabled", component="vlc")
 
             # Start playback
             log_info("Starting VLC playback...", component="vlc")
@@ -286,7 +270,6 @@ class VLCVideoPlayer:
         args = [
             # Essential settings for performance
             "--no-video-title-show",
-            "--input-repeat=-1",  # Loop video infinitely
             # Hardware acceleration for Raspberry Pi performance
             "--avcodec-hw=any",  # Enable hardware decoding (CRITICAL for performance)
             "--codec=avcodec",  # Use avcodec for better hardware support
