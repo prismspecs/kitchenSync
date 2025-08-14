@@ -50,6 +50,8 @@ class VLCVideoPlayer:
         self._monitor_thread: Optional[threading.Thread] = None
         self._monitor_stop_event: Optional[threading.Event] = None
         self._is_restarting: bool = False
+        self._last_time_ms: int = -1
+        self._last_time_check: float = 0.0
 
         # Check VLC availability once at init
         if not VLC_PYTHON_AVAILABLE:
@@ -266,13 +268,48 @@ class VLCVideoPlayer:
                         pos = float(self.vlc_player.get_position())
                     except Exception:
                         pos = -1.0
+                    # Use absolute time as primary end detection
+                    try:
+                        cur_ms = int(self.vlc_player.get_time())
+                    except Exception:
+                        cur_ms = -1
+                    try:
+                        len_ms = int(self.vlc_player.get_length())
+                    except Exception:
+                        len_ms = -1
 
-                    # Trigger loop if VLC reports end/stopped, or preempt near tail
-                    if state in (vlc.State.Ended, vlc.State.Stopped):
-                        self._restart_loop()
-                    elif pos >= 0.98:
-                        # Preemptive loop to avoid hitting Ended and window tear
-                        self._restart_loop()
+                    # Detect natural wrap-around (VLC internal repeat) and invoke callback only
+                    if len_ms > 0 and self.enable_looping:
+                        # Initialize tracking on first valid time
+                        if self._last_time_ms < 0 and cur_ms >= 0:
+                            self._last_time_ms = cur_ms
+                            self._last_time_check = time.time()
+
+                        # Loop edge: previous time was near end and current is near start
+                        if (
+                            self._last_time_ms >= 0
+                            and cur_ms >= 0
+                            and self._last_time_ms > (len_ms - 400)
+                            and cur_ms < 400
+                        ):
+                            try:
+                                self.loop_count += 1
+                                if self.loop_callback:
+                                    self.loop_callback(self.loop_count)
+                                log_info(
+                                    f"Detected natural loop edge (#{self.loop_count})",
+                                    component="vlc",
+                                )
+                            except Exception as e:
+                                log_error(f"Loop callback error: {e}", component="vlc")
+
+                        # Update stall timer
+                        if cur_ms == self._last_time_ms:
+                            # no advance; refresh check timestamp
+                            pass
+                        else:
+                            self._last_time_ms = cur_ms
+                            self._last_time_check = time.time()
                 except Exception:
                     pass
                 time.sleep(0.2)
@@ -314,8 +351,13 @@ class VLCVideoPlayer:
 
             self.vlc_player.set_media(self.vlc_media)
 
-            # Start monitor-based looping (single mechanism)
+            # Enable seamless looping in VLC and monitor for loop edges
             if self.enable_looping:
+                try:
+                    # Loop indefinitely at the media level (seamless)
+                    self.vlc_media.add_option(":input-repeat=-1")
+                except Exception:
+                    pass
                 self._start_monitoring()
 
             # Start playback
