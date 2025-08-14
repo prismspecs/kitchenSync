@@ -157,22 +157,25 @@ class CollaboratorPi:
 
         # Handle omxplayer-sync style wait states
         if self.wait_for_sync:
-            # We're waiting for deviation to become small enough after a seek
+            # We're waiting for leader time to catch up to our seek-ahead position
+            # Check if leader time has caught up to where we seeked ahead
+            time_since_seek = time.time() - self.sync_timer
             current_position = self.video_player.get_position() or 0
-            deviation = abs(leader_time - current_position)
-            if deviation < 0.1:  # Within 100ms, we're synced
+
+            # omxplayer-sync logic: if leader time catches up to our position, resume
+            if abs(leader_time - current_position) < 0.1:
                 log_info(
-                    f"Sync achieved! Deviation: {deviation:.3f}s, resuming playback",
+                    f"Leader caught up! Resuming playback. Time since seek: {time_since_seek:.2f}s",
                     component="sync",
                 )
                 self.video_player.resume()
                 self.wait_for_sync = False
                 self.wait_after_sync = time.time()
             else:
-                # Still waiting for sync
-                if time.time() - self.sync_timer > 10:  # Timeout after 10s
+                # Still waiting - timeout after 10 seconds
+                if time_since_seek > 10:
                     log_warning(
-                        f"Sync timeout after 10s, deviation still {deviation:.3f}s",
+                        f"Wait timeout after {time_since_seek:.1f}s, forcing resume",
                         component="sync",
                     )
                     self.video_player.resume()
@@ -184,6 +187,9 @@ class CollaboratorPi:
             # Grace period after correction - don't allow new corrections
             if (time.time() - self.wait_after_sync) > self.sync_grace_time:
                 self.wait_after_sync = False
+                log_info(
+                    "Grace period ended, sync monitoring resumed", component="sync"
+                )
             else:
                 return
 
@@ -342,8 +348,7 @@ class CollaboratorPi:
             else 0.0
         )
 
-        # Check if correction is needed
-        # Use configured deviation_threshold directly (no hard 1.0s floor)
+        # Check if correction is needed - use omxplayer-sync logic
         correction_threshold = self.deviation_threshold
         if abs(median_deviation) > correction_threshold:
             current_time = time.time()
@@ -353,34 +358,13 @@ class CollaboratorPi:
                 return
 
             log_info(
-                f"Sync correction needed: {median_deviation:.3f}s deviation (threshold: {correction_threshold:.3f}s)",
+                f"Large deviation detected: {median_deviation:.3f}s (threshold: {correction_threshold:.3f}s)",
                 component="sync",
             )
             print(f"🔄 Sync correction: {median_deviation:.3f}s deviation")
 
-            # Apply correction (respect duration wrap)
-            # Nudge toward/away from leader to overcome actuation lag
-            correction_lead = 0.0
-            if median_deviation < 0:
-                # Video is behind → seek slightly ahead
-                correction_lead = self.latency_compensation
-            elif median_deviation > 0:
-                # Video is ahead → seek slightly behind
-                correction_lead = -self.latency_compensation
-
-            target_position = expected_position + correction_lead
-            if duration and duration > 0:
-                target_position = target_position % duration
-
-            # Clear old deviation samples BEFORE seeking to prevent feedback loop
-            # The old samples are from before the correction and will skew future measurements
-            self.deviation_samples.clear()
-
-            # omxplayer-sync approach: pause, seek ahead, wait for sync
-            log_info(
-                f"Pausing for correction, seeking to {target_position:.3f}s (jump ahead: {self.sync_jump_ahead:.3f}s)",
-                component="sync",
-            )
+            # omxplayer-sync approach: pause, seek to leader + jump ahead, wait for leader to catch up
+            log_info("Pausing for sync correction...", component="sync")
 
             # Pause playback during correction
             if not self.video_player.pause():
@@ -389,24 +373,26 @@ class CollaboratorPi:
 
             time.sleep(0.1)  # Brief pause for VLC to settle
 
-            # Seek to target + jump ahead (like omxplayer-sync)
-            jump_ahead_position = target_position + self.sync_jump_ahead
+            # Seek to leader position + jump ahead (omxplayer-sync method)
+            target_position = leader_time + self.sync_jump_ahead
             if duration and duration > 0:
-                jump_ahead_position = jump_ahead_position % duration
+                target_position = target_position % duration
 
-            if self.video_player.set_position(jump_ahead_position):
+            # Clear old deviation samples BEFORE seeking to prevent feedback loop
+            self.deviation_samples.clear()
+
+            if self.video_player.set_position(target_position):
                 log_info(
-                    f"Seek successful to {jump_ahead_position:.3f}s (target was {target_position:.3f}s)",
+                    f"Seeked ahead to {target_position:.3f}s (leader: {leader_time:.3f}s + {self.sync_jump_ahead:.3f}s jump)",
                     component="sync",
                 )
-                # Enter wait-for-sync state
+                # Enter wait-for-sync state - wait for leader to catch up
                 self.wait_for_sync = True
                 self.sync_timer = time.time()
                 self.last_correction_time = time.time()
 
-                # Log the expected sync behavior
                 log_info(
-                    f"Entering wait-for-sync state. Will resume when deviation < 0.1s",
+                    f"Entering wait-for-sync state. Waiting for leader to reach our position...",
                     component="sync",
                 )
             else:
