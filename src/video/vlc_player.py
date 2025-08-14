@@ -257,7 +257,7 @@ class VLCVideoPlayer:
             return
         self._monitor_stop_event = threading.Event()
 
-                def monitor_loop():
+        def monitor_loop():
             debug_counter = 0
             while self._monitor_stop_event and not self._monitor_stop_event.is_set():
                 try:
@@ -282,7 +282,9 @@ class VLCVideoPlayer:
                     # Debug output every 50 cycles (~10s at 0.2s intervals)
                     debug_counter += 1
                     if debug_counter % 50 == 0 or debug_counter <= 5:
-                        print(f"🔍 VLC DEBUG: state={state}, pos={pos:.3f}, time={cur_ms}ms/{len_ms}ms, last={self._last_time_ms}ms")
+                        print(
+                            f"🔍 VLC DEBUG: state={state}, pos={pos:.3f}, time={cur_ms}ms/{len_ms}ms, last={self._last_time_ms}ms"
+                        )
 
                     # Detect natural wrap-around (VLC internal repeat) and invoke callback only
                     if len_ms > 0 and self.enable_looping:
@@ -291,7 +293,7 @@ class VLCVideoPlayer:
                             self._last_time_ms = cur_ms
                             self._last_time_check = time.time()
                             print(f"🔍 VLC DEBUG: Initialized tracking at {cur_ms}ms")
-                        
+
                         # Loop edge: previous time was near end and current is near start
                         if (
                             self._last_time_ms >= 0
@@ -303,7 +305,9 @@ class VLCVideoPlayer:
                                 self.loop_count += 1
                                 if self.loop_callback:
                                     self.loop_callback(self.loop_count)
-                                print(f"🔄 VLC DEBUG: Detected natural loop edge (#{self.loop_count}) - {self._last_time_ms}ms -> {cur_ms}ms")
+                                print(
+                                    f"🔄 VLC DEBUG: Detected natural loop edge (#{self.loop_count}) - {self._last_time_ms}ms -> {cur_ms}ms"
+                                )
                                 log_info(
                                     f"Detected natural loop edge (#{self.loop_count})",
                                     component="vlc",
@@ -317,7 +321,9 @@ class VLCVideoPlayer:
                             if cur_ms == self._last_time_ms:
                                 stall_time = time.time() - self._last_time_check
                                 if stall_time > 0.5:
-                                    print(f"⚠️ VLC DEBUG: Stalled at {cur_ms}ms for {stall_time:.1f}s (near end)")
+                                    print(
+                                        f"⚠️ VLC DEBUG: Stalled at {cur_ms}ms for {stall_time:.1f}s (near end)"
+                                    )
                             else:
                                 self._last_time_ms = cur_ms
                                 self._last_time_check = time.time()
