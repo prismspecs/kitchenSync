@@ -42,7 +42,7 @@ REREGISTER_INTERVAL_SECONDS = 60.0  # How often to re-register with leader
 # (Can be overridden in config file)
 DEFAULT_SYNC_CHECK_INTERVAL = 5.0  # Min time between corrections
 DEFAULT_DEVIATION_THRESHOLD = (
-    0.05  # Error threshold to trigger correction (SYNC_TOLERANCE in omxplayer-sync)
+    0.2  # Error threshold to trigger correction (SYNC_TOLERANCE in omxplayer-sync)
 )
 DEFAULT_SYNC_GRACE_TIME = 5.0  # Cooldown period after correction AND initial grace period (SYNC_GRACE_TIME in omxplayer-sync)
 DEFAULT_SYNC_JUMP_AHEAD = (
