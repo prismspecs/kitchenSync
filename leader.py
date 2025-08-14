@@ -36,9 +36,14 @@ from core.logger import (
 class LeaderPi:
     """Refactored Leader Pi with clean separation of concerns"""
 
-    def __init__(self):
+    def __init__(self, debug_override: bool = False):
         # Initialize configuration
         self.config = ConfigManager("leader_config.ini")
+        
+        # Apply debug override before any other initialization
+        if debug_override:
+            self.config.config["KITCHENSYNC"]["debug"] = "true"
+            print("✓ Debug mode: ENABLED (via command line)")
 
         # Configure logging based on config settings (must be AFTER config loaded)
         enable_system_logging(self.config.enable_system_logging)
@@ -374,7 +379,7 @@ def main():
     try:
         # Create LeaderPi instance first to configure logging
         try:
-            leader_instance = LeaderPi()
+            leader_instance = LeaderPi(debug_override=args.debug)
             # Now logging is configured, safe to log
             log_info("LeaderPi initialized successfully", component="autostart")
         except Exception as e:
@@ -386,12 +391,6 @@ def main():
 
             log_error(f"Traceback: {traceback.format_exc()}", component="autostart")
             raise
-
-        # Override debug mode if specified via command line
-        if args.debug:
-            leader_instance.config.config["KITCHENSYNC"]["debug"] = "true"
-            print("✓ Debug mode: ENABLED (via command line)")
-            log_info("Debug mode enabled", component="autostart")
 
         log_info(f"args.auto = {args.auto}", component="autostart")
         if args.auto:

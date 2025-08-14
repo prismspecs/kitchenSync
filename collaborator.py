@@ -148,6 +148,7 @@ class CollaboratorPi:
         self.deviation_samples = deque(maxlen=self.deviation_samples_maxlen)
         self.last_correction_time = 0
         self.video_start_time = None
+        self.sync_message_count = 0  # Counter for throttling debug output
 
         # Sync state management
         self.wait_for_sync = False
@@ -177,6 +178,26 @@ class CollaboratorPi:
         # Update system time and maintain sync
         # leader_time is now wall-clock time since start, so we can use it directly
         self.system_state.current_time = leader_time
+
+        # Debug mode: Show real-time deviation on every sync message
+        if self.config.debug_mode and self.system_state.is_running and self.video_start_time:
+            self.sync_message_count += 1
+            # Show deviation info every 10 messages (about every 0.2 seconds at 50Hz)
+            # Change this number to adjust frequency: 5=0.1s, 10=0.2s, 25=0.5s, 50=1.0s
+            if self.sync_message_count % 10 == 0:
+                video_position = self.video_player.get_position()
+                if video_position is not None:
+                    # Calculate expected position with latency compensation
+                    duration = self.video_player.get_duration()
+                    expected_position = leader_time + self.latency_compensation
+                    if duration and duration > 0:
+                        expected_position = expected_position % duration
+                    
+                    current_deviation = video_position - expected_position
+                    log_info(
+                        f"📊 Sync: leader={leader_time:.3f}s → video={video_position:.3f}s → deviation={current_deviation:+.3f}s",
+                        component="sync",
+                    )
 
         # Process MIDI cues (safe no-op if no schedule)
         self.midi_scheduler.process_cues(leader_time)
@@ -338,14 +359,6 @@ class CollaboratorPi:
 
         # Add to samples for median filtering
         self.deviation_samples.append(deviation)
-
-        # Debug mode: Show real-time deviation info
-        if self.config.debug_mode and len(self.deviation_samples) % 5 == 0:
-            # Show every 5th sample to avoid spam
-            log_info(
-                f"Sync monitor: video={video_position:.3f}s, expected={expected_position:.3f}s, deviation={deviation:.3f}s, samples={len(self.deviation_samples)}",
-                component="sync",
-            )
 
         # Only proceed if we have enough samples
         if len(self.deviation_samples) < self.deviation_samples_maxlen // 2:
