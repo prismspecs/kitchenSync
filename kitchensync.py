@@ -75,12 +75,11 @@ class KitchenSyncAutoStart:
             "No USB config found, defaulting to collaborator", component="autostart"
         )
 
-        # Create a default configuration, which is collaborator by default
+        # Create a default configuration for collaborator mode
         self.config = ConfigManager()
-        self.config.load_configuration()  # This loads hardcoded defaults
-
-        # Explicitly ensure it's not treated as a leader
-        self.config.is_leader = False
+        self.config._create_default_config(
+            is_leader=False
+        )  # Explicitly set as collaborator
 
         # Update local configs for collaborator mode
         self._update_local_configs()

@@ -4,6 +4,7 @@
 # with proper environment variables for display access
 
 set -e  # Exit on any error
+set -x  # Enable debug tracing to show each command execution
 
 # Function to archive logs with rotation (max 1000 lines per archive)
 archive_log() {
