@@ -26,9 +26,14 @@ except Exception as e:
 
 # Add src to path
 try:
-    sys.path.insert(0, str(Path(__file__).parent / "src"))
+    # Get the absolute path to the directory containing this script
+    script_dir = Path(__file__).parent.resolve()
+    src_path = script_dir / "src"
+    sys.path.insert(0, str(src_path))
+
     with open("/tmp/kitchensync_startup.log", "a") as f:
-        f.write("✓ Added src to path\n")
+        f.write(f"✓ Script dir: {script_dir}\n")
+        f.write(f"✓ Added src to path: {src_path}\n")
 except Exception as e:
     with open("/tmp/kitchensync_startup.log", "a") as f:
         f.write(f"✗ Failed to add src to path: {e}\n")
