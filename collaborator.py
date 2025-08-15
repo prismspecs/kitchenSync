@@ -42,10 +42,7 @@ REREGISTER_INTERVAL_SECONDS = 60.0  # How often to re-register with leader
 # (Can be overridden in config file)
 DEFAULT_SYNC_TOLERANCE = 1.0  # General sync tolerance (not currently used)
 DEFAULT_SYNC_CHECK_INTERVAL = 5.0  # Min time between corrections
-DEFAULT_DEVIATION_THRESHOLD = (
-    0.2  # Error threshold to trigger correction (tight for initial sync)
-)
-DEFAULT_STABLE_SYNC_THRESHOLD = 0.5  # Relaxed threshold after stable sync achieved
+DEFAULT_DEVIATION_THRESHOLD = 0.2  # Error threshold to trigger correction
 DEFAULT_SYNC_GRACE_TIME = 5.0  # Cooldown period after correction
 DEFAULT_SYNC_JUMP_AHEAD = 3.0  # How far ahead to seek for corrections
 DEFAULT_LATENCY_COMPENSATION = (
@@ -130,9 +127,6 @@ class CollaboratorPi:
         self.deviation_threshold = self.config.getfloat(
             "deviation_threshold", DEFAULT_DEVIATION_THRESHOLD
         )
-        self.stable_sync_threshold = self.config.getfloat(
-            "stable_sync_threshold", DEFAULT_STABLE_SYNC_THRESHOLD
-        )
         self.sync_grace_time = self.config.getfloat(
             "sync_grace_time", DEFAULT_SYNC_GRACE_TIME
         )
@@ -165,13 +159,6 @@ class CollaboratorPi:
         self.debug_sync_logging = False
         self.last_debug_log_time = 0
         self.debug_log_interval = 0.2  # Log every 200ms to avoid spam
-
-        # Stable sync state tracking
-        self.stable_sync_achieved = False
-        self.stable_sync_start_time = None
-        self.stable_sync_duration_required = (
-            30.0  # 30 seconds of stable sync before relaxing threshold
-        )
 
     def _handle_sync(
         self, leader_time: float, received_at: float | None = None
@@ -335,10 +322,6 @@ class CollaboratorPi:
         self.last_video_position = None
         self.deviation_samples.clear()
 
-        # Reset stable sync state
-        self.stable_sync_achieved = False
-        self.stable_sync_start_time = None
-
         log_info("Playback stopped", component="collaborator")
 
     def _check_video_sync(self, leader_time: float) -> None:
@@ -434,26 +417,17 @@ class CollaboratorPi:
         )
 
         # Check if correction is needed
-        # Use dynamic threshold: tight initially, relaxed after stable sync
-        current_threshold = (
-            self.stable_sync_threshold
-            if self.stable_sync_achieved
-            else self.deviation_threshold
-        )
-
-        if abs(median_deviation) > current_threshold:
+        # Use configured deviation_threshold directly
+        correction_threshold = self.deviation_threshold
+        if abs(median_deviation) > correction_threshold:
             current_time = time.time()
 
             # Avoid corrections too close together
             if current_time - self.last_correction_time < self.sync_check_interval:
                 return
 
-            # Reset stable sync state when we need a correction
-            self.stable_sync_achieved = False
-            self.stable_sync_start_time = None
-
             log_info(
-                f"Sync correction needed: {median_deviation:.3f}s deviation (threshold: {current_threshold:.3f}s)",
+                f"Sync correction needed: {median_deviation:.3f}s deviation (threshold: {correction_threshold:.3f}s)",
                 component="sync",
             )
             print(f"🔄 Sync correction: {median_deviation:.3f}s deviation")
@@ -512,24 +486,6 @@ class CollaboratorPi:
             else:
                 log_warning("Seek failed, resuming playback", component="sync")
                 self.video_player.resume()
-        else:
-            # Good sync - track stable sync state
-            current_time = time.time()
-            if not self.stable_sync_achieved:
-                if self.stable_sync_start_time is None:
-                    self.stable_sync_start_time = current_time
-                    log_info("Starting stable sync timer", component="sync")
-                elif (
-                    current_time - self.stable_sync_start_time
-                ) >= self.stable_sync_duration_required:
-                    self.stable_sync_achieved = True
-                    log_info(
-                        f"✓ Stable sync achieved! Switching to relaxed threshold ({self.stable_sync_threshold:.1f}s)",
-                        component="sync",
-                    )
-                    print(
-                        f"✓ Sync stabilized - using relaxed threshold ({self.stable_sync_threshold:.1f}s)"
-                    )
 
     def _log_sync_debug_info(self, leader_time: float) -> None:
         """Log detailed sync information for debugging"""
@@ -562,18 +518,12 @@ class CollaboratorPi:
         in_grace_period = (time.time() - self.last_loop_time) < self.loop_grace_period
         waiting_for_sync = self.wait_for_sync
         waiting_after_sync = self.wait_after_sync
-        current_threshold = (
-            self.stable_sync_threshold
-            if self.stable_sync_achieved
-            else self.deviation_threshold
-        )
 
         print(
             f"SYNC_DEBUG: Leader={leader_time:.3f}s | Video={video_position:.3f}s | "
             f"Expected={expected_position:.3f}s | RawDev={raw_deviation:.3f}s | "
             f"LoopDev={loop_aware_deviation:.3f}s | Duration={duration:.1f}s | "
-            f"Grace={in_grace_period} | WaitSync={waiting_for_sync} | WaitAfter={waiting_after_sync} | "
-            f"Threshold={current_threshold:.1f}s | Stable={self.stable_sync_achieved}"
+            f"Grace={in_grace_period} | WaitSync={waiting_for_sync} | WaitAfter={waiting_after_sync}"
         )
 
     def run(self) -> None:
