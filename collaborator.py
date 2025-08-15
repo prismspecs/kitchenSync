@@ -351,6 +351,21 @@ class CollaboratorPi:
 
         self.last_video_position = video_position
 
+        # Check if we're in post-loop grace period (intelligent approach)
+        # Ignore sync corrections when video position is very close to beginning
+        # This handles VLC time reporting lag after loops
+        post_loop_grace_threshold = (
+            5.0  # Ignore corrections for first 5 seconds after loop
+        )
+        in_post_loop_grace = video_position < post_loop_grace_threshold
+
+        if in_post_loop_grace:
+            if self.debug_sync_logging:
+                print(
+                    f"SYNC_SKIP: In post-loop grace period (video position {video_position:.3f}s < {post_loop_grace_threshold}s)"
+                )
+            return
+
         # Check if we're in loop grace period
         current_time = time.time()
         if current_time - self.last_loop_time < self.loop_grace_period:
@@ -378,16 +393,6 @@ class CollaboratorPi:
             elif deviation < -half_duration:
                 # Collaborator has looped, leader has not
                 deviation += duration
-
-        # ADDITIONAL CHECK: If we're very close to the start of the video (within 5 seconds)
-        # and the deviation is moderate, we might be dealing with post-loop settling
-        # Be more conservative with corrections in this case
-        if leader_time < 5.0 and abs(deviation) < 1.0:
-            log_info(
-                f"Near start of video (t={leader_time:.2f}s), being conservative with deviation {deviation:.3f}s",
-                component="sync",
-            )
-            return
 
         # Add to samples for median filtering
         self.deviation_samples.append(deviation)
