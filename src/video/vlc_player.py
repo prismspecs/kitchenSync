@@ -253,16 +253,19 @@ class VLCVideoPlayer:
 
     def restart_playback(self) -> bool:
         """Restart video playback from beginning (for command-based looping)"""
-        if not self.vlc_player:
+        if not self.vlc_player or not self.vlc_media:
             return False
         try:
-            log_info("Restarting video playback from beginning", component="vlc")
-            # Stop to clear end state, then play and seek to 0 for reliability
-            self.vlc_player.stop()
-            time.sleep(0.05)
+            log_info(
+                "Restarting video playback from beginning via set_media",
+                component="vlc",
+            )
+            # This should reset the media stream without destroying the window
+            self.vlc_player.set_media(self.vlc_media)
             self.vlc_player.play()
-            time.sleep(0.05)
-            self.vlc_player.set_time(0)
+            # Small delay to let the media settle, then ensure we're at the start
+            time.sleep(0.1)
+            self.vlc_player.set_position(0)
             log_info("Video restart completed", component="vlc")
             return True
         except Exception as e:
