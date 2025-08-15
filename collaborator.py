@@ -144,16 +144,16 @@ class CollaboratorPi:
         self.deviation_samples = deque(maxlen=self.deviation_samples_maxlen)
         self.last_correction_time = 0
         self.video_start_time = None
-        self.last_video_position = None  # Track position to detect loops
 
         # Sync state management
         self.wait_for_sync = False
         self.wait_after_sync = False
         self.sync_timer = 0
 
-        # Loop detection and grace period
-        self.loop_grace_period = 1.0  # 1 second grace period after loop
-        self.last_loop_time = 0
+        # Position-based grace period (like omxplayer-sync)
+        self.position_grace_period = (
+            5.0  # Don't sync correct if either position < 5 seconds
+        )
 
     def _handle_sync(
         self, leader_time: float, received_at: float | None = None
@@ -307,13 +307,12 @@ class CollaboratorPi:
 
         # Reset video state
         self.video_start_time = None
-        self.last_video_position = None
         self.deviation_samples.clear()
 
         log_info("Playback stopped", component="collaborator")
 
     def _check_video_sync(self, leader_time: float) -> None:
-        """Check and correct video sync using median filtering"""
+        """Check and correct video sync using omxplayer-sync position-based grace period"""
         if not self.video_player.is_playing or not self.video_start_time:
             return
 
@@ -323,36 +322,32 @@ class CollaboratorPi:
             log_warning("Could not get video position for sync check", component="sync")
             return
 
-        # Detect if we just looped - check for position near start AND previous position was near end
-        if self.last_video_position is not None:
-            duration = self.video_player.get_duration()
-            if duration and duration > 0:
-                # VLC's seamless repeat: check if we went from near-end to near-start
-                near_start = video_position < (duration * 0.1)  # First 10% of video
-                was_near_end = self.last_video_position > (
-                    duration * 0.9
-                )  # Last 10% of video
-
-                if near_start and was_near_end:
-                    log_info(
-                        f"Loop detected: went from {self.last_video_position:.2f}s to {video_position:.2f}s (seamless VLC repeat)",
-                        component="sync",
-                    )
-                    self.last_loop_time = time.time()
-                    self.deviation_samples.clear()  # Clear old samples after loop
-
-        self.last_video_position = video_position
-
-        # Check if we're in loop grace period
-        current_time = time.time()
-        if current_time - self.last_loop_time < self.loop_grace_period:
-            log_info(
-                f"In loop grace period, ignoring sync for {self.loop_grace_period - (current_time - self.last_loop_time):.2f}s more",
-                component="sync",
-            )
-            return
+        # omxplayer-sync approach: Only sync correct if BOTH positions are past grace period
+        # This naturally handles loops since both leader and collaborator will be < 5s after looping
+        if (
+            leader_time < self.position_grace_period
+            or video_position < self.position_grace_period
+        ):
+            return  # Skip sync correction during grace period
 
         # Calculate expected position with latency compensation
+        # Wrap to video duration if known
+        duration = self.video_player.get_duration()
+        expected_position = leader_time + self.latency_compensation
+        if duration and duration > 0:
+            expected_position = expected_position % duration
+
+        deviation = video_position - expected_position
+
+        # Make sync logic "loop-aware"
+        if duration and duration > 0:
+            half_duration = duration / 2.0
+            if deviation > half_duration:
+                # Leader has looped, collaborator has not
+                deviation -= duration
+            elif deviation < -half_duration:
+                # Collaborator has looped, leader has not
+                deviation += duration
         # Wrap to video duration if known
         duration = self.video_player.get_duration()
         expected_position = leader_time + self.latency_compensation
