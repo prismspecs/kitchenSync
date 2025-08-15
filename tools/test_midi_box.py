@@ -9,15 +9,94 @@ import time
 from pathlib import Path
 
 # Add src to path
-sys.path.insert(0, str(Path(__file__).parent / "src"))
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 try:
     from midi.manager import MidiManager
-
     print("✓ KitchenSync MIDI manager available")
-except ImportError:
+except ImportError as e:
     print("❌ KitchenSync MIDI manager not available")
+    print(f"Import error: {e}")
     print("This script needs to run from the KitchenSync directory")
+    print("Falling back to direct MIDI commands...")
+    
+    # Fallback: direct amidi testing
+    import subprocess
+    
+    def test_with_amidi():
+        """Simple fallback testing using amidi commands"""
+        print("\n🔧 Using direct amidi commands for testing")
+        print("Make sure your MIDI box is connected!")
+        
+        # Get MIDI port
+        port = input("Enter MIDI port (e.g., hw:3,0,0): ").strip()
+        if not port:
+            port = "hw:3,0,0"
+        
+        print(f"Testing with port: {port}")
+        
+        # Test each output
+        for output in range(1, 9):
+            note_hex = f"{59 + output:02X}"  # Convert to hex
+            print(f"\nTesting Output {output} (Note {59 + output}, Hex {note_hex})")
+            
+            try:
+                # Turn ON
+                subprocess.run(["amidi", "-p", port, "--send-hex", f"90 {note_hex} 7F"], check=True)
+                print(f"  ✓ Output {output} ON")
+                time.sleep(1.5)
+                
+                # Turn OFF  
+                subprocess.run(["amidi", "-p", port, "--send-hex", f"80 {note_hex} 00"], check=True)
+                print(f"  ✓ Output {output} OFF")
+                time.sleep(0.5)
+                
+            except subprocess.CalledProcessError as e:
+                print(f"  ❌ Error testing output {output}: {e}")
+            except FileNotFoundError:
+                print("  ❌ amidi command not found. Install alsa-utils package.")
+                return
+        
+        print("\n✅ Basic testing completed!")
+        
+        # Offer manual testing
+        print("\nManual testing:")
+        print("Commands: 'on X' or 'off X' where X is output 1-8")
+        print("Type 'quit' to exit")
+        
+        while True:
+            cmd = input("\nCommand: ").strip().lower()
+            if cmd == 'quit':
+                break
+                
+            try:
+                parts = cmd.split()
+                if len(parts) >= 2:
+                    action = parts[0]
+                    output = int(parts[1])
+                    
+                    if 1 <= output <= 8:
+                        note_hex = f"{59 + output:02X}"
+                        
+                        if action == 'on':
+                            subprocess.run(["amidi", "-p", port, "--send-hex", f"90 {note_hex} 7F"], check=True)
+                            print(f"✓ Output {output} ON")
+                        elif action == 'off':
+                            subprocess.run(["amidi", "-p", port, "--send-hex", f"80 {note_hex} 00"], check=True)
+                            print(f"✓ Output {output} OFF")
+                        else:
+                            print("Use 'on' or 'off'")
+                    else:
+                        print("Output must be 1-8")
+                else:
+                    print("Format: 'on 1' or 'off 1'")
+                    
+            except Exception as e:
+                print(f"Error: {e}")
+    
+    # Run fallback testing
+    test_with_amidi()
+    sys.exit(0)
     sys.exit(1)
 
 
