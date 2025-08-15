@@ -16,13 +16,22 @@ KitchenSync can send precisely-timed MIDI messages synchronized to video playbac
 
 ## MIDI Message Format
 
-For relay control, we use **MIDI Note On/Off** messages:
+For relay control, we use **MIDI Note On/Off** messages with **note-based addressing**:
 
 - **Note On** (0x90 + channel): Turn relay ON
-- **Note Off** (0x80 + channel): Turn relay OFF
-- **Channels 1-16**: Map to different relay outputs
-- **Note number**: Usually 60 (middle C), but configurable
-- **Velocity**: Usually 127 (max) for ON, 0 for OFF
+- **Note Off** (0x80 + channel): Turn relay OFF  
+- **Note Numbers 60-67**: Map to relay outputs 1-8
+  - Note 60 (C4) = Output 1
+  - Note 61 (C#4) = Output 2
+  - Note 62 (D4) = Output 3
+  - Note 63 (D#4) = Output 4
+  - Note 64 (E4) = Output 5
+  - Note 65 (F4) = Output 6
+  - Note 66 (F#4) = Output 7
+  - Note 67 (G4) = Output 8
+- **MIDI Channel**: Ignored (any channel 1-16 works)
+- **Velocity**: Controls output power (0 = OFF, 1-127 = ON with power level)
+- **Auto-timeout**: Notes automatically turn OFF after 5 seconds if no new messages
 
 ## Schedule File Format
 
@@ -40,7 +49,7 @@ JSON format provides the most control and is easiest to create/edit:
     "channel": 1,
     "note": 60,
     "velocity": 127,
-    "description": "Relay 1 ON"
+    "description": "Output 1 ON"
   },
   {
     "time": 8.0,
@@ -48,7 +57,15 @@ JSON format provides the most control and is easiest to create/edit:
     "channel": 1, 
     "note": 60,
     "velocity": 0,
-    "description": "Relay 1 OFF"
+    "description": "Output 1 OFF"
+  },
+  {
+    "time": 10.0,
+    "type": "note_on",
+    "channel": 1,
+    "note": 61,
+    "velocity": 100,
+    "description": "Output 2 ON (Medium power)"
   }
 ]
 ```
@@ -56,10 +73,10 @@ JSON format provides the most control and is easiest to create/edit:
 #### JSON Properties
 
 - **time**: Time in video (seconds) when event should trigger
-- **type**: "note_on", "note_off", or "control_change"
-- **channel**: MIDI channel (1-16) - maps to relay number
-- **note**: MIDI note number (typically 60)
-- **velocity**: 127 for ON, 0 for OFF
+- **type**: "note_on" or "note_off"
+- **channel**: MIDI channel (1-16, ignored by hardware but useful for organization)
+- **note**: MIDI note number (60-67 for outputs 1-8)
+- **velocity**: Power level (0 = OFF, 1-127 = ON with power control)
 - **description**: Optional human-readable description
 
 ### 2. Standard MIDI Files (.mid/.midi)
@@ -227,29 +244,76 @@ Create schedules using familiar music software:
 
 ## Hardware Requirements
 
-### MIDI Interface
+### MIDI Relay Box Specifications
 
-You need hardware that converts MIDI messages to relay control:
+**Your specific MIDI relay box behavior:**
 
-1. **USB MIDI Interface** - Connect Pi to MIDI hardware
-2. **MIDI-to-Relay Converter** - Receives MIDI, controls relays
-3. **Relay Board** - The actual switches/relays
+- **8 Outputs**: Controlled by MIDI notes 60-67 (C4 to G4)
+- **Note Mapping**: 
+  - Note 60 (C4) = Output 1
+  - Note 61 (C#4) = Output 2  
+  - Note 62 (D4) = Output 3
+  - Note 63 (D#4) = Output 4
+  - Note 64 (E4) = Output 5
+  - Note 65 (F4) = Output 6
+  - Note 66 (F#4) = Output 7
+  - Note 67 (G4) = Output 8
+- **Channel Independence**: MIDI channel is ignored (any channel 1-16 works)
+- **Power Control**: Velocity controls output power (0=OFF, 1-127=power level)
+- **Auto-Timeout**: Outputs automatically turn OFF after 5 seconds if no new messages
+- **Message Types**: Responds to Note On/Off only (not Control Change)
+- **Output Type**: Isolated dry contact closures (MOSFET-based, not mechanical relays)
 
-### Example Hardware Setup
+### Connection Setup
 
 ```
-[Raspberry Pi] → [USB MIDI Interface] → [MIDI-to-Relay Converter] → [Relay Board] → [External Devices]
+[Raspberry Pi] → [USB MIDI Interface] → [5-pin DIN MIDI Cable] → [MIDI Relay Box] → [External Devices]
 ```
 
-### MIDI Configuration
+## Important Hardware Behavior
 
-In your `kitchensync.ini`:
+### 5-Second Auto-Timeout
 
-```ini
-[KITCHENSYNC]
-is_leader = true
-midi_port = 0    # MIDI output port number
-debug = true     # Shows MIDI events in overlay
+**Critical**: Your MIDI box automatically turns OFF any output after 5 seconds if no new MIDI message is received for that note.
+
+**Implications for scheduling:**
+
+1. **Short events** (< 5s): Schedule normally with Note On/Off pairs
+2. **Long events** (> 5s): Need to send "keepalive" Note On messages every 4 seconds
+3. **Continuous operation**: Send Note On every 4s to maintain output
+
+**Example for long event:**
+```json
+[
+  {"time": 10.0, "type": "note_on", "note": 60, "velocity": 127, "description": "Start long event"},
+  {"time": 14.0, "type": "note_on", "note": 60, "velocity": 127, "description": "Keepalive 1"},
+  {"time": 18.0, "type": "note_on", "note": 60, "velocity": 127, "description": "Keepalive 2"},
+  {"time": 22.0, "type": "note_off", "note": 60, "velocity": 0, "description": "End long event"}
+]
+```
+
+### Power Control via Velocity
+
+Unlike traditional relays, your box supports **variable power output**:
+
+- **Velocity 127**: Full power output  
+- **Velocity 100**: ~78% power output
+- **Velocity 64**: ~50% power output
+- **Velocity 32**: ~25% power output
+- **Velocity 0**: OFF (same as Note Off)
+
+This allows **dimming control** for compatible devices.
+
+### Multiple Output Control
+
+Since MIDI channel is ignored, you can control multiple outputs simultaneously:
+
+```json
+[
+  {"time": 10.0, "type": "note_on", "note": 60, "velocity": 127, "description": "Output 1 ON"},
+  {"time": 10.0, "type": "note_on", "note": 61, "velocity": 100, "description": "Output 2 ON (dimmed)"},
+  {"time": 10.0, "type": "note_on", "note": 62, "velocity": 127, "description": "Output 3 ON"}
+]
 ```
 
 ## Common Patterns

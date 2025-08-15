@@ -367,72 +367,158 @@ class Schedule:
     # Relay-specific helper methods for easier schedule creation
     @staticmethod
     def create_relay_on_cue(
-        time: float, relay_channel: int, note: int = 60, velocity: int = 127
+        time: float, relay_output: int, velocity: int = 127, channel: int = 1
     ) -> Dict[str, Any]:
-        """Create a relay ON cue using Note On"""
+        """Create a relay ON cue using Note On
+
+        Args:
+            time: Time in seconds
+            relay_output: Output number (1-8)
+            velocity: MIDI velocity (1-127, controls power level)
+            channel: MIDI channel (1-16, ignored by hardware but good for organization)
+        """
+        if not (1 <= relay_output <= 8):
+            raise ValueError("Relay output must be 1-8")
+
+        note = 59 + relay_output  # Note 60-67 for outputs 1-8
         return {
             "time": time,
             "type": "note_on",
-            "channel": relay_channel,
+            "channel": channel,
             "note": note,
             "velocity": velocity,
-            "description": f"Relay {relay_channel} ON",
+            "description": f"Output {relay_output} ON (Note {note}, Velocity {velocity})",
         }
 
     @staticmethod
     def create_relay_off_cue(
-        time: float, relay_channel: int, note: int = 60
+        time: float, relay_output: int, channel: int = 1
     ) -> Dict[str, Any]:
-        """Create a relay OFF cue using Note Off"""
+        """Create a relay OFF cue using Note Off
+
+        Args:
+            time: Time in seconds
+            relay_output: Output number (1-8)
+            channel: MIDI channel (1-16, ignored by hardware)
+        """
+        if not (1 <= relay_output <= 8):
+            raise ValueError("Relay output must be 1-8")
+
+        note = 59 + relay_output  # Note 60-67 for outputs 1-8
         return {
             "time": time,
             "type": "note_off",
-            "channel": relay_channel,
+            "channel": channel,
             "note": note,
             "velocity": 0,
-            "description": f"Relay {relay_channel} OFF",
+            "description": f"Output {relay_output} OFF (Note {note})",
         }
 
     @staticmethod
     def create_relay_pulse_cues(
         time: float,
-        relay_channel: int,
+        relay_output: int,
         duration: float = 0.5,
-        note: int = 60,
         velocity: int = 127,
+        channel: int = 1,
     ) -> List[Dict[str, Any]]:
-        """Create a relay pulse (ON then OFF after duration)"""
+        """Create a relay pulse (ON then OFF after duration)
+
+        Args:
+            time: Time in seconds
+            relay_output: Output number (1-8)
+            duration: How long to stay ON (seconds, max 5s due to auto-timeout)
+            velocity: MIDI velocity (1-127, controls power level)
+            channel: MIDI channel (1-16, ignored by hardware)
+        """
+        if duration > 5.0:
+            print("⚠️ Warning: Duration > 5s, hardware will auto-timeout at 5s")
+
         return [
-            Schedule.create_relay_on_cue(time, relay_channel, note, velocity),
-            Schedule.create_relay_off_cue(time + duration, relay_channel, note),
+            Schedule.create_relay_on_cue(time, relay_output, velocity, channel),
+            Schedule.create_relay_off_cue(time + duration, relay_output, channel),
         ]
 
     def add_relay_on(
-        self, time: float, relay_channel: int, note: int = 60, velocity: int = 127
+        self, time: float, relay_output: int, velocity: int = 127, channel: int = 1
     ) -> None:
         """Add a relay ON cue to the schedule"""
-        cue = self.create_relay_on_cue(time, relay_channel, note, velocity)
+        cue = self.create_relay_on_cue(time, relay_output, velocity, channel)
         self.add_cue(cue)
 
-    def add_relay_off(self, time: float, relay_channel: int, note: int = 60) -> None:
+    def add_relay_off(self, time: float, relay_output: int, channel: int = 1) -> None:
         """Add a relay OFF cue to the schedule"""
-        cue = self.create_relay_off_cue(time, relay_channel, note)
+        cue = self.create_relay_off_cue(time, relay_output, channel)
         self.add_cue(cue)
 
     def add_relay_pulse(
         self,
         time: float,
-        relay_channel: int,
+        relay_output: int,
         duration: float = 0.5,
-        note: int = 60,
         velocity: int = 127,
+        channel: int = 1,
     ) -> None:
         """Add a relay pulse (ON then OFF) to the schedule"""
         cues = self.create_relay_pulse_cues(
-            time, relay_channel, duration, note, velocity
+            time, relay_output, duration, velocity, channel
         )
         for cue in cues:
             self.add_cue(cue)
+
+    def add_relay_long_event(
+        self,
+        start_time: float,
+        end_time: float,
+        relay_output: int,
+        velocity: int = 127,
+        channel: int = 1,
+        keepalive_interval: float = 4.0,
+    ) -> None:
+        """Add a long relay event with automatic keepalive messages
+
+        For events longer than 5 seconds, this automatically adds keepalive
+        Note On messages every 4 seconds to prevent hardware auto-timeout.
+
+        Args:
+            start_time: When to start the event (seconds)
+            end_time: When to end the event (seconds)
+            relay_output: Output number (1-8)
+            velocity: MIDI velocity (1-127, controls power level)
+            channel: MIDI channel (1-16, ignored by hardware)
+            keepalive_interval: How often to send keepalive (default 4s)
+        """
+        if end_time <= start_time:
+            raise ValueError("End time must be after start time")
+
+        duration = end_time - start_time
+
+        # Add initial Note On
+        self.add_relay_on(start_time, relay_output, velocity, channel)
+
+        # Add keepalive messages for long events
+        if duration > 5.0:
+            current_time = start_time + keepalive_interval
+            keepalive_count = 1
+
+            while current_time < end_time:
+                # Add keepalive Note On message
+                note = 59 + relay_output
+                cue = {
+                    "time": current_time,
+                    "type": "note_on",
+                    "channel": channel,
+                    "note": note,
+                    "velocity": velocity,
+                    "description": f"Output {relay_output} Keepalive #{keepalive_count} (Note {note})",
+                }
+                self.add_cue(cue)
+
+                current_time += keepalive_interval
+                keepalive_count += 1
+
+        # Add final Note Off
+        self.add_relay_off(end_time, relay_output, channel)
 
     def format_cue_description(self, cue: Dict[str, Any]) -> str:
         """Format a cue for display"""

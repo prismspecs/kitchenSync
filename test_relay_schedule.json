@@ -5,7 +5,7 @@
     "channel": 1,
     "note": 60,
     "velocity": 127,
-    "description": "Relay 1 ON"
+    "description": "Output 1 ON (Note 60, Velocity 127)"
   },
   {
     "time": 3.0,
@@ -13,54 +13,54 @@
     "channel": 1,
     "note": 60,
     "velocity": 0,
-    "description": "Relay 1 OFF"
+    "description": "Output 1 OFF (Note 60)"
   },
   {
     "time": 5.0,
     "type": "note_on",
-    "channel": 2,
-    "note": 60,
+    "channel": 1,
+    "note": 61,
     "velocity": 127,
-    "description": "Relay 2 ON"
+    "description": "Output 2 ON (Note 61, Velocity 127)"
   },
   {
     "time": 5.5,
     "type": "note_off",
-    "channel": 2,
-    "note": 60,
+    "channel": 1,
+    "note": 61,
     "velocity": 0,
-    "description": "Relay 2 OFF"
+    "description": "Output 2 OFF (Note 61)"
   },
   {
     "time": 8.0,
     "type": "note_on",
-    "channel": 3,
-    "note": 60,
+    "channel": 1,
+    "note": 62,
     "velocity": 127,
-    "description": "Relay 3 ON"
+    "description": "Output 3 ON (Note 62, Velocity 127)"
   },
   {
     "time": 8.0,
     "type": "note_on",
-    "channel": 4,
-    "note": 60,
+    "channel": 1,
+    "note": 63,
     "velocity": 127,
-    "description": "Relay 4 ON"
+    "description": "Output 4 ON (Note 63, Velocity 127)"
   },
   {
     "time": 10.0,
     "type": "note_off",
-    "channel": 3,
-    "note": 60,
+    "channel": 1,
+    "note": 62,
     "velocity": 0,
-    "description": "Relay 3 OFF"
+    "description": "Output 3 OFF (Note 62)"
   },
   {
     "time": 12.0,
     "type": "note_off",
-    "channel": 4,
-    "note": 60,
+    "channel": 1,
+    "note": 63,
     "velocity": 0,
-    "description": "Relay 4 OFF"
+    "description": "Output 4 OFF (Note 63)"
   }
 ]
