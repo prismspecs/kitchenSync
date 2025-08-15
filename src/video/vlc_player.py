@@ -344,12 +344,14 @@ class VLCVideoPlayer:
             if not self.vlc_media:
                 raise VLCPlayerError("Failed to create VLC media")
 
-            # Enforce looping at media level for reliability across VLC versions
+            # Use ONLY VLC's built-in repeat option for consistent looping behavior
+            # This ensures identical loop timing between leader and collaborator
             if self.enable_looping:
                 try:
                     # Repeat the item many times (practically infinite)
                     # Using a high number for broad compatibility
                     self.vlc_media.add_option(":input-repeat=65535")
+                    log_info("VLC media repeat option set for looping", component="vlc")
                 except Exception as e:
                     log_warning(
                         f"Failed to set media repeat option: {e}", component="vlc"
@@ -357,13 +359,10 @@ class VLCVideoPlayer:
 
             self.vlc_player.set_media(self.vlc_media)
 
-            # Set up looping event handler
+            # DO NOT set up event handler - rely only on VLC's built-in repeat
+            # This eliminates timing differences between leader and collaborator
             if self.enable_looping:
-                events = self.vlc_player.event_manager()
-                events.event_attach(
-                    vlc.EventType.MediaPlayerEndReached, self._on_video_end
-                )
-                log_info("Video looping enabled", component="vlc")
+                log_info("Video looping enabled via VLC repeat option", component="vlc")
 
             # Start playback
             log_info("Starting VLC playback...", component="vlc")
