@@ -144,11 +144,16 @@ class CollaboratorPi:
         self.deviation_samples = deque(maxlen=self.deviation_samples_maxlen)
         self.last_correction_time = 0
         self.video_start_time = None
+        self.last_video_position = None  # Track position to detect loops
 
         # Sync state management
         self.wait_for_sync = False
         self.wait_after_sync = False
         self.sync_timer = 0
+
+        # Loop detection and grace period
+        self.loop_grace_period = 1.0  # 1 second grace period after loop
+        self.last_loop_time = 0
 
     def _handle_sync(
         self, leader_time: float, received_at: float | None = None
@@ -302,6 +307,7 @@ class CollaboratorPi:
 
         # Reset video state
         self.video_start_time = None
+        self.last_video_position = None
         self.deviation_samples.clear()
 
         log_info("Playback stopped", component="collaborator")
@@ -315,6 +321,31 @@ class CollaboratorPi:
         video_position = self.video_player.get_position()
         if video_position is None:
             log_warning("Could not get video position for sync check", component="sync")
+            return
+
+        # Detect if we just looped
+        if self.last_video_position is not None:
+            duration = self.video_player.get_duration()
+            if duration and duration > 0:
+                # If position jumped backwards significantly, we likely looped
+                position_jump = self.last_video_position - video_position
+                if position_jump > duration * 0.8:  # More than 80% of video duration
+                    log_info(
+                        f"Loop detected: position jumped from {self.last_video_position:.2f}s to {video_position:.2f}s",
+                        component="sync",
+                    )
+                    self.last_loop_time = time.time()
+                    self.deviation_samples.clear()  # Clear old samples after loop
+
+        self.last_video_position = video_position
+
+        # Check if we're in loop grace period
+        current_time = time.time()
+        if current_time - self.last_loop_time < self.loop_grace_period:
+            log_info(
+                f"In loop grace period, ignoring sync for {self.loop_grace_period - (current_time - self.last_loop_time):.2f}s more",
+                component="sync",
+            )
             return
 
         # Calculate expected position with latency compensation
