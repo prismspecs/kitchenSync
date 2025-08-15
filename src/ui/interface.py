@@ -82,18 +82,18 @@ class StatusDisplay:
             print(f"Elapsed time: {elapsed:.2f} seconds ({system_state.get_formatted_time()})")
         
         print(f"\nConnected Collaborator Pis: {len(collaborators)}")
-        for pi_id, info in collaborators.items():
+        for device_id, info in collaborators.items():
             status = "ONLINE" if info.get('online', False) else "OFFLINE"
             last_seen = info.get('last_seen_seconds', 0)
-            print(f"  {pi_id}: {info.get('ip', 'unknown')} - {status} (last seen {last_seen:.1f}s ago)")
+            print(f"  {device_id}: {info.get('ip', 'unknown')} - {status} (last seen {last_seen:.1f}s ago)")
         
         print(f"\nSchedule: {schedule_count} cues")
     
     @staticmethod
-    def show_collaborator_status(pi_id: str, video_file: str, is_running: bool, 
+    def show_collaborator_status(device_id: str, video_file: str, is_running: bool, 
                                sync_stats: Optional[Dict] = None) -> None:
         """Display collaborator status"""
-        print(f"\n=== KitchenSync Collaborator Status ({pi_id}) ===")
+        print(f"\n=== KitchenSync Collaborator Status ({device_id}) ===")
         print(f"Video file: {video_file}")
         print(f"Status: {'RUNNING' if is_running else 'READY'}")
         

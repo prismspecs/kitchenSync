@@ -76,48 +76,48 @@ class CollaboratorRegistry:
         self.collaborators: Dict[str, Dict[str, Any]] = {}
         self.timeout = timeout
     
-    def register_collaborator(self, pi_id: str, ip: str, status: str = 'ready', 
+    def register_collaborator(self, device_id: str, ip: str, status: str = 'ready', 
                              video_file: str = '') -> None:
-        """Register a collaborator Pi"""
-        self.collaborators[pi_id] = {
+        """Register a new collaborator or update existing one"""
+        self.collaborators[device_id] = {
             'ip': ip,
             'status': status,
             'video_file': video_file,
             'last_seen': time.time(),
             'registered_at': time.time()
         }
-        print(f"✓ Registered collaborator: {pi_id} at {ip}")
-    
-    def update_heartbeat(self, pi_id: str, status: str = 'ready') -> None:
+        print(f"✓ Registered collaborator: {device_id} at {ip}")
+
+    def update_heartbeat(self, device_id: str, status: str = 'ready') -> None:
         """Update collaborator heartbeat"""
-        if pi_id in self.collaborators:
-            self.collaborators[pi_id]['last_seen'] = time.time()
-            self.collaborators[pi_id]['status'] = status
-    
-    def remove_collaborator(self, pi_id: str) -> None:
+        if device_id in self.collaborators:
+            self.collaborators[device_id]['last_seen'] = time.time()
+            self.collaborators[device_id]['status'] = status
+
+    def remove_collaborator(self, device_id: str) -> None:
         """Remove a collaborator"""
-        if pi_id in self.collaborators:
-            del self.collaborators[pi_id]
-            print(f"🗑️ Removed collaborator: {pi_id}")
-    
+        if device_id in self.collaborators:
+            del self.collaborators[device_id]
+            print(f"🗑️ Removed collaborator: {device_id}")
+
     def get_collaborators(self) -> Dict[str, Dict[str, Any]]:
         """Get all collaborators with online status"""
         current_time = time.time()
         result = {}
         
-        for pi_id, info in self.collaborators.items():
+        for device_id, info in self.collaborators.items():
             info_copy = info.copy()
             last_seen = current_time - info['last_seen']
             info_copy['online'] = last_seen < self.timeout
             info_copy['last_seen_seconds'] = last_seen
-            result[pi_id] = info_copy
+            result[device_id] = info_copy
         
         return result
     
     def get_online_collaborators(self) -> Dict[str, Dict[str, Any]]:
         """Get only online collaborators"""
         all_collaborators = self.get_collaborators()
-        return {pi_id: info for pi_id, info in all_collaborators.items() if info['online']}
+        return {device_id: info for device_id, info in all_collaborators.items() if info['online']}
     
     def get_collaborator_count(self) -> int:
         """Get total number of registered collaborators"""
@@ -130,14 +130,14 @@ class CollaboratorRegistry:
     def cleanup_stale_collaborators(self) -> None:
         """Remove collaborators that haven't been seen for a long time"""
         current_time = time.time()
-        stale_pis = []
+        stale_devices = []
         
-        for pi_id, info in self.collaborators.items():
+        for device_id, info in self.collaborators.items():
             if current_time - info['last_seen'] > self.timeout * 3:  # 3x timeout
-                stale_pis.append(pi_id)
+                stale_devices.append(device_id)
         
-        for pi_id in stale_pis:
-            self.remove_collaborator(pi_id)
+        for device_id in stale_devices:
+            self.remove_collaborator(device_id)
 
 
 class SyncTracker:

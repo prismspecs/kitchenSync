@@ -81,9 +81,9 @@ class LeaderPi:
         self.html_debug = None
         if self.config.debug_mode:
             log_info("About to create HTML debug overlay", component="leader")
-            pi_id = "leader-pi"  # Define the pi_id variable
-            self.html_debug = HTMLDebugManager(
-                pi_id, self.video_player, self.midi_scheduler
+            device_id = "leader-pi"  # Define the device_id variable
+            self.debug_manager = HTMLDebugManager(
+                device_id, self.video_player, self.midi_scheduler
             )
             log_info("HTMLDebugManager created, about to start", component="leader")
             self.html_debug.start()
@@ -101,17 +101,17 @@ class LeaderPi:
 
     def _handle_registration(self, msg: dict, addr: tuple) -> None:
         """Handle collaborator registration"""
-        pi_id = msg.get("device_id")  # Changed from pi_id
-        if pi_id:
+        device_id = msg.get("device_id")
+        if device_id:
             self.collaborators.register_collaborator(
-                pi_id, addr[0], msg.get("status", "ready"), msg.get("video_file", "")
+                device_id, addr[0], msg.get("status", "ready"), msg.get("video_file", "")
             )
 
     def _handle_heartbeat(self, msg: dict, addr: tuple) -> None:
         """Handle collaborator heartbeat"""
-        pi_id = msg.get("device_id")  # Changed from pi_id
-        if pi_id:
-            self.collaborators.update_heartbeat(pi_id, msg.get("status", "ready"))
+        device_id = msg.get("device_id")
+        if device_id:
+            self.collaborators.update_heartbeat(device_id, msg.get("status", "ready"))
 
     def start_system(self) -> None:
         """Start the synchronized playback system"""

@@ -190,14 +190,14 @@ class KitchenSyncAutoStart:
 
         if self.config.is_leader:
             # Update leader config
-            leader_updates = {**updates, "is_leader": "true", "pi_id": "leader-pi"}
+            leader_updates = {**updates, "is_leader": "true", "device_id": "leader-pi"}
             self.config.update_local_config("leader_config.ini", leader_updates)
         else:
             # Update collaborator config
             collaborator_updates = {
                 **updates,
                 "is_leader": "false",
-                "pi_id": self.config.pi_id,
+                "device_id": self.config.device_id,
                 "midi_port": self.config.get("midi_port", "0"),
             }
 

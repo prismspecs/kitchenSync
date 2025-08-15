@@ -90,8 +90,8 @@ def _tail_log_file(file_path: str, max_lines: int = 10) -> list:
 class HTMLDebugOverlay:
     """HTML-based debug overlay that opens in a browser window"""
 
-    def __init__(self, pi_id: str, video_player=None):
-        self.pi_id = pi_id
+    def __init__(self, device_id: str, video_player=None):
+        self.device_id = device_id
         self.video_player = video_player
         self.running = True
         self.state_lock = threading.Lock()
@@ -99,7 +99,7 @@ class HTMLDebugOverlay:
         # Initialize template system
         template_dir = Path(__file__).parent / "templates"
         self.template_manager = DebugTemplateManager(str(template_dir))
-        self.html_file = f"/tmp/kitchensync_debug_{pi_id}/index.html"
+        self.html_file = f"/tmp/kitchensync_debug_{device_id}/index.html"
 
         # Initialize state
         self.state = {
@@ -140,8 +140,8 @@ class HTMLDebugOverlay:
             system_info = self._get_system_info()
 
             # Render template
-            self.html_file = self.template_manager.render_debug_overlay(
-                self.pi_id, system_info
+            html_content = self.template_engine.render_debug_overlay(
+                self.device_id, system_info
             )
 
             if not self.html_file:
@@ -164,7 +164,7 @@ class HTMLDebugOverlay:
             fallback_html = f"""<!DOCTYPE html>
 <html>
 <head>
-    <title>KitchenSync Debug - {self.pi_id} (Fallback)</title>
+    <title>KitchenSync Debug - {self.device_id} (Fallback)</title>
     <meta charset="utf-8">
     <style>
         body {{ font-family: monospace; background: #1a1a2e; color: #fff; margin: 20px; }}
@@ -172,7 +172,7 @@ class HTMLDebugOverlay:
     </style>
 </head>
 <body>
-    <h1>KitchenSync Debug - {self.pi_id}</h1>
+    <h1>KitchenSync Debug - {self.device_id}</h1>
     <div class="error">
         <h2>Template System Error</h2>
         <p>The template system failed to load. Using fallback display.</p>
@@ -597,7 +597,7 @@ user_pref("browser.newtabpage.activity-stream.default.sites", "");
         try:
 
             info = {
-                "pi_id": self.pi_id,
+                "device_id": self.device_id,
                 "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 "service_status": "Unknown",
                 "service_status_class": "warning",
@@ -956,7 +956,7 @@ user_pref("browser.newtabpage.activity-stream.default.sites", "");
         except Exception as e:
             log_error(f"Failed to get system info: {e}")
             return {
-                "pi_id": self.pi_id,
+                "device_id": self.device_id,
                 "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 "error": f"Failed to get system info: {e}",
             }
@@ -965,8 +965,8 @@ user_pref("browser.newtabpage.activity-stream.default.sites", "");
 class HTMLDebugManager:
     """Manages the HTML debug overlay"""
 
-    def __init__(self, pi_id: str, video_player=None, midi_scheduler=None):
-        self.overlay = HTMLDebugOverlay(pi_id, video_player)
+    def __init__(self, device_id: str, video_player=None, midi_scheduler=None):
+        self.overlay = HTMLDebugOverlay(device_id, video_player)
         self.overlay.midi_scheduler = midi_scheduler  # Pass MIDI scheduler to overlay
         self.midi_scheduler = midi_scheduler
 

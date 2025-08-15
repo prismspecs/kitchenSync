@@ -117,14 +117,14 @@ class DebugTemplateManager:
             except Exception as e:
                 debug_log_warning(f"Failed to copy static files: {e}")
 
-    def render_debug_overlay(self, pi_id: str, system_info: Dict[str, Any]) -> str:
+    def render_debug_overlay(self, device_id: str, system_info: Dict[str, Any]) -> str:
         """Render the debug overlay and return the output file path"""
         try:
             # The overlay directory is now created by HTMLDebugOverlay
-            overlay_dir = self.output_dir / f"kitchensync_debug_{pi_id}"
+            overlay_dir = self.output_dir / f"kitchensync_debug_{device_id}"
 
             # Prepare template context
-            context = self._prepare_context(pi_id, system_info)
+            context = self._prepare_context(device_id, system_info)
 
             # Render HTML
             html_content = self.template_engine.render("debug_overlay.html", context)
@@ -146,13 +146,13 @@ class DebugTemplateManager:
             return ""
 
     def _prepare_context(
-        self, pi_id: str, system_info: Dict[str, Any]
+        self, device_id: str, system_info: Dict[str, Any]
     ) -> Dict[str, Any]:
         """Prepare template context from system info"""
         from datetime import datetime
 
         context = {
-            "pi_id": pi_id,
+            "device_id": device_id,
             "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             # Service status
             "service_status": system_info.get("service_status", "Unknown"),
