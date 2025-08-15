@@ -63,16 +63,36 @@ class KitchenSyncAutoStart:
         self.config = None
         self.video_manager = None
 
+    def _handle_no_config_found(self) -> bool:
+        """Handle the case where no USB configuration is found."""
+        print("⚠️  No USB config found. Defaulting to COLLABORATOR mode.")
+        log_warning(
+            "No USB config found, defaulting to collaborator", component="autostart"
+        )
+
+        # Create a default configuration, which is collaborator by default
+        self.config = ConfigManager()
+        self.config.load_configuration()  # This loads hardcoded defaults
+
+        # Explicitly ensure it's not treated as a leader
+        self.config.is_leader = False
+
+        # Update local configs for collaborator mode
+        self._update_local_configs()
+
+        # Start the collaborator role
+        return self._start_role()
+
     def run(self) -> bool:
         """Main execution flow"""
         print("\n🎬 KitchenSync Auto-Start")
         print("=" * 40)
         snapshot_env()
 
-        # Step 1: Load configuration (defaults to collaborator if none found)
+        # Step 1: Load configuration
         if not self._load_configuration():
-            ErrorDisplay.show_error("Failed to load configuration")
-            return False
+            # If loading fails because no config is found, handle it gracefully
+            return self._handle_no_config_found()
 
         # Decide role early
         is_leader = bool(getattr(self.config, "is_leader", False))
@@ -93,16 +113,12 @@ class KitchenSyncAutoStart:
             return self._start_role()
 
     def _load_configuration(self) -> bool:
-        """Load configuration from USB drive; default to collaborator if none found"""
+        """Load configuration from USB drive."""
         print("🔍 Looking for USB drive configuration...")
 
         usb_config_path = USBConfigLoader.find_config_on_usb()
         if not usb_config_path:
-            print("⚠️  No USB config found. Defaulting to COLLABORATOR mode.")
-            # Create a default configuration (collaborator by default)
-            self.config = ConfigManager()
-            self.config.load_configuration()
-            return True
+            return False  # Signal that no config was found
 
         self.config = ConfigManager()
         self.config.usb_config_path = usb_config_path
