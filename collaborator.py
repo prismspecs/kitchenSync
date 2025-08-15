@@ -155,6 +155,11 @@ class CollaboratorPi:
         self.loop_grace_period = 1.0  # 1 second grace period after loop
         self.last_loop_time = 0
 
+        # Debug sync logging
+        self.debug_sync_logging = False
+        self.last_debug_log_time = 0
+        self.debug_log_interval = 0.2  # Log every 200ms to avoid spam
+
     def _handle_sync(
         self, leader_time: float, received_at: float | None = None
     ) -> None:
@@ -187,6 +192,13 @@ class CollaboratorPi:
             time_since_start = time.time() - self.video_start_time
             if time_since_start > self.initial_sync_wait_seconds:
                 self._check_video_sync(leader_time)
+
+        # Debug sync logging (throttled to avoid spam)
+        if self.debug_sync_logging:
+            current_time = time.time()
+            if current_time - self.last_debug_log_time >= self.debug_log_interval:
+                self._log_sync_debug_info(leader_time)
+                self.last_debug_log_time = current_time
 
         # Handle omxplayer-sync style wait states
         if self.wait_for_sync:
@@ -460,6 +472,45 @@ class CollaboratorPi:
                 log_warning("Seek failed, resuming playback", component="sync")
                 self.video_player.resume()
 
+    def _log_sync_debug_info(self, leader_time: float) -> None:
+        """Log detailed sync information for debugging"""
+        if not self.video_player.is_playing:
+            return
+
+        video_position = self.video_player.get_position()
+        duration = self.video_player.get_duration()
+
+        if video_position is None:
+            return
+
+        # Calculate expected position and deviation
+        expected_position = leader_time + self.latency_compensation
+        if duration and duration > 0:
+            expected_position = expected_position % duration
+
+        raw_deviation = video_position - expected_position
+
+        # Calculate loop-aware deviation
+        loop_aware_deviation = raw_deviation
+        if duration and duration > 0:
+            half_duration = duration / 2.0
+            if raw_deviation > half_duration:
+                loop_aware_deviation = raw_deviation - duration
+            elif raw_deviation < -half_duration:
+                loop_aware_deviation = raw_deviation + duration
+
+        # Check if we're in various states
+        in_grace_period = (time.time() - self.last_loop_time) < self.loop_grace_period
+        waiting_for_sync = self.wait_for_sync
+        waiting_after_sync = self.wait_after_sync
+
+        print(
+            f"SYNC_DEBUG: Leader={leader_time:.3f}s | Video={video_position:.3f}s | "
+            f"Expected={expected_position:.3f}s | RawDev={raw_deviation:.3f}s | "
+            f"LoopDev={loop_aware_deviation:.3f}s | Duration={duration:.1f}s | "
+            f"Grace={in_grace_period} | WaitSync={waiting_for_sync} | WaitAfter={waiting_after_sync}"
+        )
+
     def run(self) -> None:
         """Main run loop"""
         print(f"Starting KitchenSync Collaborator '{self.config.device_id}'")
@@ -533,7 +584,9 @@ def main():
         # Override debug mode if specified
         if args.debug:
             collaborator.config.config["KITCHENSYNC"]["debug"] = "true"
+            collaborator.debug_sync_logging = True
             print("✓ Debug mode: ENABLED (via command line)")
+            print("✓ Sync debug logging: ENABLED")
 
         collaborator.run()
     except KeyboardInterrupt:
