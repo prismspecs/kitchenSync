@@ -35,6 +35,7 @@ class VLCVideoPlayer:
         enable_vlc_logging: bool = False,
         vlc_log_level: int = 0,
         enable_fullscreen_enforcement: bool = True,
+        enable_looping: bool = True,
     ):
         self.debug_mode = debug_mode
         self.enable_vlc_logging = enable_vlc_logging
@@ -46,7 +47,22 @@ class VLCVideoPlayer:
         self.video_path = None
         self.is_playing = False
         self.loop_count = 0
-        self.enable_looping = True
+        self.enable_looping = enable_looping
+        self.loop_callback = None
+        self.video_output: Optional[str] = None
+        self.fullscreen_enforcement_thread = None
+        self.should_be_fullscreen = False
+        self.debug_mode = debug_mode
+        self.enable_vlc_logging = enable_vlc_logging
+        self.vlc_log_level = vlc_log_level
+        self.enable_fullscreen_enforcement = enable_fullscreen_enforcement
+        self.vlc_instance = None
+        self.vlc_player = None
+        self.vlc_media = None
+        self.video_path = None
+        self.is_playing = False
+        self.loop_count = 0
+        self.enable_looping = enable_looping
         self.loop_callback = None
         self.video_output: Optional[str] = None
         self.fullscreen_enforcement_thread = None

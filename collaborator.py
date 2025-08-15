@@ -75,6 +75,7 @@ class CollaboratorPi:
             debug_mode=self.config.debug_mode,
             enable_vlc_logging=self.config.enable_vlc_logging,
             vlc_log_level=self.config.vlc_log_level,
+            enable_looping=True,  # Explicitly enable looping for collaborators
         )
         log_info(
             "Collaborator using Python VLC for precise sync control",
@@ -324,6 +325,16 @@ class CollaboratorPi:
             expected_position = expected_position % duration
 
         deviation = video_position - expected_position
+
+        # Make sync logic "loop-aware"
+        if duration and duration > 0:
+            half_duration = duration / 2.0
+            if deviation > half_duration:
+                # Leader has looped, collaborator has not
+                deviation -= duration
+            elif deviation < -half_duration:
+                # Collaborator has looped, leader has not
+                deviation += duration
 
         # Add to samples for median filtering
         self.deviation_samples.append(deviation)
