@@ -1,0 +1,66 @@
+[
+  {
+    "time": 1.0,
+    "type": "note_on",
+    "channel": 1,
+    "note": 60,
+    "velocity": 127,
+    "description": "Relay 1 ON"
+  },
+  {
+    "time": 3.0,
+    "type": "note_off",
+    "channel": 1,
+    "note": 60,
+    "velocity": 0,
+    "description": "Relay 1 OFF"
+  },
+  {
+    "time": 5.0,
+    "type": "note_on",
+    "channel": 2,
+    "note": 60,
+    "velocity": 127,
+    "description": "Relay 2 ON"
+  },
+  {
+    "time": 5.5,
+    "type": "note_off",
+    "channel": 2,
+    "note": 60,
+    "velocity": 0,
+    "description": "Relay 2 OFF"
+  },
+  {
+    "time": 8.0,
+    "type": "note_on",
+    "channel": 3,
+    "note": 60,
+    "velocity": 127,
+    "description": "Relay 3 ON"
+  },
+  {
+    "time": 8.0,
+    "type": "note_on",
+    "channel": 4,
+    "note": 60,
+    "velocity": 127,
+    "description": "Relay 4 ON"
+  },
+  {
+    "time": 10.0,
+    "type": "note_off",
+    "channel": 3,
+    "note": 60,
+    "velocity": 0,
+    "description": "Relay 3 OFF"
+  },
+  {
+    "time": 12.0,
+    "type": "note_off",
+    "channel": 4,
+    "note": 60,
+    "velocity": 0,
+    "description": "Relay 4 OFF"
+  }
+]

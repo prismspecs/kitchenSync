@@ -1,6 +1,12 @@
 # KitchenSync - Synchronized Video Playback & MIDI Output System
 
-A modern, plug-and-play system for synchronized video playback and MIDI output across multiple Raspberry Pis. Features automatic USB drive detection, VLC-based video playback with drift correction, and seamless deployment.
+A modern, plug-and-play system for synchronized video playback and MIDI output across multiple Raspberry Pis. Features automatic USB drive detection, VLC-based video playback with drift correction, and **precise MIDI relay control** with support for both JSON and standard MIDI file formats.
+
+## 📚 Documentation
+
+- **[MIDI Relay Control Guide](docs/MIDI_RELAY_CONTROL.md)** - Complete guide for relay control via MIDI
+- **[Setup Guide](#installation)** - Installation and configuration  
+- **[Troubleshooting](#troubleshooting)** - Common issues and solutions
 
 ## Download a test video
 ```sh

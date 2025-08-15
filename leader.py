@@ -104,7 +104,10 @@ class LeaderPi:
         device_id = msg.get("device_id")
         if device_id:
             self.collaborators.register_collaborator(
-                device_id, addr[0], msg.get("status", "ready"), msg.get("video_file", "")
+                device_id,
+                addr[0],
+                msg.get("status", "ready"),
+                msg.get("video_file", ""),
             )
 
     def _handle_heartbeat(self, msg: dict, addr: tuple) -> None:

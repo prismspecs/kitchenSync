@@ -102,8 +102,9 @@ class KitchenSyncAutoStart:
         is_leader = bool(getattr(self.config, "is_leader", False))
 
         if is_leader:
-            # Leader flow: desktop background, video validation, update configs, start
+            # Leader flow: desktop background, video validation, schedule check, update configs, start
             self._set_desktop_background()
+            self._check_usb_schedule()
 
             if not self._validate_video():
                 ErrorDisplay.show_error("No valid video file found")
@@ -178,6 +179,32 @@ class KitchenSyncAutoStart:
 
             except Exception as e:
                 print(f"⚠️ Could not set desktop background: {e}")
+
+    def _check_usb_schedule(self) -> None:
+        """Check for and report USB schedule files"""
+        if not self.config.usb_mount_point:
+            return
+
+        try:
+            usb_schedule_path = USBConfigLoader.find_schedule_on_usb()
+            if usb_schedule_path:
+                print(f"🎵 Found MIDI schedule: {usb_schedule_path}")
+                log_info(
+                    f"USB MIDI schedule: {usb_schedule_path}", component="autostart"
+                )
+            else:
+                print(
+                    "📋 No MIDI schedule found on USB - will use local/empty schedule"
+                )
+
+            # Also check for MIDI files that could be converted
+            usb_midi_path = USBConfigLoader.find_midi_file_on_usb()
+            if usb_midi_path:
+                print(f"🎼 Found MIDI file: {usb_midi_path} (not auto-converted)")
+                log_info(f"USB MIDI file: {usb_midi_path}", component="autostart")
+
+        except Exception as e:
+            print(f"⚠️ Error checking USB schedule: {e}")
 
     def _update_local_configs(self) -> None:
         """Update local configuration files"""

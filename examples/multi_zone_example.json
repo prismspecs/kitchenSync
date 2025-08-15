@@ -1,0 +1,106 @@
+[
+    {
+        "time": 0.0,
+        "type": "note_on",
+        "channel": 1,
+        "note": 60,
+        "velocity": 127,
+        "description": "Zone 1 - Main stage lighting"
+    },
+    {
+        "time": 0.0,
+        "type": "note_on",
+        "channel": 2,
+        "note": 60,
+        "velocity": 127,
+        "description": "Zone 2 - Audience lighting"
+    },
+    {
+        "time": 5.0,
+        "type": "note_off",
+        "channel": 2,
+        "note": 60,
+        "velocity": 0,
+        "description": "Zone 2 - Audience lights dim"
+    },
+    {
+        "time": 8.0,
+        "type": "note_on",
+        "channel": 3,
+        "note": 60,
+        "velocity": 127,
+        "description": "Zone 3 - Accent lighting"
+    },
+    {
+        "time": 15.0,
+        "type": "note_on",
+        "channel": 4,
+        "note": 60,
+        "velocity": 127,
+        "description": "Zone 4 - Special effects"
+    },
+    {
+        "time": 18.0,
+        "type": "note_on",
+        "channel": 5,
+        "note": 60,
+        "velocity": 127,
+        "description": "Zone 5 - Fog machine"
+    },
+    {
+        "time": 20.0,
+        "type": "note_off",
+        "channel": 5,
+        "note": 60,
+        "velocity": 0,
+        "description": "Zone 5 - Fog machine OFF"
+    },
+    {
+        "time": 22.0,
+        "type": "note_on",
+        "channel": 6,
+        "note": 60,
+        "velocity": 127,
+        "description": "Zone 6 - Strobes"
+    },
+    {
+        "time": 25.0,
+        "type": "note_off",
+        "channel": 6,
+        "note": 60,
+        "velocity": 0,
+        "description": "Zone 6 - Strobes OFF"
+    },
+    {
+        "time": 28.0,
+        "type": "note_off",
+        "channel": 4,
+        "note": 60,
+        "velocity": 0,
+        "description": "Zone 4 - Special effects OFF"
+    },
+    {
+        "time": 30.0,
+        "type": "note_off",
+        "channel": 3,
+        "note": 60,
+        "velocity": 0,
+        "description": "Zone 3 - Accent lighting OFF"
+    },
+    {
+        "time": 35.0,
+        "type": "note_on",
+        "channel": 2,
+        "note": 60,
+        "velocity": 127,
+        "description": "Zone 2 - Audience lights back on"
+    },
+    {
+        "time": 40.0,
+        "type": "note_off",
+        "channel": 1,
+        "note": 60,
+        "velocity": 0,
+        "description": "Zone 1 - Main stage OFF"
+    }
+]

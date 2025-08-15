@@ -68,6 +68,47 @@ class USBConfigLoader:
                         return {"mount_point": mount_point, "video_file": file}
         return None
 
+    @staticmethod
+    def find_schedule_on_usb() -> Optional[str]:
+        """Find a MIDI schedule file on USB drives"""
+        schedule_files = ["schedule.json", "midi_schedule.json", "relay_schedule.json"]
+        for mount_point in USBConfigLoader.find_usb_mount_points():
+            # Check root directory first
+            for schedule_file in schedule_files:
+                schedule_path = os.path.join(mount_point, schedule_file)
+                if os.path.exists(schedule_path):
+                    log_info(
+                        f"Found schedule on USB: {schedule_path}", component="config"
+                    )
+                    return schedule_path
+
+            # Check subdirectories for schedule files
+            for root, _, files in os.walk(mount_point):
+                for file in files:
+                    if file.lower() in [sf.lower() for sf in schedule_files]:
+                        schedule_path = os.path.join(root, file)
+                        log_info(
+                            f"Found schedule on USB: {schedule_path}",
+                            component="config",
+                        )
+                        return schedule_path
+        return None
+
+    @staticmethod
+    def find_midi_file_on_usb() -> Optional[str]:
+        """Find a MIDI file on USB drives for conversion to schedule"""
+        midi_extensions = [".mid", ".midi"]
+        for mount_point in USBConfigLoader.find_usb_mount_points():
+            for root, _, files in os.walk(mount_point):
+                for file in files:
+                    if any(file.lower().endswith(ext) for ext in midi_extensions):
+                        midi_path = os.path.join(root, file)
+                        log_info(
+                            f"Found MIDI file on USB: {midi_path}", component="config"
+                        )
+                        return midi_path
+        return None
+
 
 class ConfigManager:
     """Central configuration manager for KitchenSync"""

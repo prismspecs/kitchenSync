@@ -2,6 +2,7 @@
 
 # MIDI Support
 python-rtmidi>=1.4.0
+mido>=1.2.10
 
 # VLC Python bindings for video control
 python-vlc>=3.0.0
