@@ -379,6 +379,16 @@ class CollaboratorPi:
                 # Collaborator has looped, leader has not
                 deviation += duration
 
+        # ADDITIONAL CHECK: If we're very close to the start of the video (within 5 seconds)
+        # and the deviation is moderate, we might be dealing with post-loop settling
+        # Be more conservative with corrections in this case
+        if leader_time < 5.0 and abs(deviation) < 1.0:
+            log_info(
+                f"Near start of video (t={leader_time:.2f}s), being conservative with deviation {deviation:.3f}s",
+                component="sync",
+            )
+            return
+
         # Add to samples for median filtering
         self.deviation_samples.append(deviation)
 
