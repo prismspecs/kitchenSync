@@ -305,6 +305,28 @@ class LeaderPi:
         else:
             log_info("✓ Already in fullscreen mode", component="leader")
 
+    def seek_video(self, time_str: str) -> None:
+        """Seek the video to a specific time."""
+        if not self.video_player:
+            log_warning("No video player available", component="leader")
+            return
+
+        try:
+            seconds = float(time_str)
+            log_info(f"Seeking video to {seconds} seconds...", component="leader")
+            success = self.video_player.set_position(seconds)
+            if success:
+                log_info(f"✓ Seek successful to {seconds}s", component="leader")
+            else:
+                log_error("✗ Failed to seek video", component="leader")
+        except ValueError:
+            log_error(
+                f"Invalid time format: '{time_str}'. Please use seconds (e.g., '120.5').",
+                component="leader",
+            )
+        except Exception as e:
+            log_error(f"An error occurred during seek: {e}", component="leader")
+
     def cleanup(self) -> None:
         """Clean up resources"""
         if self.system_state.is_running:
@@ -334,6 +356,9 @@ def create_command_interface(leader: LeaderPi) -> CommandInterface:
     interface.register_command("stop", leader.stop_system, "Stop playback")
     interface.register_command("status", leader.show_status, "Show system status")
     interface.register_command("schedule", leader.edit_schedule, "Edit schedule")
+    interface.register_command(
+        "seek", leader.seek_video, "Seek video to a specific time (in seconds)"
+    )
     interface.register_command(
         "fullscreen", leader.force_fullscreen, "Force fullscreen mode"
     )
