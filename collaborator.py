@@ -42,9 +42,7 @@ REREGISTER_INTERVAL_SECONDS = 60.0  # How often to re-register with leader
 # (Can be overridden in config file)
 DEFAULT_SYNC_TOLERANCE = 1.0  # General sync tolerance (not currently used)
 DEFAULT_SYNC_CHECK_INTERVAL = 5.0  # Min time between corrections
-DEFAULT_DEVIATION_THRESHOLD = (
-    0.5  # Relaxed threshold since looping is handled by commands
-)
+DEFAULT_DEVIATION_THRESHOLD = 0.2  # Error threshold to trigger correction
 DEFAULT_SYNC_GRACE_TIME = 5.0  # Cooldown period after correction
 DEFAULT_SYNC_JUMP_AHEAD = 3.0  # How far ahead to seek for corrections
 DEFAULT_LATENCY_COMPENSATION = (
@@ -77,7 +75,7 @@ class CollaboratorPi:
             debug_mode=self.config.debug_mode,
             enable_vlc_logging=self.config.enable_vlc_logging,
             vlc_log_level=self.config.vlc_log_level,
-            enable_looping=True,  # Enable for restart command handling
+            enable_looping=True,  # Explicitly enable looping for collaborators
         )
         log_info(
             "Collaborator using Python VLC for precise sync control",
@@ -92,9 +90,6 @@ class CollaboratorPi:
         # Initialize networking
         self.sync_receiver = SyncReceiver(sync_callback=self._handle_sync)
         self.command_listener = CommandListener()
-
-        # Set up command handlers for restart commands
-        self.command_listener.register_handler("restart", self._handle_restart_command)
 
         # Find and load video file before creating debug overlay
         self.video_path = self.video_manager.find_video_file()
@@ -237,48 +232,6 @@ class CollaboratorPi:
             else:
                 return
 
-    def _handle_restart_command(self, msg: dict, addr: tuple) -> None:
-        """Handle restart command from leader for coordinated looping"""
-        restart_time = msg.get("restart_time")
-        loop_count = msg.get("loop_count", 0)
-
-        if not restart_time:
-            log_warning(
-                "Received restart command without restart_time",
-                component="collaborator",
-            )
-            return
-
-        log_info(
-            f"Received restart command for loop #{loop_count} at time {restart_time:.3f}",
-            component="collaborator",
-        )
-
-        # Schedule restart at the specified time
-        def scheduled_restart():
-            delay = max(0, restart_time - time.time())
-            if delay > 0:
-                log_info(
-                    f"Waiting {delay:.3f}s for coordinated restart",
-                    component="collaborator",
-                )
-                time.sleep(delay)
-
-            if self.video_player:
-                success = self.video_player.restart_playback()
-                if success:
-                    log_info(
-                        f"Collaborator restarted for loop #{loop_count}",
-                        component="collaborator",
-                    )
-                else:
-                    log_error(
-                        f"Failed to restart for loop #{loop_count}",
-                        component="collaborator",
-                    )
-
-        threading.Thread(target=scheduled_restart, daemon=True).start()
-
     def _handle_start_command(self, msg: dict, addr: tuple) -> None:
         """Handle start command from leader"""
         if self.system_state.is_running:
@@ -398,21 +351,6 @@ class CollaboratorPi:
 
         self.last_video_position = video_position
 
-        # Check if we're in post-loop grace period (intelligent approach)
-        # Ignore sync corrections when video position is very close to beginning
-        # This handles VLC time reporting lag after loops
-        post_loop_grace_threshold = (
-            5.0  # Ignore corrections for first 5 seconds after loop
-        )
-        in_post_loop_grace = video_position < post_loop_grace_threshold
-
-        if in_post_loop_grace:
-            if self.debug_sync_logging:
-                print(
-                    f"SYNC_SKIP: In post-loop grace period (video position {video_position:.3f}s < {post_loop_grace_threshold}s)"
-                )
-            return
-
         # Check if we're in loop grace period
         current_time = time.time()
         if current_time - self.last_loop_time < self.loop_grace_period:
@@ -464,7 +402,7 @@ class CollaboratorPi:
         )
 
         # Check if correction is needed
-        # Use configured deviation_threshold directly
+        # Use configured deviation_threshold directly (no hard 1.0s floor)
         correction_threshold = self.deviation_threshold
         if abs(median_deviation) > correction_threshold:
             current_time = time.time()

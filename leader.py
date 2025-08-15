@@ -58,9 +58,6 @@ class LeaderPi:
             vlc_log_level=self.config.vlc_log_level,
         )
 
-        # Set up video end callback for command-based looping
-        self.video_player.loop_callback = self._on_video_loop
-
         # Initialize networking (wire tick_interval from config)
         self.sync_broadcaster = SyncBroadcaster(
             sync_port=self.config.getint("sync_port", 5005),
@@ -96,38 +93,6 @@ class LeaderPi:
 
         # Setup command handlers
         self._setup_command_handlers()
-
-    def _on_video_loop(self, loop_count: int) -> None:
-        """Handle video end - send restart command to collaborators"""
-        log_info(
-            f"Video loop #{loop_count} detected, sending restart command",
-            component="leader",
-        )
-
-        # Calculate future restart time (small delay to ensure coordination)
-        import time
-
-        restart_time = time.time() + 0.5  # 500ms in the future
-
-        # Send restart command to all collaborators
-        restart_command = {
-            "type": "restart",
-            "restart_time": restart_time,
-            "loop_count": loop_count,
-        }
-        self.command_manager.send_command(restart_command)
-
-        # Schedule our own restart at the same time
-        def delayed_restart():
-            time.sleep(max(0, restart_time - time.time()))
-            if self.video_player:
-                self.video_player.restart_playback()
-                log_info(f"Leader restarted for loop #{loop_count}", component="leader")
-
-        threading.Thread(target=delayed_restart, daemon=True).start()
-        log_info(
-            f"Scheduled coordinated restart at {restart_time:.3f}", component="leader"
-        )
 
     def _setup_command_handlers(self) -> None:
         """Setup networking command handlers"""
