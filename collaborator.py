@@ -42,7 +42,9 @@ REREGISTER_INTERVAL_SECONDS = 60.0  # How often to re-register with leader
 # (Can be overridden in config file)
 DEFAULT_SYNC_TOLERANCE = 1.0  # General sync tolerance (not currently used)
 DEFAULT_SYNC_CHECK_INTERVAL = 5.0  # Min time between corrections
-DEFAULT_DEVIATION_THRESHOLD = 0.2  # Error threshold to trigger correction
+DEFAULT_DEVIATION_THRESHOLD = (
+    0.5  # Relaxed threshold since looping is handled by commands
+)
 DEFAULT_SYNC_GRACE_TIME = 5.0  # Cooldown period after correction
 DEFAULT_SYNC_JUMP_AHEAD = 3.0  # How far ahead to seek for corrections
 DEFAULT_LATENCY_COMPENSATION = (
@@ -75,7 +77,7 @@ class CollaboratorPi:
             debug_mode=self.config.debug_mode,
             enable_vlc_logging=self.config.enable_vlc_logging,
             vlc_log_level=self.config.vlc_log_level,
-            enable_looping=True,  # Explicitly enable looping for collaborators
+            enable_looping=True,  # Enable for restart command handling
         )
         log_info(
             "Collaborator using Python VLC for precise sync control",
@@ -90,6 +92,9 @@ class CollaboratorPi:
         # Initialize networking
         self.sync_receiver = SyncReceiver(sync_callback=self._handle_sync)
         self.command_listener = CommandListener()
+
+        # Set up command handlers for restart commands
+        self.command_listener.register_handler("restart", self._handle_restart_command)
 
         # Find and load video file before creating debug overlay
         self.video_path = self.video_manager.find_video_file()
@@ -231,6 +236,48 @@ class CollaboratorPi:
                 self.wait_after_sync = False
             else:
                 return
+
+    def _handle_restart_command(self, msg: dict, addr: tuple) -> None:
+        """Handle restart command from leader for coordinated looping"""
+        restart_time = msg.get("restart_time")
+        loop_count = msg.get("loop_count", 0)
+
+        if not restart_time:
+            log_warning(
+                "Received restart command without restart_time",
+                component="collaborator",
+            )
+            return
+
+        log_info(
+            f"Received restart command for loop #{loop_count} at time {restart_time:.3f}",
+            component="collaborator",
+        )
+
+        # Schedule restart at the specified time
+        def scheduled_restart():
+            delay = max(0, restart_time - time.time())
+            if delay > 0:
+                log_info(
+                    f"Waiting {delay:.3f}s for coordinated restart",
+                    component="collaborator",
+                )
+                time.sleep(delay)
+
+            if self.video_player:
+                success = self.video_player.restart_playback()
+                if success:
+                    log_info(
+                        f"Collaborator restarted for loop #{loop_count}",
+                        component="collaborator",
+                    )
+                else:
+                    log_error(
+                        f"Failed to restart for loop #{loop_count}",
+                        component="collaborator",
+                    )
+
+        threading.Thread(target=scheduled_restart, daemon=True).start()
 
     def _handle_start_command(self, msg: dict, addr: tuple) -> None:
         """Handle start command from leader"""

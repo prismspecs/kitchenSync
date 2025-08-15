@@ -251,6 +251,24 @@ class VLCVideoPlayer:
         except Exception:
             return False
 
+    def restart_playback(self) -> bool:
+        """Restart video playback from beginning (for command-based looping)"""
+        if not self.vlc_player:
+            return False
+        try:
+            log_info("Restarting video playback from beginning", component="vlc")
+            # Stop to clear end state, then play and seek to 0 for reliability
+            self.vlc_player.stop()
+            time.sleep(0.05)
+            self.vlc_player.play()
+            time.sleep(0.05)
+            self.vlc_player.set_time(0)
+            log_info("Video restart completed", component="vlc")
+            return True
+        except Exception as e:
+            log_error(f"Error restarting video: {e}", component="vlc")
+            return False
+
     def pause(self) -> bool:
         """Pause playback"""
         if not self.vlc_player:
@@ -274,43 +292,29 @@ class VLCVideoPlayer:
             return False
 
     def _on_video_end(self, event):
-        """Handle video end event for looping"""
+        """Handle video end event for command-based looping"""
         if self.enable_looping and self.vlc_player:
             try:
                 self.loop_count += 1
                 log_info(
-                    f"Video ended, starting loop #{self.loop_count}", component="vlc"
+                    f"Video ended, loop #{self.loop_count} - waiting for restart command",
+                    component="vlc",
                 )
 
-                # Notify callback before restarting (for MIDI sync)
+                # Notify callback (leader will send restart command)
                 if self.loop_callback:
                     try:
                         self.loop_callback(self.loop_count)
                     except Exception as e:
                         log_error(f"Error in video loop callback: {e}", component="vlc")
 
-                # Restart playback from the beginning on a background thread
-                def restart():
-                    try:
-                        if not self.vlc_player:
-                            return
-                        # Stop to clear end state, then play and seek to 0 for reliability
-                        self.vlc_player.stop()
-                        time.sleep(0.05)
-                        self.vlc_player.play()
-                        time.sleep(0.05)
-                        self.vlc_player.set_time(0)
-                        log_info(
-                            f"Video loop #{self.loop_count} started", component="vlc"
-                        )
-                    except Exception as e:
-                        log_error(
-                            f"Error during loop restart thread: {e}", component="vlc"
-                        )
-
-                threading.Thread(target=restart, daemon=True).start()
+                # Do NOT auto-restart - wait for explicit restart command
+                log_info(
+                    f"Video playback ended, awaiting restart command for loop #{self.loop_count}",
+                    component="vlc",
+                )
             except Exception as e:
-                log_error(f"Error restarting video loop: {e}", component="vlc")
+                log_error(f"Error handling video end: {e}", component="vlc")
 
     def _start_with_python_vlc(self) -> bool:
         """Start video using VLC Python bindings"""
@@ -344,25 +348,25 @@ class VLCVideoPlayer:
             if not self.vlc_media:
                 raise VLCPlayerError("Failed to create VLC media")
 
-            # Use ONLY VLC's built-in repeat option for consistent looping behavior
-            # This ensures identical loop timing between leader and collaborator
+            # DO NOT use VLC's built-in repeat - we will handle looping via commands
+            # This ensures precise, coordinated looping across all nodes
             if self.enable_looping:
-                try:
-                    # Repeat the item many times (practically infinite)
-                    # Using a high number for broad compatibility
-                    self.vlc_media.add_option(":input-repeat=65535")
-                    log_info("VLC media repeat option set for looping", component="vlc")
-                except Exception as e:
-                    log_warning(
-                        f"Failed to set media repeat option: {e}", component="vlc"
-                    )
+                log_info(
+                    "Looping will be handled via restart commands (no VLC auto-repeat)",
+                    component="vlc",
+                )
 
             self.vlc_player.set_media(self.vlc_media)
 
-            # DO NOT set up event handler - rely only on VLC's built-in repeat
-            # This eliminates timing differences between leader and collaborator
+            # Set up video end detection for server-controlled looping
             if self.enable_looping:
-                log_info("Video looping enabled via VLC repeat option", component="vlc")
+                events = self.vlc_player.event_manager()
+                events.event_attach(
+                    vlc.EventType.MediaPlayerEndReached, self._on_video_end
+                )
+                log_info(
+                    "Video end detection enabled for restart commands", component="vlc"
+                )
 
             # Start playback
             log_info("Starting VLC playback...", component="vlc")
