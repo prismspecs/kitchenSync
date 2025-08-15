@@ -36,7 +36,15 @@ class CommandInterface:
         try:
             while self.running:
                 try:
-                    cmd = input(f"\n{self.app_name.lower()}> ").strip().lower()
+                    user_input = input(f"\n{self.app_name.lower()}> ").strip()
+
+                    if not user_input:
+                        continue
+
+                    # Split command and arguments
+                    parts = user_input.split()
+                    cmd = parts[0].lower()
+                    args = parts[1:] if len(parts) > 1 else []
 
                     if cmd in ["quit", "exit", "q"]:
                         break
@@ -44,7 +52,11 @@ class CommandInterface:
                         self.show_help()
                     elif cmd in self.commands:
                         try:
-                            self.commands[cmd]["handler"]()
+                            # Pass arguments to the handler
+                            if args:
+                                self.commands[cmd]["handler"](*args)
+                            else:
+                                self.commands[cmd]["handler"]()
                         except Exception as e:
                             print(f"Error executing command '{cmd}': {e}")
                     else:
