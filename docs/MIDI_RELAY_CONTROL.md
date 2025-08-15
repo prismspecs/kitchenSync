@@ -20,7 +20,7 @@ For relay control, we use **MIDI Note On/Off** messages with **note-based addres
 
 - **Note On** (0x90 + channel): Turn relay ON
 - **Note Off** (0x80 + channel): Turn relay OFF  
-- **Note Numbers 60-67**: Map to relay outputs 1-8
+- **Note Numbers 60-71**: Map to relay outputs 1-12
   - Note 60 (C4) = Output 1
   - Note 61 (C#4) = Output 2
   - Note 62 (D4) = Output 3
@@ -29,6 +29,10 @@ For relay control, we use **MIDI Note On/Off** messages with **note-based addres
   - Note 65 (F4) = Output 6
   - Note 66 (F#4) = Output 7
   - Note 67 (G4) = Output 8
+  - Note 68 (G#4) = Output 9
+  - Note 69 (A4) = Output 10
+  - Note 70 (A#4) = Output 11
+  - Note 71 (B4) = Output 12
 - **MIDI Channel**: Ignored (any channel 1-16 works)
 - **Velocity**: Controls output power (0 = OFF, 1-127 = ON with power level)
 - **Auto-timeout**: Notes automatically turn OFF after 5 seconds if no new messages
@@ -75,7 +79,7 @@ JSON format provides the most control and is easiest to create/edit:
 - **time**: Time in video (seconds) when event should trigger
 - **type**: "note_on" or "note_off"
 - **channel**: MIDI channel (1-16, ignored by hardware but useful for organization)
-- **note**: MIDI note number (60-67 for outputs 1-8)
+- **note**: MIDI note number (60-71 for outputs 1-12)
 - **velocity**: Power level (0 = OFF, 1-127 = ON with power control)
 - **description**: Optional human-readable description
 

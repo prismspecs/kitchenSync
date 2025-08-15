@@ -29,7 +29,7 @@
         "channel": 1,
         "note": 62,
         "velocity": 100,
-        "description": "Output 3 ON - Effect (Note 62, Medium power)"
+        "description": "Output 3 ON - Effect relay (Note 62, Medium power)"
     },
     {
         "time": 27.0,
@@ -37,7 +37,23 @@
         "channel": 1,
         "note": 62,
         "velocity": 0,
-        "description": "Output 3 OFF - Effect (Note 62)"
+        "description": "Output 3 OFF - Effect relay (Note 62)"
+    },
+    {
+        "time": 28.0,
+        "type": "note_on",
+        "channel": 1,
+        "note": 70,
+        "velocity": 100,
+        "description": "Output 11 ON - Special effect (Note 70)"
+    },
+    {
+        "time": 29.0,
+        "type": "note_on",
+        "channel": 1,
+        "note": 71,
+        "velocity": 127,
+        "description": "Output 12 ON - Master relay (Note 71)"
     },
     {
         "time": 30.0,
@@ -46,5 +62,21 @@
         "note": 61,
         "velocity": 0,
         "description": "Output 2 OFF - Stage lights (Note 61)"
+    },
+    {
+        "time": 32.0,
+        "type": "note_off",
+        "channel": 1,
+        "note": 70,
+        "velocity": 0,
+        "description": "Output 11 OFF - Special effect (Note 70)"
+    },
+    {
+        "time": 35.0,
+        "type": "note_off",
+        "channel": 1,
+        "note": 71,
+        "velocity": 0,
+        "description": "Output 12 OFF - Master relay (Note 71)"
     }
 ]

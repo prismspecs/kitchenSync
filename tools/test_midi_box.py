@@ -13,87 +13,110 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 try:
     from midi.manager import MidiManager
+
     print("✓ KitchenSync MIDI manager available")
 except ImportError as e:
     print("❌ KitchenSync MIDI manager not available")
     print(f"Import error: {e}")
     print("This script needs to run from the KitchenSync directory")
     print("Falling back to direct MIDI commands...")
-    
+
     # Fallback: direct amidi testing
     import subprocess
-    
+
     def test_with_amidi():
         """Simple fallback testing using amidi commands"""
         print("\n🔧 Using direct amidi commands for testing")
         print("Make sure your MIDI box is connected!")
-        
+
         # Get MIDI port
         port = input("Enter MIDI port (e.g., hw:3,0,0): ").strip()
         if not port:
             port = "hw:3,0,0"
-        
+
         print(f"Testing with port: {port}")
-        
+
         # Test each output
-        for output in range(1, 9):
+        for output in range(1, 13):
             note_hex = f"{59 + output:02X}"  # Convert to hex
             print(f"\nTesting Output {output} (Note {59 + output}, Hex {note_hex})")
-            
+
             try:
                 # Turn ON
-                subprocess.run(["amidi", "-p", port, "--send-hex", f"90 {note_hex} 7F"], check=True)
+                subprocess.run(
+                    ["amidi", "-p", port, "--send-hex", f"90 {note_hex} 7F"], check=True
+                )
                 print(f"  ✓ Output {output} ON")
                 time.sleep(1.5)
-                
-                # Turn OFF  
-                subprocess.run(["amidi", "-p", port, "--send-hex", f"80 {note_hex} 00"], check=True)
+
+                # Turn OFF
+                subprocess.run(
+                    ["amidi", "-p", port, "--send-hex", f"80 {note_hex} 00"], check=True
+                )
                 print(f"  ✓ Output {output} OFF")
                 time.sleep(0.5)
-                
+
             except subprocess.CalledProcessError as e:
                 print(f"  ❌ Error testing output {output}: {e}")
             except FileNotFoundError:
                 print("  ❌ amidi command not found. Install alsa-utils package.")
                 return
-        
+
         print("\n✅ Basic testing completed!")
-        
+
         # Offer manual testing
         print("\nManual testing:")
-        print("Commands: 'on X' or 'off X' where X is output 1-8")
+        print("Commands: 'on X' or 'off X' where X is output 1-12")
         print("Type 'quit' to exit")
-        
+
         while True:
             cmd = input("\nCommand: ").strip().lower()
-            if cmd == 'quit':
+            if cmd == "quit":
                 break
-                
+
             try:
                 parts = cmd.split()
                 if len(parts) >= 2:
                     action = parts[0]
                     output = int(parts[1])
-                    
-                    if 1 <= output <= 8:
+
+                    if 1 <= output <= 12:
                         note_hex = f"{59 + output:02X}"
-                        
-                        if action == 'on':
-                            subprocess.run(["amidi", "-p", port, "--send-hex", f"90 {note_hex} 7F"], check=True)
+
+                        if action == "on":
+                            subprocess.run(
+                                [
+                                    "amidi",
+                                    "-p",
+                                    port,
+                                    "--send-hex",
+                                    f"90 {note_hex} 7F",
+                                ],
+                                check=True,
+                            )
                             print(f"✓ Output {output} ON")
-                        elif action == 'off':
-                            subprocess.run(["amidi", "-p", port, "--send-hex", f"80 {note_hex} 00"], check=True)
+                        elif action == "off":
+                            subprocess.run(
+                                [
+                                    "amidi",
+                                    "-p",
+                                    port,
+                                    "--send-hex",
+                                    f"80 {note_hex} 00",
+                                ],
+                                check=True,
+                            )
                             print(f"✓ Output {output} OFF")
                         else:
                             print("Use 'on' or 'off'")
                     else:
-                        print("Output must be 1-8")
+                        print("Output must be 1-12")
                 else:
-                    print("Format: 'on 1' or 'off 1'")
-                    
+                    print("Format: 'on 1' or 'off 1' (outputs 1-12)")
+
             except Exception as e:
                 print(f"Error: {e}")
-    
+
     # Run fallback testing
     test_with_amidi()
     sys.exit(0)
@@ -114,11 +137,11 @@ class MidiBoxTester:
 
     def test_output(self, output_num: int, velocity: int = 127, duration: float = 2.0):
         """Test a single output"""
-        if not (1 <= output_num <= 8):
-            print(f"❌ Output number must be 1-8, got {output_num}")
+        if not (1 <= output_num <= 12):
+            print(f"❌ Output number must be 1-12, got {output_num}")
             return
 
-        note = 59 + output_num  # Convert to MIDI note (60-67)
+        note = 59 + output_num  # Convert to MIDI note (60-71)
 
         print(
             f"🔧 Testing Output {output_num} (Note {note}) at velocity {velocity} for {duration}s"
@@ -136,10 +159,10 @@ class MidiBoxTester:
         print(f"  ✓ Sent Note OFF: Output {output_num}")
 
     def test_all_outputs(self, duration: float = 1.0):
-        """Test all 8 outputs sequentially"""
+        """Test all 12 outputs sequentially"""
         print(f"🎯 Testing all outputs sequentially ({duration}s each)")
 
-        for output in range(1, 9):
+        for output in range(1, 13):
             self.test_output(output, velocity=127, duration=duration)
             time.sleep(0.5)  # Brief pause between outputs
 
@@ -237,7 +260,7 @@ class MidiBoxTester:
             choice = input("\nChoice (1-8): ").strip()
 
             if choice == "1":
-                output = int(input("Output number (1-8): "))
+                output = int(input("Output number (1-12): "))
                 velocity = int(input("Velocity (1-127): ") or "127")
                 duration = float(input("Duration (seconds): ") or "2.0")
                 self.test_output(output, velocity, duration)
@@ -247,18 +270,18 @@ class MidiBoxTester:
                 self.test_all_outputs(duration)
 
             elif choice == "3":
-                output = int(input("Output number (1-8): ") or "1")
+                output = int(input("Output number (1-12): ") or "1")
                 self.test_power_levels(output)
 
             elif choice == "4":
                 self.test_multiple_outputs()
 
             elif choice == "5":
-                output = int(input("Output number (1-8): ") or "1")
+                output = int(input("Output number (1-12): ") or "1")
                 self.test_timeout_behavior(output)
 
             elif choice == "6":
-                output = int(input("Output number (1-8): ") or "1")
+                output = int(input("Output number (1-12): ") or "1")
                 self.test_keepalive(output)
 
             elif choice == "7":

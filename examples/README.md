@@ -4,14 +4,11 @@ This directory contains example schedules in both supported formats.
 
 ## JSON Format Examples
 
-### Basic Relay Control (`basic_relay_example.json`)
-Simple on/off relay control for lighting or effects.
+### MIDI Relay Control (`relay_example.json`)
+Complete example showing MIDI relay control with proper hardware addressing (Notes 60-71 for Outputs 1-12).
 
 ### Advanced Multi-Zone (`multi_zone_example.json`)  
 Complex schedule controlling multiple zones with timing coordination.
-
-### Theater Show (`theater_example.json`)
-Real-world example for a theater production with lighting and effects cues.
 
 ## MIDI File Examples
 

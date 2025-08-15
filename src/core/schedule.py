@@ -373,14 +373,14 @@ class Schedule:
 
         Args:
             time: Time in seconds
-            relay_output: Output number (1-8)
+            relay_output: Output number (1-12)
             velocity: MIDI velocity (1-127, controls power level)
             channel: MIDI channel (1-16, ignored by hardware but good for organization)
         """
-        if not (1 <= relay_output <= 8):
-            raise ValueError("Relay output must be 1-8")
+        if not (1 <= relay_output <= 12):
+            raise ValueError("Relay output must be 1-12")
 
-        note = 59 + relay_output  # Note 60-67 for outputs 1-8
+        note = 59 + relay_output  # Note 60-71 for outputs 1-12
         return {
             "time": time,
             "type": "note_on",
@@ -398,13 +398,13 @@ class Schedule:
 
         Args:
             time: Time in seconds
-            relay_output: Output number (1-8)
+            relay_output: Output number (1-12)
             channel: MIDI channel (1-16, ignored by hardware)
         """
-        if not (1 <= relay_output <= 8):
-            raise ValueError("Relay output must be 1-8")
+        if not (1 <= relay_output <= 12):
+            raise ValueError("Relay output must be 1-12")
 
-        note = 59 + relay_output  # Note 60-67 for outputs 1-8
+        note = 59 + relay_output  # Note 60-71 for outputs 1-12
         return {
             "time": time,
             "type": "note_off",
@@ -426,7 +426,7 @@ class Schedule:
 
         Args:
             time: Time in seconds
-            relay_output: Output number (1-8)
+            relay_output: Output number (1-12)
             duration: How long to stay ON (seconds, max 5s due to auto-timeout)
             velocity: MIDI velocity (1-127, controls power level)
             channel: MIDI channel (1-16, ignored by hardware)
@@ -483,7 +483,7 @@ class Schedule:
         Args:
             start_time: When to start the event (seconds)
             end_time: When to end the event (seconds)
-            relay_output: Output number (1-8)
+            relay_output: Output number (1-12)
             velocity: MIDI velocity (1-127, controls power level)
             channel: MIDI channel (1-16, ignored by hardware)
             keepalive_interval: How often to send keepalive (default 4s)

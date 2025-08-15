@@ -5,7 +5,7 @@
         "channel": 1,
         "note": 60,
         "velocity": 127,
-        "description": "House lights ON"
+        "description": "Output 1 ON - House lights (Note 60)"
     },
     {
         "time": 10.0,
@@ -13,38 +13,38 @@
         "channel": 1,
         "note": 60,
         "velocity": 0,
-        "description": "House lights OFF"
+        "description": "Output 1 OFF - House lights (Note 60)"
     },
     {
         "time": 12.0,
         "type": "note_on",
-        "channel": 2,
-        "note": 60,
+        "channel": 1,
+        "note": 61,
         "velocity": 127,
-        "description": "Stage lights ON"
+        "description": "Output 2 ON - Stage lights (Note 61)"
     },
     {
         "time": 25.0,
         "type": "note_on",
-        "channel": 3,
-        "note": 60,
-        "velocity": 127,
-        "description": "Effect relay ON"
+        "channel": 1,
+        "note": 62,
+        "velocity": 100,
+        "description": "Output 3 ON - Effect (Note 62, Medium power)"
     },
     {
         "time": 27.0,
         "type": "note_off",
-        "channel": 3,
-        "note": 60,
+        "channel": 1,
+        "note": 62,
         "velocity": 0,
-        "description": "Effect relay OFF"
+        "description": "Output 3 OFF - Effect (Note 62)"
     },
     {
         "time": 30.0,
         "type": "note_off",
-        "channel": 2,
-        "note": 60,
+        "channel": 1,
+        "note": 61,
         "velocity": 0,
-        "description": "Stage lights OFF"
+        "description": "Output 2 OFF - Stage lights (Note 61)"
     }
 ]
