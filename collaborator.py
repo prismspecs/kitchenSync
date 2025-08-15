@@ -323,15 +323,19 @@ class CollaboratorPi:
             log_warning("Could not get video position for sync check", component="sync")
             return
 
-        # Detect if we just looped
+        # Detect if we just looped - check for position near start AND previous position was near end
         if self.last_video_position is not None:
             duration = self.video_player.get_duration()
             if duration and duration > 0:
-                # If position jumped backwards significantly, we likely looped
-                position_jump = self.last_video_position - video_position
-                if position_jump > duration * 0.8:  # More than 80% of video duration
+                # VLC's seamless repeat: check if we went from near-end to near-start
+                near_start = video_position < (duration * 0.1)  # First 10% of video
+                was_near_end = self.last_video_position > (
+                    duration * 0.9
+                )  # Last 10% of video
+
+                if near_start and was_near_end:
                     log_info(
-                        f"Loop detected: position jumped from {self.last_video_position:.2f}s to {video_position:.2f}s",
+                        f"Loop detected: went from {self.last_video_position:.2f}s to {video_position:.2f}s (seamless VLC repeat)",
                         component="sync",
                     )
                     self.last_loop_time = time.time()
