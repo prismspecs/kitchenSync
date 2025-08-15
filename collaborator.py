@@ -144,16 +144,16 @@ class CollaboratorPi:
         self.deviation_samples = deque(maxlen=self.deviation_samples_maxlen)
         self.last_correction_time = 0
         self.video_start_time = None
+        self.last_video_position = None  # Track position to detect loops
 
         # Sync state management
         self.wait_for_sync = False
         self.wait_after_sync = False
         self.sync_timer = 0
 
-        # Position-based grace period (like omxplayer-sync)
-        self.position_grace_period = (
-            5.0  # Don't sync correct if either position < 5 seconds
-        )
+        # Loop detection and grace period
+        self.loop_grace_period = 1.0  # 1 second grace period after loop
+        self.last_loop_time = 0
 
     def _handle_sync(
         self, leader_time: float, received_at: float | None = None
@@ -307,12 +307,13 @@ class CollaboratorPi:
 
         # Reset video state
         self.video_start_time = None
+        self.last_video_position = None
         self.deviation_samples.clear()
 
         log_info("Playback stopped", component="collaborator")
 
     def _check_video_sync(self, leader_time: float) -> None:
-        """Check and correct video sync with omxplayer-sync position-based grace period"""
+        """Check and correct video sync using median filtering"""
         if not self.video_player.is_playing or not self.video_start_time:
             return
 
@@ -322,55 +323,32 @@ class CollaboratorPi:
             log_warning("Could not get video position for sync check", component="sync")
             return
 
-        # omxplayer-sync approach: Skip sync correction if EITHER position is in grace period
-        # This naturally handles loops without complex detection
-        if (
-            leader_time < self.position_grace_period
-            or video_position < self.position_grace_period
-        ):
-            return
+        # Detect if we just looped
+        if self.last_video_position is not None:
+            duration = self.video_player.get_duration()
+            if duration and duration > 0:
+                # If position jumped backwards significantly, we likely looped
+                position_jump = self.last_video_position - video_position
+                if position_jump > duration * 0.8:  # More than 80% of video duration
+                    log_info(
+                        f"Loop detected: position jumped from {self.last_video_position:.2f}s to {video_position:.2f}s",
+                        component="sync",
+                    )
+                    self.last_loop_time = time.time()
+                    self.deviation_samples.clear()  # Clear old samples after loop
 
-        # Simple deviation calculation
-        deviation = video_position - leader_time
+        self.last_video_position = video_position
 
-        # Add to samples for median filtering
-        self.deviation_samples.append(deviation)
-
-        # Only proceed if we have enough samples
-        if len(self.deviation_samples) < self.deviation_samples_maxlen // 2:
-            return
-
-        # Calculate median deviation
-        sorted_deviations = sorted(self.deviation_samples)
-        median_deviation = sorted_deviations[len(sorted_deviations) // 2]
-
-        # Check if correction is needed
-        if abs(median_deviation) > self.deviation_threshold:
-            current_time = time.time()
-
-            # Avoid corrections too close together
-            if current_time - self.last_correction_time < self.sync_check_interval:
-                return
-
+        # Check if we're in loop grace period
+        current_time = time.time()
+        if current_time - self.last_loop_time < self.loop_grace_period:
             log_info(
-                f"Sync correction: {median_deviation:.3f}s deviation", component="sync"
+                f"In loop grace period, ignoring sync for {self.loop_grace_period - (current_time - self.last_loop_time):.2f}s more",
+                component="sync",
             )
+            return
 
-            # Apply simple correction
-            target_position = leader_time
-            self.deviation_samples.clear()
-
-            # Pause, seek, wait for sync
-            if self.video_player.pause():
-                time.sleep(0.1)
-                if self.video_player.set_position(
-                    target_position + self.sync_jump_ahead
-                ):
-                    self.wait_for_sync = True
-                    self.sync_timer = time.time()
-                    self.last_correction_time = time.time()
-                else:
-                    self.video_player.resume()
+        # Calculate expected position with latency compensation
         # Wrap to video duration if known
         duration = self.video_player.get_duration()
         expected_position = leader_time + self.latency_compensation
