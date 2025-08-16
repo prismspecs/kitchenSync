@@ -52,9 +52,11 @@ DEFAULT_LATENCY_COMPENSATION = (
     0.0  # Network/processing delay offset (DISABLED - may cause issues)
 )
 DEFAULT_SEEK_SETTLE_TIME = 0.1  # VLC settling time after seek
+
 POST_LOOP_SYNC_DELAY_SECONDS = (
     5.0  # Grace period after a loop before sync corrections resume
 )
+NO_SYNC_AFTER_LOOP = True  # If True, disables all sync corrections after a loop
 
 
 # =============================================================================
@@ -149,6 +151,7 @@ class CollaboratorPi:
         self.post_loop_sync_delay_seconds = self.config.getfloat(
             "post_loop_sync_delay", POST_LOOP_SYNC_DELAY_SECONDS
         )
+        self.no_sync_after_loop = NO_SYNC_AFTER_LOOP
 
         # Video sync state
         self.deviation_samples = deque(maxlen=self.deviation_samples_maxlen)
@@ -157,6 +160,7 @@ class CollaboratorPi:
         self.last_video_position = 0.0
         self.in_post_loop_grace_period = False
         self.loop_time = 0
+        self.no_sync_after_loop_active = False
 
         # Sync state management
         self.wait_for_sync = False
@@ -371,6 +375,15 @@ class CollaboratorPi:
         if not self.video_player.is_playing or not self.video_start_time:
             return
 
+        # If NO_SYNC_AFTER_LOOP is enabled and a loop has occurred, block all corrections
+        if self.no_sync_after_loop and self.no_sync_after_loop_active:
+            if self.critical_window_logging:
+                log_info(
+                    "NO_SYNC_AFTER_LOOP active: blocking all sync corrections after loop.",
+                    component="sync",
+                )
+            return
+
         # Block all corrections during post-loop grace period
         if self.in_post_loop_grace_period:
             if time.time() - self.loop_time < self.post_loop_sync_delay_seconds:
@@ -393,13 +406,20 @@ class CollaboratorPi:
         # The threshold is large to avoid triggering on small stutters.
         if self.last_video_position > video_position + 1.0:  # e.g. 634.0 > 0.5 + 1.0
             log_info(
-                f"Loop detected! Position jumped from {self.last_video_position:.3f}s to {video_position:.3f}s. Clearing samples and starting post-loop grace period.",
+                f"Loop detected! Position jumped from {self.last_video_position:.3f}s to {video_position:.3f}s. Clearing samples.",
                 component="sync",
             )
             self.deviation_samples.clear()
             self.last_video_position = video_position
-            self.in_post_loop_grace_period = True
-            self.loop_time = time.time()
+            if self.no_sync_after_loop:
+                self.no_sync_after_loop_active = True
+                log_info(
+                    "NO_SYNC_AFTER_LOOP flag set: all sync corrections will be blocked after this loop.",
+                    component="sync",
+                )
+            else:
+                self.in_post_loop_grace_period = True
+                self.loop_time = time.time()
             return  # Skip sync check for one cycle to gather fresh data
 
         self.last_video_position = video_position
