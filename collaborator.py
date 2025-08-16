@@ -46,7 +46,7 @@ REREGISTER_INTERVAL_SECONDS = 60.0  # How often to re-register with leader
 # Default sync settings - these are tunable parameters that affect sync quality
 # (Can be overridden in config file)
 DEFAULT_SYNC_CHECK_INTERVAL = 5.0  # Min time between corrections
-DEFAULT_DEVIATION_THRESHOLD = 0.2  # Error threshold to trigger correction
+DEFAULT_DEVIATION_THRESHOLD = 0.3  # Error threshold to trigger correction
 DEFAULT_SYNC_JUMP_AHEAD = 3.0  # How far ahead to seek for corrections
 DEFAULT_LATENCY_COMPENSATION = (
     0.0  # Network/processing delay offset (DISABLED - may cause issues)
@@ -56,7 +56,7 @@ DEFAULT_SEEK_SETTLE_TIME = 0.1  # VLC settling time after seek
 POST_LOOP_SYNC_DELAY_SECONDS = (
     5.0  # Grace period after a loop before sync corrections resume
 )
-NO_SYNC_AFTER_LOOP = True  # If True, disables all sync corrections after a loop
+NO_SYNC_AFTER_LOOP = False  # If True, disables all sync corrections after a loop
 
 
 # =============================================================================
