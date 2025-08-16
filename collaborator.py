@@ -115,11 +115,16 @@ class CollaboratorPi:
         # Initialize networking
         self.command_listener = CommandListener()
         self.sync_receiver = SyncReceiver(
+            sync_port=self.config.getint("sync_port", 5005),
+            sync_callback=self._handle_sync,
+        )
+
         # Catch-up sync mode defaults (can be overridden by config, but always present)
         self.catchup_mode = DEFAULT_CATCHUP_MODE
         self.catchup_rate = DEFAULT_CATCHUP_RATE
         self.catchup_threshold = DEFAULT_CATCHUP_THRESHOLD
         self._catchup_active = False
+
         self.video_path = self.video_manager.find_video_file()
         if self.video_path:
             self.video_player.load_video(self.video_path)
@@ -409,11 +414,19 @@ class CollaboratorPi:
                 if not getattr(self, "_catchup_active", False):
                     # Activate catch-up
                     try:
-                        self.video_player.set_playback_rate(getattr(self, "catchup_rate", 1.05))
+                        self.video_player.set_playback_rate(
+                            getattr(self, "catchup_rate", 1.05)
+                        )
                         self._catchup_active = True
-                        log_info(f"Catch-up mode: playback rate set to {getattr(self, 'catchup_rate', 1.05)}", component="sync")
+                        log_info(
+                            f"Catch-up mode: playback rate set to {getattr(self, 'catchup_rate', 1.05)}",
+                            component="sync",
+                        )
                     except Exception as e:
-                        log_warning(f"Failed to set catch-up playback rate: {e}", component="sync")
+                        log_warning(
+                            f"Failed to set catch-up playback rate: {e}",
+                            component="sync",
+                        )
                 else:
                     # Already in catch-up, keep going
                     pass
@@ -423,9 +436,14 @@ class CollaboratorPi:
                     try:
                         self.video_player.set_playback_rate(1.0)
                         self._catchup_active = False
-                        log_info("Catch-up mode: playback rate restored to normal", component="sync")
+                        log_info(
+                            "Catch-up mode: playback rate restored to normal",
+                            component="sync",
+                        )
                     except Exception as e:
-                        log_warning(f"Failed to restore playback rate: {e}", component="sync")
+                        log_warning(
+                            f"Failed to restore playback rate: {e}", component="sync"
+                        )
             return
 
         # --- ORIGINAL LOGIC ---
