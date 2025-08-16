@@ -218,7 +218,9 @@ class CollaboratorPi:
 
         # Debug logging with appropriate intervals
         if self.critical_window_logging and self.in_critical_window:
-            self._throttled_debug_log(leader_time, 0.05)  # 50ms interval during critical window
+            self._throttled_debug_log(
+                leader_time, 0.05
+            )  # 50ms interval during critical window
         elif self.debug_sync_logging:
             self._throttled_debug_log(leader_time, self.debug_log_interval)
 
@@ -226,14 +228,20 @@ class CollaboratorPi:
         if self.wait_for_sync:
             current_position = self.video_player.get_position() or 0
             deviation = abs(leader_time - current_position)
-            
+
             if deviation < self.sync_deviation_threshold_resume:
-                log_info(f"Sync achieved! Deviation: {deviation:.3f}s, resuming", component="sync")
+                log_info(
+                    f"Sync achieved! Deviation: {deviation:.3f}s, resuming",
+                    component="sync",
+                )
                 self.video_player.resume()
                 self.wait_for_sync = False
                 self.wait_after_sync = time.time()
             elif time.time() - self.sync_timer > self.sync_timeout_seconds:
-                log_warning(f"Sync timeout after {self.sync_timeout_seconds}s, resuming anyway", component="sync")
+                log_warning(
+                    f"Sync timeout after {self.sync_timeout_seconds}s, resuming anyway",
+                    component="sync",
+                )
                 self.video_player.resume()
                 self.wait_for_sync = False
                 self.wait_after_sync = time.time()
@@ -358,11 +366,13 @@ class CollaboratorPi:
         time_to_end = duration - video_position
         in_pre_end = time_to_end <= self.critical_window_start_threshold
         in_post_start = video_position <= self.critical_window_end_threshold
-        
+
         # State transitions
         if not self.in_critical_window and in_pre_end:
             self.in_critical_window = True
-            print(f"ENTERING CRITICAL SYNC WINDOW (pos={video_position:.2f}s, ttl={time_to_end:.2f}s)")
+            print(
+                f"ENTERING CRITICAL SYNC WINDOW (pos={video_position:.2f}s, ttl={time_to_end:.2f}s)"
+            )
         elif self.in_critical_window and not (in_pre_end or in_post_start):
             self.in_critical_window = False
             print(f"EXITING CRITICAL SYNC WINDOW (pos={video_position:.2f}s)")
@@ -430,7 +440,10 @@ class CollaboratorPi:
         min_samples = self.deviation_samples_maxlen // 2
         if len(self.deviation_samples) < min_samples:
             if self.critical_window_logging and self.in_critical_window:
-                log_info(f"SYNC_EVAL: Need {min_samples - len(self.deviation_samples)} more samples", component="sync")
+                log_info(
+                    f"SYNC_EVAL: Need {min_samples - len(self.deviation_samples)} more samples",
+                    component="sync",
+                )
             return
 
         # Calculate median with outlier filtering (trimmed mean)
@@ -440,28 +453,47 @@ class CollaboratorPi:
             trimmed = sorted_samples[trim_count:-trim_count]
         else:
             trimmed = sorted_samples
-        
+
         median_deviation = trimmed[len(trimmed) // 2] if trimmed else 0.0
 
         if self.critical_window_logging and self.in_critical_window:
-            log_info(f"SYNC_EVAL: Median {median_deviation:.3f}s (threshold: {self.deviation_threshold:.3f}s)", component="sync")
+            # Show median calculation details during critical window
+            print(
+                f"SYNC_MEDIAN_CALC | Samples: {len(self.deviation_samples)} | Raw: {sorted_samples[-5:]} | "
+                f"Trimmed: {trimmed[-5:]} | Median: {median_deviation:.3f}s | Threshold: {self.deviation_threshold:.3f}s"
+            )
 
         # Check if correction is needed
         if abs(median_deviation) > self.deviation_threshold:
+            if self.critical_window_logging and self.in_critical_window:
+                print(f"SYNC_CORRECTION_TRIGGER | Median {median_deviation:.3f}s > threshold {self.deviation_threshold:.3f}s")
+            
             current_time = time.time()
 
             # Rate limit corrections
             if current_time - self.last_correction_time < self.sync_check_interval:
                 if self.critical_window_logging and self.in_critical_window:
-                    time_left = self.sync_check_interval - (current_time - self.last_correction_time)
-                    log_info(f"SYNC_EVAL: Correction blocked, {time_left:.1f}s remaining", component="sync")
+                    time_left = self.sync_check_interval - (
+                        current_time - self.last_correction_time
+                    )
+                    log_info(
+                        f"SYNC_EVAL: Correction blocked, {time_left:.1f}s remaining",
+                        component="sync",
+                    )
                 return
 
-            log_info(f"Sync correction: {median_deviation:.3f}s > {self.deviation_threshold:.3f}s", component="sync")
+            log_info(
+                f"Sync correction: {median_deviation:.3f}s > {self.deviation_threshold:.3f}s",
+                component="sync",
+            )
             print(f"🔄 Sync correction: {median_deviation:.3f}s deviation")
 
             # Calculate target position with latency compensation
-            correction_offset = -self.latency_compensation if median_deviation > 0 else self.latency_compensation
+            correction_offset = (
+                -self.latency_compensation
+                if median_deviation > 0
+                else self.latency_compensation
+            )
             target_position = expected_position + correction_offset
             if duration and duration > 0:
                 target_position = target_position % duration
@@ -482,18 +514,24 @@ class CollaboratorPi:
                 seek_position = seek_position % duration
 
             if self.video_player.set_position(seek_position):
-                log_info(f"Seeking to {seek_position:.3f}s (target: {target_position:.3f}s)", component="sync")
+                log_info(
+                    f"Seeking to {seek_position:.3f}s (target: {target_position:.3f}s)",
+                    component="sync",
+                )
                 self.wait_for_sync = True
                 self.sync_timer = time.time()
                 self.last_correction_time = time.time()
-                log_info("Waiting for sync (will resume when deviation < 0.1s)", component="sync")
+                log_info(
+                    "Waiting for sync (will resume when deviation < 0.1s)",
+                    component="sync",
+                )
             else:
                 log_warning("Seek failed, resuming playback", component="sync")
                 self.video_player.resume()
         else:
             # No correction needed
             if self.critical_window_logging and self.in_critical_window:
-                log_info(f"SYNC_EVAL: No correction needed ({median_deviation:.3f}s within threshold)", component="sync")
+                print(f"SYNC_NO_CORRECTION | Median {median_deviation:.3f}s <= threshold {self.deviation_threshold:.3f}s")
 
     def _log_sync_debug_info(self, leader_time: float) -> None:
         """Log sync information for debugging"""
@@ -511,10 +549,14 @@ class CollaboratorPi:
             expected_position = expected_position % duration
 
         raw_deviation = video_position - expected_position
-        
+
         # Loop-aware deviation (choose shortest path around the circle)
         if duration and duration > 0:
-            candidates = [raw_deviation, raw_deviation - duration, raw_deviation + duration]
+            candidates = [
+                raw_deviation,
+                raw_deviation - duration,
+                raw_deviation + duration,
+            ]
             loop_aware_deviation = min(candidates, key=abs)
         else:
             loop_aware_deviation = raw_deviation
