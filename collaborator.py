@@ -160,6 +160,13 @@ class CollaboratorPi:
         self.last_debug_log_time = 0
         self.debug_log_interval = 0.2  # Log every 200ms to avoid spam
 
+        # Critical window sync logging (5s before video end to 5s after restart)
+        self.critical_window_logging = True  # Always enabled to capture sync data
+        self.critical_window_start_threshold = 5.0  # Start logging 5s before video end
+        self.critical_window_end_threshold = 5.0  # Continue logging 5s after restart
+        self.in_critical_window = False
+        self.video_restart_time = None  # Track when video restarts after loop
+
     def _handle_sync(
         self, leader_time: float, received_at: float | None = None
     ) -> None:
@@ -187,16 +194,22 @@ class CollaboratorPi:
         # Process MIDI cues (safe no-op if no schedule)
         self.midi_scheduler.process_cues(leader_time)
 
+        # Check for critical sync window (5s before video end to 5s after restart)
+        self._update_critical_window_status(leader_time)
+
         # Check video sync (only if we've been running for a bit)
         if self.system_state.is_running and self.video_start_time:
             time_since_start = time.time() - self.video_start_time
             if time_since_start > self.initial_sync_wait_seconds:
                 self._check_video_sync(leader_time)
 
-        # Debug sync logging (throttled to avoid spam)
-        if self.debug_sync_logging:
+        # Debug sync logging (throttled to avoid spam unless in critical window)
+        if self.debug_sync_logging or self.in_critical_window:
             current_time = time.time()
-            if current_time - self.last_debug_log_time >= self.debug_log_interval:
+            log_interval = (
+                0.05 if self.in_critical_window else self.debug_log_interval
+            )  # 50ms in critical window
+            if current_time - self.last_debug_log_time >= log_interval:
                 self._log_sync_debug_info(leader_time)
                 self.last_debug_log_time = current_time
 
@@ -324,6 +337,47 @@ class CollaboratorPi:
 
         log_info("Playback stopped", component="collaborator")
 
+    def _update_critical_window_status(self, leader_time: float) -> None:
+        """Update whether we're in the critical sync logging window"""
+        if not self.video_player.is_playing:
+            return
+
+        duration = self.video_player.get_duration()
+        if not duration or duration <= 0:
+            return
+
+        # Calculate position in video loop
+        video_position = leader_time % duration
+        time_to_end = duration - video_position
+
+        # Check if we're in the pre-end critical window (5s before video ends)
+        approaching_end = time_to_end <= self.critical_window_start_threshold
+
+        # Check if we're in the post-restart critical window (5s after restart)
+        after_restart = False
+        if self.video_restart_time:
+            time_since_restart = time.time() - self.video_restart_time
+            after_restart = time_since_restart <= self.critical_window_end_threshold
+
+        was_in_critical_window = self.in_critical_window
+        self.in_critical_window = approaching_end or after_restart
+
+        # Log when entering/exiting critical window
+        if self.in_critical_window and not was_in_critical_window:
+            reason = "approaching end" if approaching_end else "after restart"
+            log_info(
+                f"ENTERING CRITICAL SYNC WINDOW: {reason} (video_pos={video_position:.2f}s, duration={duration:.1f}s, time_to_end={time_to_end:.2f}s)",
+                component="sync",
+            )
+        elif not self.in_critical_window and was_in_critical_window:
+            log_info(
+                f"EXITING CRITICAL SYNC WINDOW (video_pos={video_position:.2f}s, duration={duration:.1f}s)",
+                component="sync",
+            )
+            # Clear restart time when exiting window
+            if self.video_restart_time and not approaching_end:
+                self.video_restart_time = None
+
     def _check_video_sync(self, leader_time: float) -> None:
         """Check and correct video sync using median filtering"""
         if not self.video_player.is_playing or not self.video_start_time:
@@ -348,6 +402,14 @@ class CollaboratorPi:
                     )
                     self.last_loop_time = time.time()
                     self.deviation_samples.clear()  # Clear old samples after loop
+
+                    # Track video restart for critical window logging
+                    self.video_restart_time = time.time()
+                    if self.in_critical_window:
+                        log_info(
+                            f"VIDEO RESTART detected at {video_position:.2f}s -> {self.last_video_position:.2f}s",
+                            component="sync",
+                        )
 
         self.last_video_position = video_position
 
@@ -382,8 +444,20 @@ class CollaboratorPi:
         # Add to samples for median filtering
         self.deviation_samples.append(deviation)
 
+        # Log sync evaluation in critical window
+        if self.in_critical_window:
+            log_info(
+                f"SYNC_EVAL: Added deviation sample {deviation:.3f}s (samples: {len(self.deviation_samples)}/{self.deviation_samples_maxlen})",
+                component="sync",
+            )
+
         # Only proceed if we have enough samples
         if len(self.deviation_samples) < self.deviation_samples_maxlen // 2:
+            if self.in_critical_window:
+                log_info(
+                    f"SYNC_EVAL: Insufficient samples ({len(self.deviation_samples)} < {self.deviation_samples_maxlen // 2}), skipping correction check",
+                    component="sync",
+                )
             return
 
         # Calculate median deviation with outlier filtering
@@ -401,6 +475,13 @@ class CollaboratorPi:
             else 0.0
         )
 
+        # Log median calculation in critical window
+        if self.in_critical_window:
+            log_info(
+                f"SYNC_EVAL: Median deviation {median_deviation:.3f}s from {len(trimmed_deviations)} trimmed samples (threshold: {self.deviation_threshold:.3f}s)",
+                component="sync",
+            )
+
         # Check if correction is needed
         # Use configured deviation_threshold directly (no hard 1.0s floor)
         correction_threshold = self.deviation_threshold
@@ -409,6 +490,11 @@ class CollaboratorPi:
 
             # Avoid corrections too close together
             if current_time - self.last_correction_time < self.sync_check_interval:
+                if self.in_critical_window:
+                    log_info(
+                        f"SYNC_EVAL: Correction needed but too soon since last correction ({current_time - self.last_correction_time:.2f}s < {self.sync_check_interval:.2f}s)",
+                        component="sync",
+                    )
                 return
 
             log_info(
@@ -471,6 +557,13 @@ class CollaboratorPi:
             else:
                 log_warning("Seek failed, resuming playback", component="sync")
                 self.video_player.resume()
+        else:
+            # No correction needed - log in critical window
+            if self.in_critical_window:
+                log_info(
+                    f"SYNC_EVAL: No correction needed, median deviation {median_deviation:.3f}s within threshold {correction_threshold:.3f}s",
+                    component="sync",
+                )
 
     def _log_sync_debug_info(self, leader_time: float) -> None:
         """Log detailed sync information for debugging"""
@@ -504,12 +597,33 @@ class CollaboratorPi:
         waiting_for_sync = self.wait_for_sync
         waiting_after_sync = self.wait_after_sync
 
-        print(
-            f"SYNC_DEBUG: Leader={leader_time:.3f}s | Video={video_position:.3f}s | "
-            f"Expected={expected_position:.3f}s | RawDev={raw_deviation:.3f}s | "
-            f"LoopDev={loop_aware_deviation:.3f}s | Duration={duration:.1f}s | "
-            f"Grace={in_grace_period} | WaitSync={waiting_for_sync} | WaitAfter={waiting_after_sync}"
+        # Calculate additional metrics for critical window
+        time_to_end = duration - (leader_time % duration) if duration > 0 else 0
+        time_since_restart = (
+            time.time() - self.video_restart_time if self.video_restart_time else 999
         )
+        deviation_samples_count = len(self.deviation_samples)
+
+        if self.in_critical_window:
+            # Enhanced logging during critical window - log every sync evaluation
+            log_info(
+                f"CRITICAL_SYNC: Leader={leader_time:.3f}s | Video={video_position:.3f}s | "
+                f"Expected={expected_position:.3f}s | RawDev={raw_deviation:.3f}s | "
+                f"LoopDev={loop_aware_deviation:.3f}s | Duration={duration:.1f}s | "
+                f"TimeToEnd={time_to_end:.2f}s | TimeSinceRestart={time_since_restart:.2f}s | "
+                f"DevSamples={deviation_samples_count}/{self.deviation_samples_maxlen} | "
+                f"Grace={in_grace_period} | WaitSync={waiting_for_sync} | WaitAfter={waiting_after_sync} | "
+                f"Threshold={self.deviation_threshold:.3f}s",
+                component="sync",
+            )
+        else:
+            # Standard debug logging
+            print(
+                f"SYNC_DEBUG: Leader={leader_time:.3f}s | Video={video_position:.3f}s | "
+                f"Expected={expected_position:.3f}s | RawDev={raw_deviation:.3f}s | "
+                f"LoopDev={loop_aware_deviation:.3f}s | Duration={duration:.1f}s | "
+                f"Grace={in_grace_period} | WaitSync={waiting_for_sync} | WaitAfter={waiting_after_sync}"
+            )
 
     def run(self) -> None:
         """Main run loop"""
