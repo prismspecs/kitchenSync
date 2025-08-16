@@ -63,7 +63,7 @@ class LeaderPi:
         # Initialize networking (wire tick_interval from config)
         self.sync_broadcaster = SyncBroadcaster(
             sync_port=self.config.getint("sync_port", 5005),
-            tick_interval=0.02,  # Increased: 50 times per second for responsive sync
+            tick_interval=1.0,  # Changed: 1 time per second for omxplayer-sync style
         )
         self.command_manager = CommandManager()
 
