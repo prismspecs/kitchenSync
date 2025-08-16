@@ -78,11 +78,11 @@ class CollaboratorPi:
         # Initialize configuration
         self.config = ConfigManager(config_file)
 
-    # Catch-up sync mode defaults (can be overridden by config, but always present)
-    self.catchup_mode = DEFAULT_CATCHUP_MODE
-    self.catchup_rate = DEFAULT_CATCHUP_RATE
-    self.catchup_threshold = DEFAULT_CATCHUP_THRESHOLD
-    self._catchup_active = False
+        # Catch-up sync mode defaults (can be overridden by config, but always present)
+        self.catchup_mode = DEFAULT_CATCHUP_MODE
+        self.catchup_rate = DEFAULT_CATCHUP_RATE
+        self.catchup_threshold = DEFAULT_CATCHUP_THRESHOLD
+        self._catchup_active = False
 
         # Configure logging based on config settings
         enable_system_logging(self.config.enable_system_logging)
@@ -115,11 +115,11 @@ class CollaboratorPi:
         # Initialize networking
         self.command_listener = CommandListener()
         self.sync_receiver = SyncReceiver(
-            sync_port=self.config.getint("sync_port", 5005),
-            sync_callback=self._handle_sync,
-        )
-
-        # Find and load video file before creating debug overlay
+        # Catch-up sync mode defaults (can be overridden by config, but always present)
+        self.catchup_mode = DEFAULT_CATCHUP_MODE
+        self.catchup_rate = DEFAULT_CATCHUP_RATE
+        self.catchup_threshold = DEFAULT_CATCHUP_THRESHOLD
+        self._catchup_active = False
         self.video_path = self.video_manager.find_video_file()
         if self.video_path:
             self.video_player.load_video(self.video_path)
