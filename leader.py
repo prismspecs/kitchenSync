@@ -19,7 +19,7 @@ sys.path.insert(0, str(Path(__file__).parent / "src"))
 from config import ConfigManager
 from video import VideoFileManager, VLCVideoPlayer
 from networking import SyncBroadcaster, CommandManager
-from midi.manager import MidiScheduler, MidiManager
+from midi import MidiManager, MidiScheduler
 from core import Schedule, ScheduleEditor, SystemState, CollaboratorRegistry
 from ui import CommandInterface, StatusDisplay
 from debug.html_overlay import HTMLDebugManager
