@@ -164,6 +164,9 @@ class CollaboratorPi:
 
         # Loop detection
         self.last_loop_time = 0
+        self.sync_correction_in_progress = (
+            False  # Track when we're doing a sync correction
+        )
 
         # Debug sync logging
         self.debug_sync_logging = False
@@ -237,6 +240,7 @@ class CollaboratorPi:
                 self.video_player.resume()
                 self.wait_for_sync = False
                 self.wait_after_sync = time.time()
+                self.sync_correction_in_progress = False  # Sync correction completed
             elif time.time() - self.sync_timer > self.sync_timeout_seconds:
                 log_warning(
                     f"Sync timeout after {self.sync_timeout_seconds}s, resuming anyway",
@@ -245,6 +249,9 @@ class CollaboratorPi:
                 self.video_player.resume()
                 self.wait_for_sync = False
                 self.wait_after_sync = time.time()
+                self.sync_correction_in_progress = (
+                    False  # Sync correction completed (timeout)
+                )
             return
 
         # Reset wait state immediately (no grace period)
@@ -388,8 +395,11 @@ class CollaboratorPi:
             log_warning("Could not get video position for sync check", component="sync")
             return
 
-        # Detect if we just looped
-        if self.last_video_position is not None:
+        # Detect if we just looped (but ignore if we're in the middle of a sync correction)
+        if (
+            self.last_video_position is not None
+            and not self.sync_correction_in_progress
+        ):
             duration = self.video_player.get_duration()
             if duration and duration > 0:
                 # If position jumped backwards significantly, we likely looped
@@ -424,11 +434,6 @@ class CollaboratorPi:
             expected_position = expected_position % duration
 
         deviation = video_position - expected_position
-
-        # Loop-aware deviation calculation: find shortest path on timeline circle
-        if duration and duration > 0:
-            candidates = [deviation, deviation + duration, deviation - duration]
-            deviation = min(candidates, key=abs)
 
         # Loop-aware deviation calculation: find shortest path on timeline circle
         if duration and duration > 0:
@@ -531,9 +536,13 @@ class CollaboratorPi:
             # Clear samples before correction to prevent feedback
             self.deviation_samples.clear()
 
+            # Mark that we're starting a sync correction to avoid false loop detection
+            self.sync_correction_in_progress = True
+
             # Pause, seek ahead, wait for sync (omxplayer-sync style)
             if not self.video_player.pause():
                 log_warning("Failed to pause for correction", component="sync")
+                self.sync_correction_in_progress = False  # Reset flag on failure
                 return
 
             time.sleep(0.1)  # Let VLC settle
@@ -552,7 +561,6 @@ class CollaboratorPi:
                 self.sync_timer = time.time()
                 # Reset state after correction
                 self.last_correction_time = time.time()
-                self.deviation_samples.clear()
                 log_info(
                     "Waiting for sync (will resume when deviation < 0.1s)",
                     component="sync",
@@ -560,6 +568,7 @@ class CollaboratorPi:
             else:
                 log_warning("Seek failed, resuming playback", component="sync")
                 self.video_player.resume()
+                self.sync_correction_in_progress = False  # Reset flag on failure
         else:
             # No correction needed
             if self.critical_window_logging and self.in_critical_window:
