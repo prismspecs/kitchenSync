@@ -430,6 +430,11 @@ class CollaboratorPi:
             candidates = [deviation, deviation + duration, deviation - duration]
             deviation = min(candidates, key=abs)
 
+        # Loop-aware deviation calculation: find shortest path on timeline circle
+        if duration and duration > 0:
+            candidates = [deviation, deviation + duration, deviation - duration]
+            deviation = min(candidates, key=abs)
+
         # Round to reduce floating point noise in logs
         deviation = round(deviation, 4)
 
@@ -545,7 +550,9 @@ class CollaboratorPi:
                 )
                 self.wait_for_sync = True
                 self.sync_timer = time.time()
+                # Reset state after correction
                 self.last_correction_time = time.time()
+                self.deviation_samples.clear()
                 log_info(
                     "Waiting for sync (will resume when deviation < 0.1s)",
                     component="sync",
