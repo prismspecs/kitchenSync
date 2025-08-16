@@ -161,7 +161,9 @@ class CollaboratorPi:
         self.debug_log_interval = 0.2  # Log every 200ms to avoid spam
 
         # Critical window sync logging (5s before video end to 5s after restart)
-        self.critical_window_logging = False  # Disabled by default, enabled via --debug_loop
+        self.critical_window_logging = (
+            False  # Disabled by default, enabled via --debug_loop
+        )
         self.critical_window_start_threshold = 5.0  # Start logging 5s before video end
         self.critical_window_end_threshold = 5.0  # Continue logging 5s after restart
         self.in_critical_window = False
@@ -370,11 +372,17 @@ class CollaboratorPi:
         # Log when entering/exiting critical window
         if self.in_critical_window and not was_in_critical_window:
             reason = "approaching end" if approaching_end else "after restart"
+            print(
+                f"ENTERING CRITICAL SYNC WINDOW: {reason} (video_pos={video_position:.2f}s, duration={duration:.1f}s, time_to_end={time_to_end:.2f}s)"
+            )
             log_info(
                 f"ENTERING CRITICAL SYNC WINDOW: {reason} (video_pos={video_position:.2f}s, duration={duration:.1f}s, time_to_end={time_to_end:.2f}s)",
                 component="sync",
             )
         elif not self.in_critical_window and was_in_critical_window:
+            print(
+                f"EXITING CRITICAL SYNC WINDOW (video_pos={video_position:.2f}s, duration={duration:.1f}s)"
+            )
             log_info(
                 f"EXITING CRITICAL SYNC WINDOW (video_pos={video_position:.2f}s, duration={duration:.1f}s)",
                 component="sync",
@@ -609,7 +617,7 @@ class CollaboratorPi:
         )
         deviation_samples_count = len(self.deviation_samples)
 
-        if self.in_critical_window:
+        if self.critical_window_logging and self.in_critical_window:
             # Enhanced logging during critical window - log every sync evaluation
             log_info(
                 f"CRITICAL_SYNC: Leader={leader_time:.3f}s | Video={video_position:.3f}s | "
@@ -621,7 +629,7 @@ class CollaboratorPi:
                 f"Threshold={self.deviation_threshold:.3f}s",
                 component="sync",
             )
-        else:
+        elif self.debug_sync_logging:
             # Standard debug logging
             print(
                 f"SYNC_DEBUG: Leader={leader_time:.3f}s | Video={video_position:.3f}s | "
@@ -695,7 +703,11 @@ def main():
         help="Configuration file to use",
     )
     parser.add_argument("--debug", action="store_true", help="Enable debug mode")
-    parser.add_argument("--debug_loop", action="store_true", help="Enable detailed sync logging during video loop transitions (5s before end to 5s after restart)")
+    parser.add_argument(
+        "--debug_loop",
+        action="store_true",
+        help="Enable detailed sync logging during video loop transitions (5s before end to 5s after restart)",
+    )
     args = parser.parse_args()
 
     try:
@@ -712,7 +724,9 @@ def main():
         if args.debug_loop:
             collaborator.critical_window_logging = True
             print("✓ Loop debug mode: ENABLED (via command line)")
-            print("✓ Critical window sync logging: ENABLED (5s before video end to 5s after restart)")
+            print(
+                "✓ Critical window sync logging: ENABLED (5s before video end to 5s after restart)"
+            )
 
         collaborator.run()
     except KeyboardInterrupt:
