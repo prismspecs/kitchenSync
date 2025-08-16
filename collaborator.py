@@ -377,12 +377,11 @@ class CollaboratorPi:
         if not self.video_player.is_playing or not self.video_start_time:
             return
 
-        # Debug deviation mode: print raw deviation between leader and video
+        # Debug deviation mode: print raw deviation between leader and video (does not block sync logic)
         if self.debug_deviation_mode:
             video_position = self.video_player.get_position()
             if video_position is not None:
                 print(f"[DEBUG_DEVIATION] Leader: {leader_time:.3f}s | Video: {video_position:.3f}s | Deviation: {video_position - leader_time:.3f}s")
-            return
 
         # If NO_SYNC_AFTER_LOOP is enabled and a loop has occurred, block all corrections
         if self.no_sync_after_loop and self.no_sync_after_loop_active:
