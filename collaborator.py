@@ -376,14 +376,16 @@ class CollaboratorPi:
                 after_restart = False
             else:
                 after_restart = True
-        
+
         was_in_critical_window = self.in_critical_window
         self.in_critical_window = approaching_end or after_restart
 
         # Log when entering/exiting critical window
         if self.in_critical_window and not was_in_critical_window:
             reason = "approaching end" if approaching_end else "after restart"
-            print(f"ENTERING CRITICAL SYNC WINDOW: {reason} (CollabPos={video_position:.2f}s, TimeToEnd={time_to_end:.2f}s)")
+            print(
+                f"ENTERING CRITICAL SYNC WINDOW: {reason} (CollabPos={video_position:.2f}s, TimeToEnd={time_to_end:.2f}s)"
+            )
         elif not self.in_critical_window and was_in_critical_window:
             print(f"EXITING CRITICAL SYNC WINDOW (CollabPos={video_position:.2f}s)")
 
@@ -440,15 +442,18 @@ class CollaboratorPi:
 
         deviation = video_position - expected_position
 
-        # Make sync logic "loop-aware"
+        # Make sync logic "loop-aware" by finding the shortest path on the timeline circle
         if duration and duration > 0:
-            half_duration = duration / 2.0
-            if deviation > half_duration:
-                # Leader has looped, collaborator has not
-                deviation -= duration
-            elif deviation < -half_duration:
-                # Collaborator has looped, leader has not
-                deviation += duration
+            # Check distances in three scenarios: direct, collaborator looped, leader has looped
+            d_direct = deviation
+            d_collab_looped = deviation + duration
+            d_leader_looped = deviation - duration
+
+            # Choose the deviation with the smallest absolute magnitude
+            if abs(d_leader_looped) < abs(d_direct):
+                deviation = d_leader_looped
+            if abs(d_collab_looped) < abs(deviation):
+                deviation = d_collab_looped
 
         # Add to samples for median filtering
         self.deviation_samples.append(deviation)
