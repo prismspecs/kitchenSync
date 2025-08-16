@@ -383,21 +383,25 @@ class CollaboratorPi:
         in_pre_end_window = time_to_end <= self.critical_window_start_threshold
         in_post_start_window = video_position <= self.critical_window_end_threshold
 
+        # Handle wraparound case: if we're near the end (>629s in a 634s video), we should stay in window
+        # when it loops to the beginning (0-5s)
         was_in_critical_window = self.in_critical_window
         self.in_critical_window = in_pre_end_window or in_post_start_window
 
-        # Log when entering/exiting the continuous critical window
+        # Only log transitions, not the continuous state
         if self.in_critical_window and not was_in_critical_window:
             if in_pre_end_window:
                 print(
-                    f"ENTERING CRITICAL SYNC WINDOW: approaching end (CollabPos={video_position:.2f}s, TimeToEnd={time_to_end:.2f}s)"
+                    f"ENTERING CRITICAL SYNC WINDOW (CollabPos={video_position:.2f}s, TimeToEnd={time_to_end:.2f}s)"
                 )
             else:
                 print(
-                    f"ENTERING CRITICAL SYNC WINDOW: after restart (CollabPos={video_position:.2f}s)"
+                    f"ENTERING CRITICAL SYNC WINDOW (CollabPos={video_position:.2f}s)"
                 )
         elif not self.in_critical_window and was_in_critical_window:
-            print(f"EXITING CRITICAL SYNC WINDOW (CollabPos={video_position:.2f}s)")
+            # Only exit if we're truly outside both windows (middle of video)
+            if not in_pre_end_window and not in_post_start_window:
+                print(f"EXITING CRITICAL SYNC WINDOW (CollabPos={video_position:.2f}s)")
 
     def _check_video_sync(self, leader_time: float) -> None:
         """Check and correct video sync using median filtering"""
@@ -434,15 +438,6 @@ class CollaboratorPi:
 
         self.last_video_position = video_position
 
-        # Check if we're in loop grace period
-        current_time = time.time()
-        if current_time - self.last_loop_time < self.loop_grace_period:
-            log_info(
-                f"In loop grace period, ignoring sync for {self.loop_grace_period - (current_time - self.last_loop_time):.2f}s more",
-                component="sync",
-            )
-            return
-
         # Calculate expected position with latency compensation
         # Wrap to video duration if known
         duration = self.video_player.get_duration()
@@ -465,7 +460,7 @@ class CollaboratorPi:
             if abs(d_collab_looped) < abs(deviation):
                 deviation = d_collab_looped
 
-        # Add to samples for median filtering
+        # Add to samples for median filtering - ALWAYS collect samples for analysis
         self.deviation_samples.append(deviation)
 
         # Log sync evaluation in critical window
@@ -474,6 +469,16 @@ class CollaboratorPi:
                 f"SYNC_EVAL: Added deviation sample {deviation:.3f}s (samples: {len(self.deviation_samples)}/{self.deviation_samples_maxlen})",
                 component="sync",
             )
+
+        # Check if we're in loop grace period - if so, don't do corrections but still collect samples
+        current_time = time.time()
+        if current_time - self.last_loop_time < self.loop_grace_period:
+            if self.critical_window_logging and self.in_critical_window:
+                log_info(
+                    f"In loop grace period, collecting samples but no corrections for {self.loop_grace_period - (current_time - self.last_loop_time):.2f}s more",
+                    component="sync",
+                )
+            return
 
         # Only proceed if we have enough samples
         if len(self.deviation_samples) < self.deviation_samples_maxlen // 2:
