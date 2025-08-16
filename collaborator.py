@@ -423,23 +423,35 @@ class CollaboratorPi:
             median_deviation = trimmed[len(trimmed) // 2]
 
         if self.critical_window_logging and self.in_critical_window:
-            # Show median calculation details during critical window (condensed for --debug_loop)
-            print(
-                f"SYNC_MEDIAN_CALC | Samples: {len(self.deviation_samples)} | "
-                f"Median: {median_deviation:.3f}s | Threshold: {self.deviation_threshold:.3f}s"
-            )
+            # Only show median calc when correction is actually needed
+            if abs(median_deviation) > self.deviation_threshold:
+                print(
+                    f"SYNC_MEDIAN_CALC | Samples: {len(self.deviation_samples)} | "
+                    f"Median: {median_deviation:.3f}s | Threshold: {self.deviation_threshold:.3f}s"
+                )
 
         # Check if correction is needed
         if abs(median_deviation) > self.deviation_threshold:
-            if self.critical_window_logging and self.in_critical_window:
-                print(
-                    f"SYNC_CORRECTION_TRIGGER | Median {median_deviation:.3f}s > threshold {self.deviation_threshold:.3f}s"
+            # SAFE ZONE: If we are very close to the end of the video,
+            # block corrections to allow VLC's natural loop to occur without interference.
+            time_to_end = (
+                duration - video_position
+                if duration and video_position is not None
+                else 0
+            )
+            if duration and time_to_end < 2.0:
+                log_info(
+                    f"In loop safe zone ({time_to_end:.2f}s to end), "
+                    f"blocking correction of {median_deviation:.3f}s to allow natural loop.",
+                    component="sync",
                 )
+                return
 
             current_time = time.time()
 
             # Rate limit corrections
             if current_time - self.last_correction_time < self.sync_check_interval:
+                # Don't spam during rate limiting - only log in critical window
                 if self.critical_window_logging and self.in_critical_window:
                     time_left = self.sync_check_interval - (
                         current_time - self.last_correction_time
@@ -499,8 +511,12 @@ class CollaboratorPi:
                 log_warning("Seek failed, resuming playback", component="sync")
                 self.video_player.resume()
         else:
-            # No correction needed - only log during critical window
-            if self.critical_window_logging and self.in_critical_window:
+            # No correction needed - only log during critical window when samples are low
+            if (
+                self.critical_window_logging
+                and self.in_critical_window
+                and len(self.deviation_samples) < self.deviation_samples_maxlen
+            ):
                 print(
                     f"SYNC_NO_CORRECTION | Median {median_deviation:.3f}s <= threshold {self.deviation_threshold:.3f}s"
                 )
