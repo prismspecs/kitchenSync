@@ -22,7 +22,7 @@ sys.path.insert(0, str(Path(__file__).parent / "src"))
 
 from config import ConfigManager
 from video import VideoFileManager, VLCVideoPlayer, LoopStrategy
-from networking import CommandListener, SyncClient
+from networking import CommandListener, SyncReceiver
 from midi import MidiManager, MidiScheduler
 from core import SystemState, Schedule, SyncTracker
 from core.logger import (
@@ -101,6 +101,10 @@ class CollaboratorPi:
 
         # Initialize networking
         self.command_listener = CommandListener()
+        self.sync_receiver = SyncReceiver(
+            sync_port=self.config.getint("sync_port", 5005),
+            time_callback=self._handle_sync,
+        )
 
         # Find and load video file before creating debug overlay
         self.video_path = self.video_manager.find_video_file()
