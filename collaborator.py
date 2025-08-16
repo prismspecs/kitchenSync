@@ -53,11 +53,6 @@ DEFAULT_LATENCY_COMPENSATION = (
 )
 DEFAULT_SEEK_SETTLE_TIME = 0.1  # VLC settling time after seek
 
-# Catch-up sync mode defaults
-DEFAULT_CATCHUP_MODE = True
-DEFAULT_CATCHUP_RATE = 1.05
-DEFAULT_CATCHUP_THRESHOLD = 0.5
-
 POST_LOOP_SYNC_DELAY_SECONDS = (
     5.0  # Grace period after a loop before sync corrections resume
 )
@@ -77,12 +72,6 @@ class CollaboratorPi:
     def __init__(self, config_file: str = "collaborator_config.ini"):
         # Initialize configuration
         self.config = ConfigManager(config_file)
-
-        # Catch-up sync mode defaults (can be overridden by config, but always present)
-        self.catchup_mode = DEFAULT_CATCHUP_MODE
-        self.catchup_rate = DEFAULT_CATCHUP_RATE
-        self.catchup_threshold = DEFAULT_CATCHUP_THRESHOLD
-        self._catchup_active = False
 
         # Configure logging based on config settings
         enable_system_logging(self.config.enable_system_logging)
@@ -119,12 +108,7 @@ class CollaboratorPi:
             sync_callback=self._handle_sync,
         )
 
-        # Catch-up sync mode defaults (can be overridden by config, but always present)
-        self.catchup_mode = DEFAULT_CATCHUP_MODE
-        self.catchup_rate = DEFAULT_CATCHUP_RATE
-        self.catchup_threshold = DEFAULT_CATCHUP_THRESHOLD
-        self._catchup_active = False
-
+        # Find and load video file before creating debug overlay
         self.video_path = self.video_manager.find_video_file()
         if self.video_path:
             self.video_player.load_video(self.video_path)
@@ -393,61 +377,249 @@ class CollaboratorPi:
         if not self.video_player.is_playing or not self.video_start_time:
             return
 
-        # --- CATCH-UP MODE ---
-        if getattr(self, "catchup_mode", False):
+        # Debug deviation mode: print raw and median deviation between leader and video (does not block sync logic)
+        if self.debug_deviation_mode:
             video_position = self.video_player.get_position()
-            duration = self.video_player.get_duration()
-            if video_position is None or duration is None:
-                return
-            expected_position = leader_time + self.latency_compensation
-            if duration > 0:
-                expected_position = expected_position % duration
-            deviation = video_position - expected_position
-            # Loop-aware deviation
-            if duration > 0:
-                candidates = [deviation, deviation + duration, deviation - duration]
-                deviation = min(candidates, key=abs)
-            deviation = round(deviation, 4)
-
-            # If deviation is above threshold, temporarily increase playback rate
-            if abs(deviation) > getattr(self, "catchup_threshold", 0.5):
-                if not getattr(self, "_catchup_active", False):
-                    # Activate catch-up
-                    try:
-                        self.video_player.set_playback_rate(
-                            getattr(self, "catchup_rate", 1.05)
-                        )
-                        self._catchup_active = True
-                        log_info(
-                            f"Catch-up mode: playback rate set to {getattr(self, 'catchup_rate', 1.05)}",
-                            component="sync",
-                        )
-                    except Exception as e:
-                        log_warning(
-                            f"Failed to set catch-up playback rate: {e}",
-                            component="sync",
-                        )
+            if video_position is not None:
+                raw_deviation = video_position - leader_time
+                # Calculate expected position with latency compensation
+                duration = self.video_player.get_duration()
+                expected_position = leader_time + self.latency_compensation
+                if duration and duration > 0:
+                    expected_position = expected_position % duration
+                deviation = video_position - expected_position
+                # Loop-aware deviation calculation: find shortest path on timeline circle
+                if duration and duration > 0:
+                    candidates = [deviation, deviation + duration, deviation - duration]
+                    deviation = min(candidates, key=abs)
+                deviation = round(deviation, 4)
+                # Median calculation (same as below)
+                samples = list(self.deviation_samples)
+                sorted_samples = sorted(samples)
+                trim_count = max(1, len(sorted_samples) // 5)
+                if len(sorted_samples) > 2 * trim_count:
+                    trimmed = sorted_samples[trim_count:-trim_count]
                 else:
-                    # Already in catch-up, keep going
-                    pass
-            else:
-                # Deviation is small, restore normal rate if needed
-                if getattr(self, "_catchup_active", False):
-                    try:
-                        self.video_player.set_playback_rate(1.0)
-                        self._catchup_active = False
-                        log_info(
-                            "Catch-up mode: playback rate restored to normal",
-                            component="sync",
-                        )
-                    except Exception as e:
-                        log_warning(
-                            f"Failed to restore playback rate: {e}", component="sync"
-                        )
+                    trimmed = sorted_samples
+                if not trimmed:
+                    median_deviation = 0.0
+                elif len(trimmed) % 2 == 0:
+                    mid1 = trimmed[len(trimmed) // 2 - 1]
+                    mid2 = trimmed[len(trimmed) // 2]
+                    median_deviation = (mid1 + mid2) / 2.0
+                else:
+                    median_deviation = trimmed[len(trimmed) // 2]
+                print(
+                    f"[DEBUG_DEVIATION] Leader: {leader_time:.3f}s | Video: {video_position:.3f}s | Raw: {raw_deviation:.3f}s | Median: {median_deviation:.3f}s"
+                )
+
+        # If NO_SYNC_AFTER_LOOP is enabled and a loop has occurred, block all corrections
+        if self.no_sync_after_loop and self.no_sync_after_loop_active:
+            if self.critical_window_logging:
+                log_info(
+                    "NO_SYNC_AFTER_LOOP active: blocking all sync corrections after loop.",
+                    component="sync",
+                )
             return
 
-        # --- ORIGINAL LOGIC ---
-        # ...existing code...
+        # Block all corrections during post-loop grace period
+        if self.in_post_loop_grace_period:
+            if time.time() - self.loop_time < self.post_loop_sync_delay_seconds:
+                if self.critical_window_logging:
+                    log_info(
+                        f"Post-loop grace period active ({time.time() - self.loop_time:.2f}s/{self.post_loop_sync_delay_seconds}s), blocking sync corrections.",
+                        component="sync",
+                    )
+                return
+            else:
+                self.in_post_loop_grace_period = False
+
+        # Get current video position
+        video_position = self.video_player.get_position()
+        if video_position is None:
+            log_warning("Could not get video position for sync check", component="sync")
+            return
+
+        # Loop detection: only after first sample
+        if self.last_video_position is not None:
+            # The threshold is large to avoid triggering on small stutters.
+            if (
+                self.last_video_position > video_position + 1.0
+            ):  # e.g. 634.0 > 0.5 + 1.0
+                log_info(
+                    f"Loop detected! Position jumped from {self.last_video_position:.3f}s to {video_position:.3f}s. Clearing samples.",
+                    component="sync",
+                )
+                self.deviation_samples.clear()
+                self.last_video_position = video_position
+                if self.no_sync_after_loop:
+                    self.no_sync_after_loop_active = True
+                    log_info(
+                        "NO_SYNC_AFTER_LOOP flag set: all sync corrections will be blocked after this loop.",
+                        component="sync",
+                    )
+                else:
+                    self.in_post_loop_grace_period = True
+                    self.loop_time = time.time()
+                return  # Skip sync check for one cycle to gather fresh data
+        # Always update last_video_position
+        self.last_video_position = video_position
+
+        # Calculate expected position with latency compensation
+        # Wrap to video duration if known
+        duration = self.video_player.get_duration()
+        expected_position = leader_time + self.latency_compensation
+        if duration and duration > 0:
+            expected_position = expected_position % duration
+
+        deviation = video_position - expected_position
+
+        # Loop-aware deviation calculation: find shortest path on timeline circle
+        if duration and duration > 0:
+            candidates = [deviation, deviation + duration, deviation - duration]
+            deviation = min(candidates, key=abs)
+
+        # Round to reduce floating point noise in logs
+        deviation = round(deviation, 4)
+
+        # Always collect samples for analysis
+        self.deviation_samples.append(deviation)
+
+        # Critical window logging
+        if self.critical_window_logging and self.in_critical_window:
+            log_info(
+                f"SYNC_EVAL: Sample {deviation:.3f}s ({len(self.deviation_samples)}/{self.deviation_samples_maxlen})",
+                component="sync",
+            )
+
+        # Check if we have enough samples for correction
+        min_samples = self.deviation_samples_maxlen // 2
+        if len(self.deviation_samples) < min_samples:
+            if self.critical_window_logging and self.in_critical_window:
+                log_info(
+                    f"SYNC_EVAL: Need {min_samples - len(self.deviation_samples)} more samples",
+                    component="sync",
+                )
+            return
+
+        # Calculate median with outlier filtering (trimmed mean)
+        sorted_samples = sorted(self.deviation_samples)
+        trim_count = max(1, len(sorted_samples) // 5)
+        if len(sorted_samples) > 2 * trim_count:
+            trimmed = sorted_samples[trim_count:-trim_count]
+        else:
+            trimmed = sorted_samples
+
+        # Calculate median properly
+        if not trimmed:
+            median_deviation = 0.0
+        elif len(trimmed) % 2 == 0:
+            # Even number of elements - average the two middle values
+            mid1 = trimmed[len(trimmed) // 2 - 1]
+            mid2 = trimmed[len(trimmed) // 2]
+            median_deviation = (mid1 + mid2) / 2.0
+        else:
+            # Odd number of elements - take the middle value
+            median_deviation = trimmed[len(trimmed) // 2]
+
+        if self.critical_window_logging and self.in_critical_window:
+            # Only show median calc when correction is actually needed
+            if abs(median_deviation) > self.deviation_threshold:
+                print(
+                    f"SYNC_MEDIAN_CALC | Samples: {len(self.deviation_samples)} | "
+                    f"Median: {median_deviation:.3f}s | Threshold: {self.deviation_threshold:.3f}s"
+                )
+
+        # Check if correction is needed
+        if abs(median_deviation) > self.deviation_threshold:
+            # SAFE ZONE: If we are very close to the end of the video,
+            # block corrections to allow VLC's natural loop to occur without interference.
+            time_to_end = (
+                duration - video_position
+                if duration and video_position is not None
+                else 0
+            )
+            if duration and time_to_end < 2.0:
+                log_info(
+                    f"In loop safe zone ({time_to_end:.2f}s to end), "
+                    f"blocking correction of {median_deviation:.3f}s to allow natural loop.",
+                    component="sync",
+                )
+                return
+
+            current_time = time.time()
+
+            # Rate limit corrections
+            if current_time - self.last_correction_time < self.sync_check_interval:
+                # Don't spam during rate limiting - only log in critical window
+                if self.critical_window_logging and self.in_critical_window:
+                    time_left = self.sync_check_interval - (
+                        current_time - self.last_correction_time
+                    )
+                    log_info(
+                        f"SYNC_EVAL: Correction blocked, {time_left:.1f}s remaining",
+                        component="sync",
+                    )
+                return
+
+            # Always log sync corrections (this is important)
+            log_info(
+                f"🔄 SYNC CORRECTION: {median_deviation:.3f}s deviation > {self.deviation_threshold:.3f}s threshold at {leader_time:.1f}s",
+                component="sync",
+            )
+            print(f"🔄 Sync correction: {median_deviation:.3f}s deviation")
+
+            # Calculate target position with latency compensation
+            correction_offset = (
+                -self.latency_compensation
+                if median_deviation > 0
+                else self.latency_compensation
+            )
+            target_position = expected_position + correction_offset
+            if duration and duration > 0:
+                target_position = target_position % duration
+
+            # Clear samples before correction to prevent feedback
+            self.deviation_samples.clear()
+
+            # Pause, seek ahead, wait for sync (omxplayer-sync style)
+            if not self.video_player.pause():
+                log_warning("Failed to pause for correction", component="sync")
+                return
+
+            time.sleep(0.1)  # Let VLC settle
+
+            # Seek with jump-ahead
+            seek_position = target_position + self.sync_jump_ahead
+            if duration and duration > 0:
+                seek_position = seek_position % duration
+
+            if self.video_player.set_position(seek_position):
+                log_info(
+                    f"Seeking to {seek_position:.3f}s (target: {target_position:.3f}s)",
+                    component="sync",
+                )
+                self.wait_for_sync = True
+                self.sync_timer = time.time()
+                # Reset state after correction
+                self.last_correction_time = time.time()
+                log_info(
+                    "Waiting for sync (will resume when deviation < 0.1s)",
+                    component="sync",
+                )
+            else:
+                log_warning("Seek failed, resuming playback", component="sync")
+                self.video_player.resume()
+        else:
+            # No correction needed - only log during critical window when samples are low
+            if (
+                self.critical_window_logging
+                and self.in_critical_window
+                and len(self.deviation_samples) < self.deviation_samples_maxlen
+            ):
+                print(
+                    f"SYNC_NO_CORRECTION | Median {median_deviation:.3f}s <= threshold {self.deviation_threshold:.3f}s"
+                )
 
     def _log_sync_debug_info(self, leader_time: float) -> None:
         """Log sync information for debugging"""
