@@ -67,6 +67,8 @@ NO_SYNC_AFTER_LOOP = True  # If True, disables all sync corrections after a loop
 class CollaboratorPi:
     """Refactored Collaborator Pi with clean separation of concerns"""
 
+    debug_deviation_mode = False
+
     def __init__(self, config_file: str = "collaborator_config.ini"):
         # Initialize configuration
         self.config = ConfigManager(config_file)
@@ -373,6 +375,13 @@ class CollaboratorPi:
     def _check_video_sync(self, leader_time: float) -> None:
         """Check and correct video sync using median filtering"""
         if not self.video_player.is_playing or not self.video_start_time:
+            return
+
+        # Debug deviation mode: print raw deviation between leader and video
+        if self.debug_deviation_mode:
+            video_position = self.video_player.get_position()
+            if video_position is not None:
+                print(f"[DEBUG_DEVIATION] Leader: {leader_time:.3f}s | Video: {video_position:.3f}s | Deviation: {video_position - leader_time:.3f}s")
             return
 
         # If NO_SYNC_AFTER_LOOP is enabled and a loop has occurred, block all corrections
@@ -684,6 +693,11 @@ def main():
         action="store_true",
         help="Enable detailed sync logging during video loop transitions (5s before end to 5s after restart)",
     )
+    parser.add_argument(
+        "--debug_deviation",
+        action="store_true",
+        help="Print raw deviation between leader and collaborator video positions to the console",
+    )
     args = parser.parse_args()
 
     try:
@@ -703,6 +717,11 @@ def main():
             print(
                 "✓ Critical window sync logging: ENABLED (5s before video end to 5s after restart)"
             )
+
+        # Enable debug deviation mode if specified
+        if args.debug_deviation:
+            collaborator.debug_deviation_mode = True
+            print("✓ Debug deviation mode: ENABLED (prints raw deviation)")
 
         collaborator.run()
     except KeyboardInterrupt:
