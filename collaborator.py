@@ -395,6 +395,10 @@ class CollaboratorPi:
                 # If position jumped backwards significantly, we likely looped
                 position_jump = self.last_video_position - video_position
                 if position_jump > duration * 0.8:  # More than 80% of video duration
+                    if self.critical_window_logging and self.in_critical_window:
+                        print(
+                            f"LOOP DETECTED: position jumped from {self.last_video_position:.2f}s to {video_position:.2f}s"
+                        )
                     log_info(
                         f"Loop detected: position jumped from {self.last_video_position:.2f}s to {video_position:.2f}s",
                         component="sync",
@@ -405,9 +409,8 @@ class CollaboratorPi:
                     # Track video restart for critical window logging
                     self.video_restart_time = time.time()
                     if self.critical_window_logging and self.in_critical_window:
-                        log_info(
-                            f"VIDEO RESTART detected at {video_position:.2f}s -> {self.last_video_position:.2f}s",
-                            component="sync",
+                        print(
+                            f"VIDEO RESTART detected at {video_position:.2f}s (was {self.last_video_position:.2f}s)"
                         )
 
         self.last_video_position = video_position
@@ -425,6 +428,9 @@ class CollaboratorPi:
         if duration and duration > 0:
             candidates = [deviation, deviation + duration, deviation - duration]
             deviation = min(candidates, key=abs)
+
+        # Round to reduce floating point noise in logs
+        deviation = round(deviation, 4)
 
         # Always collect samples for analysis
         self.deviation_samples.append(deviation)
@@ -454,10 +460,26 @@ class CollaboratorPi:
         else:
             trimmed = sorted_samples
 
-        median_deviation = trimmed[len(trimmed) // 2] if trimmed else 0.0
+        # Calculate median properly
+        if not trimmed:
+            median_deviation = 0.0
+        elif len(trimmed) % 2 == 0:
+            # Even number of elements - average the two middle values
+            mid1 = trimmed[len(trimmed) // 2 - 1]
+            mid2 = trimmed[len(trimmed) // 2]
+            median_deviation = (mid1 + mid2) / 2.0
+        else:
+            # Odd number of elements - take the middle value
+            median_deviation = trimmed[len(trimmed) // 2]
 
         if self.critical_window_logging and self.in_critical_window:
-            # Show median calculation details during critical window
+            # Show median calculation details during critical window (condensed for --debug_loop)
+            print(
+                f"SYNC_MEDIAN_CALC | Samples: {len(self.deviation_samples)} | "
+                f"Median: {median_deviation:.3f}s | Threshold: {self.deviation_threshold:.3f}s"
+            )
+        elif self.debug_sync_logging:
+            # Show full array details only in full debug mode (--debug)
             print(
                 f"SYNC_MEDIAN_CALC | Samples: {len(self.deviation_samples)} | Raw: {sorted_samples[-5:]} | "
                 f"Trimmed: {trimmed[-5:]} | Median: {median_deviation:.3f}s | Threshold: {self.deviation_threshold:.3f}s"
@@ -466,8 +488,10 @@ class CollaboratorPi:
         # Check if correction is needed
         if abs(median_deviation) > self.deviation_threshold:
             if self.critical_window_logging and self.in_critical_window:
-                print(f"SYNC_CORRECTION_TRIGGER | Median {median_deviation:.3f}s > threshold {self.deviation_threshold:.3f}s")
-            
+                print(
+                    f"SYNC_CORRECTION_TRIGGER | Median {median_deviation:.3f}s > threshold {self.deviation_threshold:.3f}s"
+                )
+
             current_time = time.time()
 
             # Rate limit corrections
@@ -531,7 +555,13 @@ class CollaboratorPi:
         else:
             # No correction needed
             if self.critical_window_logging and self.in_critical_window:
-                print(f"SYNC_NO_CORRECTION | Median {median_deviation:.3f}s <= threshold {self.deviation_threshold:.3f}s")
+                print(
+                    f"SYNC_NO_CORRECTION | Median {median_deviation:.3f}s <= threshold {self.deviation_threshold:.3f}s"
+                )
+            elif self.debug_sync_logging:
+                print(
+                    f"SYNC_NO_CORRECTION | Median {median_deviation:.3f}s <= threshold {self.deviation_threshold:.3f}s (samples: {len(self.deviation_samples)})"
+                )
 
     def _log_sync_debug_info(self, leader_time: float) -> None:
         """Log sync information for debugging"""
