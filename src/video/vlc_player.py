@@ -267,18 +267,8 @@ class VLCVideoPlayer:
         if not self.vlc_player:
             return False
         try:
-            # Use soft pause if supported
-            try:
-                self.vlc_player.set_rate(0.0)
-                log_info("Soft pause: playback rate set to 0.0", component="vlc")
-                return True
-            except Exception as e:
-                log_warning(
-                    f"Soft pause failed, falling back to hard pause: {e}",
-                    component="vlc",
-                )
-                self.vlc_player.pause()
-                return True
+            self.vlc_player.pause()
+            return True
         except Exception as e:
             log_error(f"Error pausing: {e}", component="vlc")
             return False
@@ -288,31 +278,11 @@ class VLCVideoPlayer:
         if not self.vlc_player:
             return False
         try:
-            # Resume from soft pause if supported
-            try:
-                self.vlc_player.set_rate(1.0)
-                log_info("Resumed: playback rate set to 1.0", component="vlc")
-                self.vlc_player.play()
-                return True
-            except Exception as e:
-                log_warning(f"Resume with playback rate failed: {e}", component="vlc")
-                self.vlc_player.play()
-                return True
+            self.vlc_player.play()
+            return True
         except Exception as e:
             log_error(f"Error resuming: {e}", component="vlc")
             return False
-
-        def set_playback_rate(self, rate: float) -> bool:
-            """Set playback rate (for soft pause/resume)"""
-            if not self.vlc_player:
-                return False
-            try:
-                self.vlc_player.set_rate(rate)
-                log_info(f"Playback rate set to {rate}", component="vlc")
-                return True
-            except Exception as e:
-                log_error(f"Error setting playback rate: {e}", component="vlc")
-                return False
 
     def _on_video_end(self, event):
         """Handle video end event for looping"""
