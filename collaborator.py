@@ -377,11 +377,41 @@ class CollaboratorPi:
         if not self.video_player.is_playing or not self.video_start_time:
             return
 
-        # Debug deviation mode: print raw deviation between leader and video (does not block sync logic)
+        # Debug deviation mode: print raw and median deviation between leader and video (does not block sync logic)
         if self.debug_deviation_mode:
             video_position = self.video_player.get_position()
             if video_position is not None:
-                print(f"[DEBUG_DEVIATION] Leader: {leader_time:.3f}s | Video: {video_position:.3f}s | Deviation: {video_position - leader_time:.3f}s")
+                raw_deviation = video_position - leader_time
+                # Calculate expected position with latency compensation
+                duration = self.video_player.get_duration()
+                expected_position = leader_time + self.latency_compensation
+                if duration and duration > 0:
+                    expected_position = expected_position % duration
+                deviation = video_position - expected_position
+                # Loop-aware deviation calculation: find shortest path on timeline circle
+                if duration and duration > 0:
+                    candidates = [deviation, deviation + duration, deviation - duration]
+                    deviation = min(candidates, key=abs)
+                deviation = round(deviation, 4)
+                # Median calculation (same as below)
+                samples = list(self.deviation_samples)
+                sorted_samples = sorted(samples)
+                trim_count = max(1, len(sorted_samples) // 5)
+                if len(sorted_samples) > 2 * trim_count:
+                    trimmed = sorted_samples[trim_count:-trim_count]
+                else:
+                    trimmed = sorted_samples
+                if not trimmed:
+                    median_deviation = 0.0
+                elif len(trimmed) % 2 == 0:
+                    mid1 = trimmed[len(trimmed) // 2 - 1]
+                    mid2 = trimmed[len(trimmed) // 2]
+                    median_deviation = (mid1 + mid2) / 2.0
+                else:
+                    median_deviation = trimmed[len(trimmed) // 2]
+                print(
+                    f"[DEBUG_DEVIATION] Leader: {leader_time:.3f}s | Video: {video_position:.3f}s | Raw: {raw_deviation:.3f}s | Median: {median_deviation:.3f}s"
+                )
 
         # If NO_SYNC_AFTER_LOOP is enabled and a loop has occurred, block all corrections
         if self.no_sync_after_loop and self.no_sync_after_loop_active:
@@ -413,7 +443,9 @@ class CollaboratorPi:
         # Loop detection: only after first sample
         if self.last_video_position is not None:
             # The threshold is large to avoid triggering on small stutters.
-            if self.last_video_position > video_position + 1.0:  # e.g. 634.0 > 0.5 + 1.0
+            if (
+                self.last_video_position > video_position + 1.0
+            ):  # e.g. 634.0 > 0.5 + 1.0
                 log_info(
                     f"Loop detected! Position jumped from {self.last_video_position:.3f}s to {video_position:.3f}s. Clearing samples.",
                     component="sync",
