@@ -50,11 +50,13 @@ DEFAULT_LATENCY_COMPENSATION = (
 )
 DEFAULT_SEEK_SETTLE_TIME = 0.1  # VLC settling time after seek
 
-# Timing and sync
-SYNC_START_WINDOW = 0.5  # seconds from start
-SYNC_END_WINDOW = 0.5  # seconds to end
+# =============================================================================
+
 
 # =============================================================================
+# LOOPING STRATEGY - 'VLC_NATIVE' or 'ARTIFICIAL'
+# =============================================================================
+LOOP_MODE = "VLC_NATIVE"
 
 
 class CollaboratorPi:
@@ -63,6 +65,9 @@ class CollaboratorPi:
     def __init__(self, config_file: str = "collaborator_config.ini"):
         # Initialize configuration
         self.config = ConfigManager(config_file)
+
+        # Set looping strategy
+        self.loop_mode = LOOP_MODE
 
         # Configure logging based on config settings
         enable_system_logging(self.config.enable_system_logging)
@@ -148,16 +153,14 @@ class CollaboratorPi:
         self.deviation_samples = deque(maxlen=self.deviation_samples_maxlen)
         self.last_correction_time = 0
         self.video_start_time = None
-        self.last_video_position = None  # Track position to detect loops
 
         # Sync state management
         self.wait_for_sync = False
         self.wait_after_sync = False
         self.sync_timer = 0
 
-        # Loop detection and grace period
-        self.loop_grace_period = 1.0  # 1 second grace period after loop
-        self.last_loop_time = 0
+        # Loop detection state (for critical window logging)
+        self.last_video_position_for_loop_detection = None
 
         # Debug sync logging
         self.debug_sync_logging = False
@@ -323,7 +326,8 @@ class CollaboratorPi:
             self.video_player.start_playback()
 
         # Start MIDI playback with video duration for looping
-        self.midi_scheduler.start_playback()
+        video_duration = self.video_player.get_duration()
+        self.midi_scheduler.start_playback(self.system_state.start_time, video_duration)
 
         log_info("Playback started", component="collaborator")
 
@@ -364,6 +368,18 @@ class CollaboratorPi:
         if video_position is None:
             return
 
+        # Detect loop for critical window timing
+        if self.last_video_position_for_loop_detection is not None and duration and duration > 0:
+            position_jump = self.last_video_position_for_loop_detection - video_position
+            # If position jumped backwards significantly, we likely looped
+            if position_jump > duration * 0.8:
+                self.video_restart_time = time.time()
+                log_info(
+                    f"Loop detected for critical window tracking at {video_position:.2f}s",
+                    component="sync",
+                )
+        self.last_video_position_for_loop_detection = video_position
+
         time_to_end = duration - video_position
 
         # Check if we're in the pre-end critical window
@@ -403,38 +419,9 @@ class CollaboratorPi:
             log_warning("Could not get video position for sync check", component="sync")
             return
 
-        # Detect if we just looped
-        if self.last_video_position is not None:
-            duration = self.video_player.get_duration()
-            if duration and duration > 0:
-                # If position jumped backwards significantly, we likely looped
-                position_jump = self.last_video_position - video_position
-                if position_jump > duration * 0.8:  # More than 80% of video duration
-                    log_info(
-                        f"Loop detected: position jumped from {self.last_video_position:.2f}s to {video_position:.2f}s",
-                        component="sync",
-                    )
-                    self.last_loop_time = time.time()
-                    self.deviation_samples.clear()  # Clear old samples after loop
-
-                    # Track video restart for critical window logging
-                    self.video_restart_time = time.time()
-                    if self.critical_window_logging and self.in_critical_window:
-                        log_info(
-                            f"VIDEO RESTART detected at {video_position:.2f}s -> {self.last_video_position:.2f}s",
-                            component="sync",
-                        )
-
-        self.last_video_position = video_position
-
-        # Check if we're in loop grace period
-        current_time = time.time()
-        if current_time - self.last_loop_time < self.loop_grace_period:
-            log_info(
-                f"In loop grace period, ignoring sync for {self.loop_grace_period - (current_time - self.last_loop_time):.2f}s more",
-                component="sync",
-            )
-            return
+        # When using VLC_NATIVE looping, we remove the artificial loop detection
+        # and grace period from the sync logic. The loop-aware deviation
+        # calculation is sufficient to handle the transition.
 
         # Calculate expected position with latency compensation
         # Wrap to video duration if known
