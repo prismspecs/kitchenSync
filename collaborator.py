@@ -378,29 +378,24 @@ class CollaboratorPi:
 
         time_to_end = duration - video_position
 
-        # Check if we're in the pre-end critical window
-        approaching_end = time_to_end <= self.critical_window_start_threshold
-
-        # Check if we're in the post-restart critical window
-        after_restart = False
-        if self.video_restart_time:
-            time_since_restart = time.time() - self.video_restart_time
-            if time_since_restart > self.critical_window_end_threshold:
-                # Window is over, reset the restart time
-                self.video_restart_time = None
-                after_restart = False
-            else:
-                after_restart = True
+        # Critical window is active if we're within 5 seconds of the end OR within 5 seconds of the start
+        # This creates a continuous 10-second window around the loop point
+        in_pre_end_window = time_to_end <= self.critical_window_start_threshold
+        in_post_start_window = video_position <= self.critical_window_end_threshold
 
         was_in_critical_window = self.in_critical_window
-        self.in_critical_window = approaching_end or after_restart
+        self.in_critical_window = in_pre_end_window or in_post_start_window
 
-        # Log when entering/exiting critical window
+        # Log when entering/exiting the continuous critical window
         if self.in_critical_window and not was_in_critical_window:
-            reason = "approaching end" if approaching_end else "after restart"
-            print(
-                f"ENTERING CRITICAL SYNC WINDOW: {reason} (CollabPos={video_position:.2f}s, TimeToEnd={time_to_end:.2f}s)"
-            )
+            if in_pre_end_window:
+                print(
+                    f"ENTERING CRITICAL SYNC WINDOW: approaching end (CollabPos={video_position:.2f}s, TimeToEnd={time_to_end:.2f}s)"
+                )
+            else:
+                print(
+                    f"ENTERING CRITICAL SYNC WINDOW: after restart (CollabPos={video_position:.2f}s)"
+                )
         elif not self.in_critical_window and was_in_critical_window:
             print(f"EXITING CRITICAL SYNC WINDOW (CollabPos={video_position:.2f}s)")
 
@@ -427,7 +422,7 @@ class CollaboratorPi:
                         component="sync",
                     )
                     self.last_loop_time = time.time()
-                    self.deviation_samples.clear()  # Clear old samples after loop
+                    # Don't clear samples after loop - we want continuous sampling for debug analysis
 
                     # Track video restart for critical window logging
                     self.video_restart_time = time.time()
