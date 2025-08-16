@@ -145,6 +145,7 @@ class CollaboratorPi:
         self.deviation_samples = deque(maxlen=self.deviation_samples_maxlen)
         self.last_correction_time = 0
         self.video_start_time = None
+        self.last_video_position = 0.0
 
         # Sync state management
         self.wait_for_sync = False
@@ -364,6 +365,19 @@ class CollaboratorPi:
         if video_position is None:
             log_warning("Could not get video position for sync check", component="sync")
             return
+
+        # Loop detection: if video position jumps backwards, it's a loop.
+        # The threshold is large to avoid triggering on small stutters.
+        if self.last_video_position > video_position + 1.0:  # e.g. 634.0 > 0.5 + 1.0
+            log_info(
+                f"Loop detected! Position jumped from {self.last_video_position:.3f}s to {video_position:.3f}s. Clearing samples.",
+                component="sync",
+            )
+            self.deviation_samples.clear()
+            self.last_video_position = video_position
+            return  # Skip sync check for one cycle to gather fresh data
+
+        self.last_video_position = video_position
 
         # Calculate expected position with latency compensation
         # Wrap to video duration if known
