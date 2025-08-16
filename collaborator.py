@@ -50,6 +50,10 @@ DEFAULT_LATENCY_COMPENSATION = (
 )
 DEFAULT_SEEK_SETTLE_TIME = 0.1  # VLC settling time after seek
 
+# Timing and sync
+SYNC_START_WINDOW = 0.5  # seconds from start
+SYNC_END_WINDOW = 0.5  # seconds to end
+
 # =============================================================================
 
 
