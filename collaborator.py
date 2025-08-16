@@ -52,6 +52,12 @@ DEFAULT_LATENCY_COMPENSATION = (
     0.0  # Network/processing delay offset (DISABLED - may cause issues)
 )
 DEFAULT_SEEK_SETTLE_TIME = 0.1  # VLC settling time after seek
+POST_LOOP_SYNC_DELAY_SECONDS = (
+    5.0  # Grace period after a loop before sync corrections resume
+)
+
+
+# =============================================================================
 
 # =============================================================================
 
@@ -140,12 +146,17 @@ class CollaboratorPi:
         self.seek_settle_time = self.config.getfloat(
             "seek_settle_time", DEFAULT_SEEK_SETTLE_TIME
         )
+        self.post_loop_sync_delay_seconds = self.config.getfloat(
+            "post_loop_sync_delay", POST_LOOP_SYNC_DELAY_SECONDS
+        )
 
         # Video sync state
         self.deviation_samples = deque(maxlen=self.deviation_samples_maxlen)
         self.last_correction_time = 0
         self.video_start_time = None
         self.last_video_position = 0.0
+        self.in_post_loop_grace_period = False
+        self.loop_time = 0
 
         # Sync state management
         self.wait_for_sync = False
