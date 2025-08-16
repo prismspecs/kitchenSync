@@ -17,9 +17,9 @@ import subprocess
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 
 from config import ConfigManager
-from video import VideoFileManager, VLCVideoPlayer
+from video import VideoFileManager, VLCVideoPlayer, LoopStrategy
 from networking import SyncBroadcaster, CommandManager
-from midi import MidiManager, MidiScheduler
+from midi import MidiScheduler, MidiManager
 from core import Schedule, ScheduleEditor, SystemState, CollaboratorRegistry
 from ui import CommandInterface, StatusDisplay
 from debug.html_overlay import HTMLDebugManager
@@ -57,6 +57,7 @@ class LeaderPi:
             enable_vlc_logging=self.config.enable_vlc_logging,
             vlc_log_level=self.config.vlc_log_level,
             enable_looping=True,  # Ensure leader also loops
+            loop_strategy=LoopStrategy.NATURAL,  # Force natural VLC looping
         )
 
         # Initialize networking (wire tick_interval from config)
@@ -224,8 +225,9 @@ class LeaderPi:
         self.sync_broadcaster.start_broadcasting(self.system_state.start_time)
         self.command_manager.start_listening()
 
-        # Start MIDI playback, it will be driven by the leader's main loop
-        self.midi_scheduler.start_playback()
+        # Start MIDI playback with video duration for looping
+        video_duration = self.video_player.get_duration()
+        self.midi_scheduler.start_playback(self.system_state.start_time, video_duration)
 
         # Send start command to collaborators
         start_command = {
@@ -242,14 +244,6 @@ class LeaderPi:
             "Log paths: " + ", ".join([f"{k}={v}" for k, v in paths.items()]),
             component="leader",
         )
-
-    def _leader_playback_loop(self):
-        """Main playback loop for the leader to drive MIDI cues."""
-        while self.system_state.is_running:
-            current_time = self.video_player.get_position()
-            if current_time is not None:
-                self.midi_scheduler.process_cues(current_time)
-            time.sleep(0.001)  # 1ms sleep
 
     def stop_system(self) -> None:
         """Stop the synchronized playback system"""
@@ -442,8 +436,7 @@ def main():
 
             # Keep running until interrupted
             try:
-                # The main loop is now handled inside start_system
-                while leader_instance.system_state.is_running:
+                while True:
                     time.sleep(1)
             except KeyboardInterrupt:
                 print("\n🛑 Stopping system...")
