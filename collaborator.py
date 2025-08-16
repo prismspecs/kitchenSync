@@ -103,7 +103,7 @@ class CollaboratorPi:
         self.command_listener = CommandListener()
         self.sync_receiver = SyncReceiver(
             sync_port=self.config.getint("sync_port", 5005),
-            time_callback=self._handle_sync,
+            sync_callback=self._handle_sync,
         )
 
         # Find and load video file before creating debug overlay
