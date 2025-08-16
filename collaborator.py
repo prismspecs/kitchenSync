@@ -619,15 +619,14 @@ class CollaboratorPi:
 
         if self.critical_window_logging and self.in_critical_window:
             # Enhanced logging during critical window - log every sync evaluation
-            log_info(
+            print(
                 f"CRITICAL_SYNC: Leader={leader_time:.3f}s | Video={video_position:.3f}s | "
                 f"Expected={expected_position:.3f}s | RawDev={raw_deviation:.3f}s | "
                 f"LoopDev={loop_aware_deviation:.3f}s | Duration={duration:.1f}s | "
                 f"TimeToEnd={time_to_end:.2f}s | TimeSinceRestart={time_since_restart:.2f}s | "
                 f"DevSamples={deviation_samples_count}/{self.deviation_samples_maxlen} | "
                 f"Grace={in_grace_period} | WaitSync={waiting_for_sync} | WaitAfter={waiting_after_sync} | "
-                f"Threshold={self.deviation_threshold:.3f}s",
-                component="sync",
+                f"Threshold={self.deviation_threshold:.3f}s"
             )
         elif self.debug_sync_logging:
             # Standard debug logging
