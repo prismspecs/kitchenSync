@@ -273,6 +273,17 @@ class VLCVideoPlayer:
             log_error(f"Error resuming: {e}", component="vlc")
             return False
 
+    def _on_video_end_once(self, event):
+        """Handle the video end event just once when looping is disabled."""
+        log_info("Video reached end (looping disabled).", component="vlc")
+        self.is_playing = False
+        # Optional: Add a callback for the system to know the video has finished.
+        if self.loop_callback:
+            try:
+                self.loop_callback(0)  # 0 indicates not a loop, but an end
+            except Exception as e:
+                log_error(f"Error in one-time video end callback: {e}", component="vlc")
+
     def _on_video_end(self, event):
         """Handle video end event for looping"""
         if self.enable_looping and self.vlc_player:
@@ -347,15 +358,8 @@ class VLCVideoPlayer:
             # Use ONLY VLC's built-in repeat option for consistent looping behavior
             # This ensures identical loop timing between leader and collaborator
             if self.enable_looping:
-                try:
-                    # Repeat the item many times (practically infinite)
-                    # Using a high number for broad compatibility
-                    self.vlc_media.add_option(":input-repeat=65535")
-                    log_info("VLC media repeat option set for looping", component="vlc")
-                except Exception as e:
-                    log_warning(
-                        f"Failed to set media repeat option: {e}", component="vlc"
-                    )
+                self.vlc_media.add_option(":input-repeat=65535")
+                log_info("VLC media repeat option set for looping", component="vlc")
 
             self.vlc_player.set_media(self.vlc_media)
 
@@ -363,6 +367,16 @@ class VLCVideoPlayer:
             # This eliminates timing differences between leader and collaborator
             if self.enable_looping:
                 log_info("Video looping enabled via VLC repeat option", component="vlc")
+            else:
+                # If looping is disabled, we still need to know when the video ends
+                # to stop the system gracefully.
+                events = self.vlc_player.event_manager()
+                events.event_attach(
+                    vlc.EventType.MediaPlayerEndReached, self._on_video_end_once
+                )
+                log_info(
+                    "Attached one-time end-of-video event handler", component="vlc"
+                )
 
             # Start playback
             log_info("Starting VLC playback...", component="vlc")

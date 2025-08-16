@@ -5,8 +5,12 @@ Handles MIDI output and scheduling
 """
 
 import time
-from typing import List, Dict, Any, Set, Optional
-from core.logger import log_info, log_warning, log_error
+import threading
+from typing import List, Dict, Any
+
+from . import rtmidi
+from core.logger import log_info, log_warning
+from enum import Enum, auto
 
 # Try to import rtmidi
 try:
@@ -141,135 +145,176 @@ class MidiManager:
             print(f"Error closing MIDI: {e}")
 
 
+class LoopMidi(Enum):
+    """Defines how the MIDI scheduler should handle looping."""
+
+    NONE = auto()  # No looping
+    INTERNAL = auto()  # Loop within the scheduler (default)
+    EXTERNAL = auto()  # Rely on an external component to trigger loop
+
+
+import time
+import threading
+from typing import List, Dict, Any
+
+try:
+    import rtmidi
+
+    MIDI_SUPPORT = True
+except ImportError:
+    MIDI_SUPPORT = False
+
+import time
+import threading
+from typing import List, Dict, Any
+
+try:
+    import rtmidi
+
+    MIDI_SUPPORT = True
+except ImportError:
+    MIDI_SUPPORT = False
+
+from core.logger import log_info, log_warning, log_error
+
+
 class MidiScheduler:
-    """Handles scheduled MIDI events"""
+    """Schedules and sends MIDI cues based on an external time source."""
 
-    def __init__(self, midi_manager: MidiManager):
+    def __init__(self, midi_manager):
         self.midi_manager = midi_manager
-        self.schedule: List[Dict[str, Any]] = []
-        self.triggered_cues: Set[str] = set()
-        self.is_running = False
-        self.start_time: Optional[float] = None
-        self.video_duration: Optional[float] = None
-        self.loop_count = 0
-        self.enable_looping = True
+        self.cues: List[Dict[str, Any]] = []
+        self.is_playing = False
+        self.last_processed_index = -1
+        self.last_elapsed_time = -1.0
 
-    def load_schedule(self, schedule: List[Dict[str, Any]]) -> None:
-        """Load MIDI schedule"""
-        self.schedule = sorted(schedule, key=lambda x: x.get("time", 0))
-        self.triggered_cues.clear()
-        print(f"📋 Loaded MIDI schedule with {len(self.schedule)} cues")
+    def load_schedule(self, cues: list):
+        """Load a new schedule and sort it by time."""
+        self.cues = sorted(cues, key=lambda x: x.get("time", 0))
+        self.last_processed_index = -1
+        log_info(f"Loaded {len(self.cues)} MIDI cues", component="midi")
 
-    def start_playback(
-        self, start_time: float, video_duration: Optional[float] = None
-    ) -> None:
-        """Start MIDI playback"""
-        self.start_time = start_time
-        self.video_duration = video_duration
-        self.is_running = True
-        self.triggered_cues.clear()
-        self.loop_count = 0
-        print("🎵 Started MIDI playback")
+    def start_playback(self):
+        """Enable MIDI playback."""
+        if self.is_playing:
+            return
+        self.is_playing = True
+        self.last_processed_index = -1
+        self.last_elapsed_time = -1.0
+        log_info("MIDI playback enabled.", component="midi")
 
-    def stop_playback(self) -> None:
-        """Stop MIDI playback"""
-        self.is_running = False
-        self.start_time = None
-        print("🛑 Stopped MIDI playback")
+    def stop_playback(self):
+        """Disable MIDI playback."""
+        self.is_playing = False
+        log_info("MIDI playback disabled.", component="midi")
 
-    def process_cues(self, current_time: float) -> None:
-        """Process MIDI cues for current time with looping support"""
-        if not self.is_running or not self.start_time:
+    def process_cues(self, elapsed_time: float):
+        """
+        Process cues based on a given elapsed time from an external source.
+        This method is now responsible for handling looping by detecting when
+        the elapsed_time resets.
+        """
+        if not self.is_playing or elapsed_time is None:
             return
 
-        playback_time = current_time
-
-        # Handle looping if video duration is known and looping is enabled
+        # Detect loop from time source (current time is less than last time)
+        # Add a small tolerance to avoid false positives from minor time fluctuations
         if (
-            self.enable_looping
-            and self.video_duration
-            and playback_time >= self.video_duration
+            elapsed_time < self.last_elapsed_time
+            and (self.last_elapsed_time - elapsed_time) > 1.0
         ):
-            # Calculate which loop we're in and the position within the loop
-            loop_number = int(playback_time // self.video_duration)
-            loop_time = playback_time % self.video_duration
+            self.last_processed_index = -1  # Reset for new loop
+            log_info(
+                f"MIDI schedule loop detected. Time jumped from {self.last_elapsed_time:.2f}s to {elapsed_time:.2f}s.",
+                component="midi",
+            )
 
-            # If we've entered a new loop, reset triggered cues
-            if loop_number > self.loop_count:
-                self.loop_count = loop_number
-                self.triggered_cues.clear()
+        self.last_elapsed_time = elapsed_time
+
+        # Find next cue to process
+        start_index = self.last_processed_index + 1
+        for i in range(start_index, len(self.cues)):
+            cue = self.cues[i]
+            if cue.get("time", 0) <= elapsed_time:
+                self.midi_manager.send(cue)
+                self.last_processed_index = i
+            else:
+                # Cues are sorted, so we can stop searching
+                break
+
+
+class MidiManager:
+    """Manages MIDI I/O using python-rtmidi"""
+
+    def __init__(self, port_index: int = 0, use_mock: bool = False):
+        self.port_index = port_index
+        self.midi_out = None
+        self.use_mock = use_mock
+
+        if use_mock:
+            log_warning("Using mock MIDI manager", component="midi")
+            return
+
+        if not MIDI_SUPPORT:
+            log_error(
+                "rtmidi not available, cannot create MIDI manager", component="midi"
+            )
+            self.use_mock = True
+            return
+
+        try:
+            self.midi_out = rtmidi.MidiOut()
+            available_ports = self.midi_out.get_ports()
+
+            if not available_ports:
+                log_warning("No MIDI output ports found", component="midi")
+                self.use_mock = True
+                return
+
+            if self.port_index < len(available_ports):
+                self.midi_out.open_port(self.port_index)
                 log_info(
-                    f"MIDI schedule loop #{self.loop_count} started", component="midi"
+                    f"Opened MIDI port: {available_ports[self.port_index]}",
+                    component="midi",
                 )
-
-            playback_time = loop_time
-
-        for cue in self.schedule:
-            cue_time = cue.get("time", 0)
-            cue_id = f"{cue_time}_{cue.get('type', 'unknown')}_{cue.get('note', 0)}_{cue.get('channel', 1)}"
-
-            if cue_time <= playback_time and cue_id not in self.triggered_cues:
-                self.midi_manager.send_cue_message(cue)
-                self.triggered_cues.add(cue_id)
-                loop_info = f" (Loop #{self.loop_count})" if self.loop_count > 0 else ""
-                print(
-                    f"⏰ MIDI triggered at {cue_time}s: {cue.get('type', 'unknown')}{loop_info}"
+            else:
+                log_warning(
+                    f"MIDI port index {self.port_index} out of range, using port 0",
+                    component="midi",
                 )
+                self.midi_out.open_port(0)
+        except Exception as e:
+            log_error(f"Error initializing MIDI: {e}", component="midi")
+            self.use_mock = True
 
-    def get_current_cues(
-        self, current_time: float, window: float = 0.5
-    ) -> List[Dict[str, Any]]:
-        """Get cues that are currently active (within time window)"""
-        # Adjust time for looping
-        effective_time = self._get_loop_adjusted_time(current_time)
+    def send(self, cue: Dict[str, Any]) -> None:
+        """Send a MIDI message from a cue"""
+        if self.use_mock:
+            log_info(f"Mock MIDI send: {cue}", component="midi")
+            return
 
-        current_cues = []
-        for cue in self.schedule:
-            cue_time = cue.get("time", 0)
-            if abs(effective_time - cue_time) <= window:
-                current_cues.append(cue)
-        return current_cues
+        if not self.midi_out or not self.midi_out.is_port_open():
+            return
 
-    def get_upcoming_cues(
-        self, current_time: float, lookahead: float = 10.0
-    ) -> List[Dict[str, Any]]:
-        """Get upcoming cues within lookahead time"""
-        # Adjust time for looping
-        effective_time = self._get_loop_adjusted_time(current_time)
+        try:
+            msg_type = cue.get("type")
+            channel = cue.get("channel", 1) - 1  # Convert 1-16 to 0-15
 
-        upcoming_cues = []
-        for cue in self.schedule:
-            cue_time = cue.get("time", 0)
-            if effective_time < cue_time <= effective_time + lookahead:
-                upcoming_cues.append(cue)
-        return upcoming_cues[:5]  # Limit to next 5 cues
+            if msg_type == "note_on":
+                note = cue.get("note", 60)
+                velocity = cue.get("velocity", 127)
+                self.midi_out.send_message([0x90 + channel, note, velocity])
+            elif msg_type == "note_off":
+                note = cue.get("note", 60)
+                self.midi_out.send_message([0x80 + channel, note, 0])
+            elif msg_type == "control_change":
+                control = cue.get("control", 0)
+                value = cue.get("value", 0)
+                self.midi_out.send_message([0xB0 + channel, control, value])
+        except Exception as e:
+            log_error(f"Error sending MIDI message: {e}", component="midi")
 
-    def get_recent_cues(
-        self, current_time: float, lookback: float = 5.0
-    ) -> List[Dict[str, Any]]:
-        """Get recently triggered cues"""
-        recent_cues = []
-        for cue in self.schedule:
-            cue_time = cue.get("time", 0)
-            if current_time - lookback <= cue_time <= current_time:
-                recent_cues.append(cue)
-        return recent_cues[-5:]  # Last 5 cues
-
-    def _get_loop_adjusted_time(self, current_time: float) -> float:
-        """Get time adjusted for looping"""
-        if (
-            self.enable_looping
-            and self.video_duration
-            and current_time >= self.video_duration
-        ):
-            return current_time % self.video_duration
-        return current_time
-
-    def get_stats(self) -> Dict[str, int]:
-        """Get scheduler statistics"""
-        return {
-            "total_cues": len(self.schedule),
-            "triggered_cues": len(self.triggered_cues),
-            "remaining_cues": len(self.schedule) - len(self.triggered_cues),
-            "loop_count": self.loop_count,
-        }
+    def cleanup(self) -> None:
+        """Clean up MIDI resources"""
+        if self.midi_out:
+            del self.midi_out

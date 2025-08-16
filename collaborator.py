@@ -319,8 +319,7 @@ class CollaboratorPi:
             self.video_player.start_playback()
 
         # Start MIDI playback with video duration for looping
-        video_duration = self.video_player.get_duration()
-        self.midi_scheduler.start_playback(self.system_state.start_time, video_duration)
+        self.midi_scheduler.start_playback()
 
         log_info("Playback started", component="collaborator")
 
