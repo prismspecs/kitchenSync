@@ -599,38 +599,14 @@ class CollaboratorPi:
                     f"Seeking to {seek_position:.3f}s (target: {target_position:.3f}s)",
                     component="sync",
                 )
+                self.wait_for_sync = True
+                self.sync_timer = time.time()
+                # Reset state after correction
                 self.last_correction_time = time.time()
-                # Tighter feedback loop: periodically check deviation and re-seek if needed
-                feedback_start = time.time()
-                max_feedback_time = self.sync_timeout_seconds
-                feedback_interval = 0.2  # 200ms
-                while True:
-                    time.sleep(feedback_interval)
-                    current_position = self.video_player.get_position() or 0
-                    deviation = abs(
-                        (leader_time + self.latency_compensation) - current_position
-                    )
-                    if deviation < self.sync_deviation_threshold_resume:
-                        log_info(
-                            f"Sync achieved! Deviation: {deviation:.3f}s, resuming",
-                            component="sync",
-                        )
-                        self.video_player.resume()
-                        break
-                    elif time.time() - feedback_start > max_feedback_time:
-                        log_warning(
-                            f"Sync timeout after {max_feedback_time}s, resuming anyway",
-                            component="sync",
-                        )
-                        self.video_player.resume()
-                        break
-                    else:
-                        # If deviation is still large, nudge again
-                        log_info(
-                            f"Still out of sync (deviation={deviation:.3f}s), re-seeking...",
-                            component="sync",
-                        )
-                        self.video_player.set_position(seek_position)
+                log_info(
+                    "Waiting for sync (will resume when deviation < 0.1s)",
+                    component="sync",
+                )
             else:
                 log_warning("Seek failed, resuming playback", component="sync")
                 self.video_player.resume()
