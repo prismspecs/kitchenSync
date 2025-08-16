@@ -86,8 +86,8 @@ class CollaboratorPi:
             debug_mode=self.config.debug_mode,
             enable_vlc_logging=self.config.enable_vlc_logging,
             vlc_log_level=self.config.vlc_log_level,
-            enable_looping=True,
-            loop_strategy=LoopStrategy.NATURAL,  # Force natural VLC looping
+            enable_looping=False,  # Collaborator should not loop; it follows the leader
+            loop_strategy=LoopStrategy.NATURAL,
         )
         log_info(
             "Collaborator using Python VLC for precise sync control",
