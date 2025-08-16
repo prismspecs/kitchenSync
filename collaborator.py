@@ -1,21 +1,3 @@
-# Restore missing parameters required for sync logic
-DEFAULT_LATENCY_COMPENSATION = 0.0  # Network/processing delay offset
-NO_SYNC_AFTER_LOOP = False  # If True, disables all sync corrections after a loop
-# Restore only the parameters that are actually used in the code
-DEVIATION_SAMPLES_MAXLEN = 20  # Used for median filtering
-INITIAL_SYNC_WAIT_SECONDS = 2.0  # Used for sync grace period
-SYNC_TIMEOUT_SECONDS = 10.0  # Used for sync timeout after seek
-SYNC_DEVIATION_THRESHOLD_RESUME = (
-    0.1  # Used for deviation threshold to resume after seek
-)
-HEARTBEAT_INTERVAL_SECONDS = 2.0  # Used for heartbeat interval
-REREGISTER_INTERVAL_SECONDS = 60.0  # Used for re-registration interval
-DEFAULT_SYNC_CHECK_INTERVAL = 5.0  # Used for sync correction interval
-DEFAULT_DEVIATION_THRESHOLD = 0.3  # Used for sync correction threshold
-DEFAULT_SYNC_JUMP_AHEAD = 3.0  # Used for jump ahead during correction
-DEFAULT_SEEK_SETTLE_TIME = 0.1  # Used for VLC settling time after seek
-POST_LOOP_SYNC_DELAY_SECONDS = 5.0  # Used for post-loop sync delay
-# Remove DEFAULT_LATENCY_COMPENSATION and NO_SYNC_AFTER_LOOP as they are not referenced in the code
 #!/usr/bin/env python3
 """
 Refactored KitchenSync Collaborator Pi
@@ -45,7 +27,41 @@ from core.logger import (
 )
 
 
-# ...existing code...
+# =============================================================================
+# SYNCHRONIZATION PARAMETERS - Edit these values to tune sync behavior
+# =============================================================================
+
+# Constants for sync logic - these control the basic behavior of the sync system
+DEVIATION_SAMPLES_MAXLEN = 20  # How many timing samples to keep for median filtering
+INITIAL_SYNC_WAIT_SECONDS = (
+    2.0  # Grace period after startup before sync corrections begin
+)
+SYNC_TIMEOUT_SECONDS = 10.0  # Max time to wait for sync after a seek operation
+SYNC_DEVIATION_THRESHOLD_RESUME = (
+    0.1  # Deviation (seconds) required to resume after seek
+)
+HEARTBEAT_INTERVAL_SECONDS = 2.0  # How often to send status updates to leader
+REREGISTER_INTERVAL_SECONDS = 60.0  # How often to re-register with leader
+
+# Default sync settings - these are tunable parameters that affect sync quality
+# (Can be overridden in config file)
+DEFAULT_SYNC_CHECK_INTERVAL = 5.0  # Min time between corrections
+DEFAULT_DEVIATION_THRESHOLD = 0.3  # Error threshold to trigger correction
+DEFAULT_SYNC_JUMP_AHEAD = 3.0  # How far ahead to seek for corrections
+DEFAULT_LATENCY_COMPENSATION = (
+    0.0  # Network/processing delay offset (DISABLED - may cause issues)
+)
+DEFAULT_SEEK_SETTLE_TIME = 0.1  # VLC settling time after seek
+
+POST_LOOP_SYNC_DELAY_SECONDS = (
+    5.0  # Grace period after a loop before sync corrections resume
+)
+NO_SYNC_AFTER_LOOP = False  # If True, disables all sync corrections after a loop
+
+
+# =============================================================================
+
+# =============================================================================
 
 
 class CollaboratorPi:
@@ -109,10 +125,8 @@ class CollaboratorPi:
         )
 
     def _initialize_sync_parameters(self):
-        self.latency_compensation = self.config.getfloat(
-            "latency_compensation", DEFAULT_LATENCY_COMPENSATION
-        )
-        self.no_sync_after_loop = NO_SYNC_AFTER_LOOP
+        """Initialize synchronization parameters from config and set initial state."""
+        # Use constants defined at top of file for easy editing
         self.deviation_samples_maxlen = DEVIATION_SAMPLES_MAXLEN
         self.initial_sync_wait_seconds = INITIAL_SYNC_WAIT_SECONDS
         self.sync_timeout_seconds = SYNC_TIMEOUT_SECONDS
@@ -120,6 +134,7 @@ class CollaboratorPi:
         self.heartbeat_interval_seconds = HEARTBEAT_INTERVAL_SECONDS
         self.reregister_interval_seconds = REREGISTER_INTERVAL_SECONDS
 
+        # Load sync settings from config with defaults from constants
         self.sync_check_interval = self.config.getfloat(
             "sync_check_interval", DEFAULT_SYNC_CHECK_INTERVAL
         )
@@ -129,15 +144,16 @@ class CollaboratorPi:
         self.sync_jump_ahead = self.config.getfloat(
             "sync_jump_ahead", DEFAULT_SYNC_JUMP_AHEAD
         )
+        self.latency_compensation = self.config.getfloat(
+            "latency_compensation", DEFAULT_LATENCY_COMPENSATION
+        )
         self.seek_settle_time = self.config.getfloat(
             "seek_settle_time", DEFAULT_SEEK_SETTLE_TIME
         )
         self.post_loop_sync_delay_seconds = self.config.getfloat(
             "post_loop_sync_delay", POST_LOOP_SYNC_DELAY_SECONDS
         )
-        # Remove latency_compensation and no_sync_after_loop assignments
-        """Initialize synchronization parameters from config and set initial state."""
-        # ...existing code...
+        self.no_sync_after_loop = NO_SYNC_AFTER_LOOP
 
         # Video sync state
         self.deviation_samples = deque(maxlen=self.deviation_samples_maxlen)
