@@ -159,7 +159,7 @@ class CollaboratorPi:
         self.deviation_samples = deque(maxlen=self.deviation_samples_maxlen)
         self.last_correction_time = 0
         self.video_start_time = None
-        self.last_video_position = 0.0
+        self.last_video_position = None
         self.in_post_loop_grace_period = False
         self.loop_time = 0
         self.no_sync_after_loop_active = False
@@ -411,26 +411,27 @@ class CollaboratorPi:
             log_warning("Could not get video position for sync check", component="sync")
             return
 
-        # Loop detection: if video position jumps backwards, it's a loop.
-        # The threshold is large to avoid triggering on small stutters.
-        if self.last_video_position > video_position + 1.0:  # e.g. 634.0 > 0.5 + 1.0
-            log_info(
-                f"Loop detected! Position jumped from {self.last_video_position:.3f}s to {video_position:.3f}s. Clearing samples.",
-                component="sync",
-            )
-            self.deviation_samples.clear()
-            self.last_video_position = video_position
-            if self.no_sync_after_loop:
-                self.no_sync_after_loop_active = True
+        # Loop detection: only after first sample
+        if self.last_video_position is not None:
+            # The threshold is large to avoid triggering on small stutters.
+            if self.last_video_position > video_position + 1.0:  # e.g. 634.0 > 0.5 + 1.0
                 log_info(
-                    "NO_SYNC_AFTER_LOOP flag set: all sync corrections will be blocked after this loop.",
+                    f"Loop detected! Position jumped from {self.last_video_position:.3f}s to {video_position:.3f}s. Clearing samples.",
                     component="sync",
                 )
-            else:
-                self.in_post_loop_grace_period = True
-                self.loop_time = time.time()
-            return  # Skip sync check for one cycle to gather fresh data
-
+                self.deviation_samples.clear()
+                self.last_video_position = video_position
+                if self.no_sync_after_loop:
+                    self.no_sync_after_loop_active = True
+                    log_info(
+                        "NO_SYNC_AFTER_LOOP flag set: all sync corrections will be blocked after this loop.",
+                        component="sync",
+                    )
+                else:
+                    self.in_post_loop_grace_period = True
+                    self.loop_time = time.time()
+                return  # Skip sync check for one cycle to gather fresh data
+        # Always update last_video_position
         self.last_video_position = video_position
 
         # Calculate expected position with latency compensation
