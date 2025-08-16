@@ -404,7 +404,8 @@ class CollaboratorPi:
                         component="sync",
                     )
                     self.last_loop_time = time.time()
-                    # Don't clear samples after loop - we want continuous sampling for debug analysis
+                    # Clear samples after loop to ensure sync is based on fresh data
+                    self.deviation_samples.clear()
 
                     # Track video restart for critical window logging
                     self.video_restart_time = time.time()
