@@ -371,6 +371,18 @@ class CollaboratorPi:
         if not self.video_player.is_playing or not self.video_start_time:
             return
 
+        # Block all corrections during post-loop grace period
+        if self.in_post_loop_grace_period:
+            if time.time() - self.loop_time < self.post_loop_sync_delay_seconds:
+                if self.critical_window_logging:
+                    log_info(
+                        f"Post-loop grace period active ({time.time() - self.loop_time:.2f}s/{self.post_loop_sync_delay_seconds}s), blocking sync corrections.",
+                        component="sync",
+                    )
+                return
+            else:
+                self.in_post_loop_grace_period = False
+
         # Get current video position
         video_position = self.video_player.get_position()
         if video_position is None:
@@ -381,11 +393,13 @@ class CollaboratorPi:
         # The threshold is large to avoid triggering on small stutters.
         if self.last_video_position > video_position + 1.0:  # e.g. 634.0 > 0.5 + 1.0
             log_info(
-                f"Loop detected! Position jumped from {self.last_video_position:.3f}s to {video_position:.3f}s. Clearing samples.",
+                f"Loop detected! Position jumped from {self.last_video_position:.3f}s to {video_position:.3f}s. Clearing samples and starting post-loop grace period.",
                 component="sync",
             )
             self.deviation_samples.clear()
             self.last_video_position = video_position
+            self.in_post_loop_grace_period = True
+            self.loop_time = time.time()
             return  # Skip sync check for one cycle to gather fresh data
 
         self.last_video_position = video_position
