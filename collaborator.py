@@ -61,8 +61,6 @@ NO_SYNC_AFTER_LOOP = False  # If True, disables all sync corrections after a loo
 
 # =============================================================================
 
-# =============================================================================
-
 
 class CollaboratorPi:
     """Refactored Collaborator Pi with clean separation of concerns"""
