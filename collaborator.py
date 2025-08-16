@@ -582,10 +582,15 @@ class CollaboratorPi:
             # Clear samples before correction to prevent feedback
             self.deviation_samples.clear()
 
-            # Pause, seek ahead, wait for sync (omxplayer-sync style)
-            if not self.video_player.pause():
-                log_warning("Failed to pause for correction", component="sync")
-                return
+            # Soft pause: set playback rate to 0
+            if not self.video_player.set_playback_rate(0.0):
+                log_warning(
+                    "Failed to set playback rate to 0 (soft pause), falling back to hard pause",
+                    component="sync",
+                )
+                if not self.video_player.pause():
+                    log_warning("Failed to pause for correction", component="sync")
+                    return
 
             time.sleep(0.1)  # Let VLC settle
 
@@ -609,6 +614,7 @@ class CollaboratorPi:
                 )
             else:
                 log_warning("Seek failed, resuming playback", component="sync")
+                self.video_player.set_playback_rate(1.0)
                 self.video_player.resume()
         else:
             # No correction needed - only log during critical window when samples are low
