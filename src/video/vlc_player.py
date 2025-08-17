@@ -585,25 +585,3 @@ class VLCVideoPlayer:
             log_error(f"Error getting video info: {e}", component="vlc")
 
         return info
-
-        def set_playback_rate(self, rate: float) -> bool:
-            """Set playback rate (speed)"""
-            if not self.vlc_player:
-                return False
-            try:
-                self.vlc_player.set_rate(rate)
-                log_info(f"Set playback rate to {rate}", component="vlc")
-                return True
-            except Exception as e:
-                log_error(f"Error setting playback rate: {e}", component="vlc")
-                return False
-
-        def get_playback_rate(self) -> Optional[float]:
-            """Get current playback rate"""
-            if not self.vlc_player:
-                return None
-            try:
-                return self.vlc_player.get_rate()
-            except Exception as e:
-                log_error(f"Error getting playback rate: {e}", component="vlc")
-                return None
