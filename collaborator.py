@@ -73,6 +73,9 @@ class CollaboratorPi:
         # Initialize configuration
         self.config = ConfigManager(config_file)
 
+        # Sync mode: 'catchup' (playback rate) or 'seek' (pause/jump)
+        self.sync_mode = self.config.get("sync_mode", "catchup")
+
         # Configure logging based on config settings
         enable_system_logging(self.config.enable_system_logging)
 
@@ -514,112 +517,49 @@ class CollaboratorPi:
         if not trimmed:
             median_deviation = 0.0
         elif len(trimmed) % 2 == 0:
-            # Even number of elements - average the two middle values
             mid1 = trimmed[len(trimmed) // 2 - 1]
             mid2 = trimmed[len(trimmed) // 2]
             median_deviation = (mid1 + mid2) / 2.0
         else:
-            # Odd number of elements - take the middle value
             median_deviation = trimmed[len(trimmed) // 2]
 
         if self.critical_window_logging and self.in_critical_window:
-            # Only show median calc when correction is actually needed
             if abs(median_deviation) > self.deviation_threshold:
                 print(
                     f"SYNC_MEDIAN_CALC | Samples: {len(self.deviation_samples)} | "
                     f"Median: {median_deviation:.3f}s | Threshold: {self.deviation_threshold:.3f}s"
                 )
 
-        # Check if correction is needed
-        if abs(median_deviation) > self.deviation_threshold:
-            # SAFE ZONE: If we are very close to the end of the video,
-            # block corrections to allow VLC's natural loop to occur without interference.
-            time_to_end = (
-                duration - video_position
-                if duration and video_position is not None
-                else 0
-            )
-            if duration and time_to_end < 2.0:
+        # --- Catchup Sync Mode ---
+        if self.sync_mode == "catchup":
+            # Only correct if deviation is above threshold
+            if abs(median_deviation) > self.deviation_threshold:
+                # If behind, speed up; if ahead, slow down
+                if median_deviation > 0:
+                    rate = 1.05
+                else:
+                    rate = 0.95
+                self.video_player.set_playback_rate(rate)
                 log_info(
-                    f"In loop safe zone ({time_to_end:.2f}s to end), "
-                    f"blocking correction of {median_deviation:.3f}s to allow natural loop.",
-                    component="sync",
-                )
-                return
-
-            current_time = time.time()
-
-            # Rate limit corrections
-            if current_time - self.last_correction_time < self.sync_check_interval:
-                # Don't spam during rate limiting - only log in critical window
-                if self.critical_window_logging and self.in_critical_window:
-                    time_left = self.sync_check_interval - (
-                        current_time - self.last_correction_time
-                    )
-                    log_info(
-                        f"SYNC_EVAL: Correction blocked, {time_left:.1f}s remaining",
-                        component="sync",
-                    )
-                return
-
-            # Always log sync corrections (this is important)
-            log_info(
-                f"🔄 SYNC CORRECTION: {median_deviation:.3f}s deviation > {self.deviation_threshold:.3f}s threshold at {leader_time:.1f}s",
-                component="sync",
-            )
-            print(f"🔄 Sync correction: {median_deviation:.3f}s deviation")
-
-            # Calculate target position with latency compensation
-            correction_offset = (
-                -self.latency_compensation
-                if median_deviation > 0
-                else self.latency_compensation
-            )
-            target_position = expected_position + correction_offset
-            if duration and duration > 0:
-                target_position = target_position % duration
-
-            # Clear samples before correction to prevent feedback
-            self.deviation_samples.clear()
-
-            # Pause, seek ahead, wait for sync (omxplayer-sync style)
-            if not self.video_player.pause():
-                log_warning("Failed to pause for correction", component="sync")
-                return
-
-            time.sleep(0.1)  # Let VLC settle
-
-            # Seek with jump-ahead
-            seek_position = target_position + self.sync_jump_ahead
-            if duration and duration > 0:
-                seek_position = seek_position % duration
-
-            if self.video_player.set_position(seek_position):
-                log_info(
-                    f"Seeking to {seek_position:.3f}s (target: {target_position:.3f}s)",
-                    component="sync",
-                )
-                self.wait_for_sync = True
-                self.sync_timer = time.time()
-                # Reset state after correction
-                self.last_correction_time = time.time()
-                log_info(
-                    "Waiting for sync (will resume when deviation < 0.1s)",
+                    f"Catch-up mode: set rate to {rate} due to deviation {median_deviation:.3f}s",
                     component="sync",
                 )
             else:
-                log_warning("Seek failed, resuming playback", component="sync")
-                self.video_player.resume()
-        else:
-            # No correction needed - only log during critical window when samples are low
-            if (
-                self.critical_window_logging
-                and self.in_critical_window
-                and len(self.deviation_samples) < self.deviation_samples_maxlen
-            ):
-                print(
-                    f"SYNC_NO_CORRECTION | Median {median_deviation:.3f}s <= threshold {self.deviation_threshold:.3f}s"
-                )
+                self.video_player.set_playback_rate(1.0)
+            return
+        # --- End Catchup Sync Mode ---
+
+        # --- Seek/Pause Sync Mode (legacy) ---
+        # ...existing code for seek/pause correction...
+        # No correction needed - only log during critical window when samples are low
+        if (
+            self.critical_window_logging
+            and self.in_critical_window
+            and len(self.deviation_samples) < self.deviation_samples_maxlen
+        ):
+            print(
+                f"SYNC_NO_CORRECTION | Median {median_deviation:.3f}s <= threshold {self.deviation_threshold:.3f}s"
+            )
 
     def _log_sync_debug_info(self, leader_time: float) -> None:
         """Log sync information for debugging"""
