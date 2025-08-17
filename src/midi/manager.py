@@ -138,8 +138,8 @@ class MidiManager:
         port: int = 0,
         use_mock: bool = False,
         use_serial: bool = True,
-        serial_port: str = "/dev/tty.usbmodem112101",
-        serial_baud: int = 31250,
+        serial_port: str = None,
+        serial_baud: int = 9600,  # Match Arduino Serial.begin
     ):
         self.port = port
         self.use_mock = use_mock
