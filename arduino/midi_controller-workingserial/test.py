@@ -4,7 +4,7 @@ import serial
 import time
 
 # Update this to your Arduino's serial port (e.g., '/dev/tty.usbmodemXXXX' or '/dev/ttyUSB0')
-SERIAL_PORT = "/dev/tty.usbmodem112101"
+SERIAL_PORT = "/dev/ttyACM0"
 BAUD_RATE = 31250  # MIDI baud rate
 
 
