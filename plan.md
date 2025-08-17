@@ -609,7 +609,42 @@ This is the mark of professional programming vs. superficial patching.
   - Leader: fullscreen unless explicitly running in debug mode.
 - Do not switch video outputs (e.g., `--vout`) or windowing backends unless requested and documented.g
 
-## future necessities
+## Bug Fixes and Improvements (Jan 2025)
+
+### Ctrl+C Graceful Shutdown Fix
+
+**Problem**: When using Ctrl+C to stop the leader script, the MIDI scheduler would crash with a TypeError when comparing `None` values during shutdown.
+
+**Root Cause**: Race condition between the main thread shutdown and the MIDI cue processing thread. When Ctrl+C was pressed:
+1. Main thread would set `system_state.is_running = False`
+2. MIDI cue thread might still execute one more iteration
+3. Video player methods could return `None` during shutdown
+4. `process_cues()` would receive `None` for `current_time`
+5. Comparison `playback_time < self.previous_playback_time` would fail with `TypeError: '<' not supported between instances of 'NoneType' and 'float'`
+
+**Solution Implemented**:
+1. **Input Validation**: Added null checks in `MidiScheduler.process_cues()` to validate `current_time` parameter
+2. **Thread Safety**: Enhanced MIDI cue loop in `leader.py` to check both `current_time` validity and system state before processing
+3. **State Reset**: Reset `previous_playback_time` to `None` in `stop_playback()` to prevent comparison issues
+4. **Method Safety**: Added null checks to all time-based methods (`get_current_cues`, `get_upcoming_cues`, `get_recent_cues`, `_get_loop_adjusted_time`)
+
+**Files Modified**:
+- `src/midi/manager.py` - Added comprehensive null checks and safety measures
+- `leader.py` - Enhanced thread safety in MIDI cue processing loop
+
+**Result**: Leader script now shuts down gracefully with Ctrl+C without throwing exceptions.
+
+### Empty MIDI Scheduler File Issue
+
+**Problem**: Empty `src/midi/scheduler.py` file was interfering with Python imports, causing `'LeaderPi' object has no attribute 'seek_to_zero_and_reset_cues'` error when running `python leader.py` directly.
+
+**Root Cause**: The `src/midi/scheduler.py` file was completely empty (0 bytes), but Python was trying to import from it, causing import system conflicts.
+
+**Solution**: Deleted the empty `src/midi/scheduler.py` file, allowing proper imports from `src/midi/manager.py` where the `MidiScheduler` class is actually defined.
+
+**Result**: `python leader.py` now works correctly when run directly.
+
+## Future Necessities
 
 + Remove desktop environment, etc. just have a totally slimmed down OS
 + Read only root filesystem to prevent disk errors, etc.

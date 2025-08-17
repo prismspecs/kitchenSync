@@ -281,11 +281,16 @@ class MidiScheduler:
         """Stop MIDI playback"""
         self.is_running = False
         self.start_time = None
+        self.previous_playback_time = None  # Reset to prevent comparison issues
         print("🛑 Stopped MIDI playback")
 
     def process_cues(self, current_time: float) -> None:
         """Process MIDI cues for current time with looping support"""
         if not self.is_running or not self.start_time:
+            return
+
+        # Validate current_time parameter
+        if current_time is None or not isinstance(current_time, (int, float)):
             return
 
         playback_time = current_time
@@ -340,6 +345,10 @@ class MidiScheduler:
         self, current_time: float, window: float = 0.5
     ) -> List[Dict[str, Any]]:
         """Get cues that are currently active (within time window)"""
+        # Safety check for None or invalid current_time
+        if current_time is None or not isinstance(current_time, (int, float)):
+            return []
+
         # Adjust time for looping
         effective_time = self._get_loop_adjusted_time(current_time)
 
@@ -354,6 +363,10 @@ class MidiScheduler:
         self, current_time: float, lookahead: float = 10.0
     ) -> List[Dict[str, Any]]:
         """Get upcoming cues within lookahead time"""
+        # Safety check for None or invalid current_time
+        if current_time is None or not isinstance(current_time, (int, float)):
+            return []
+
         # Adjust time for looping
         effective_time = self._get_loop_adjusted_time(current_time)
 
@@ -368,6 +381,10 @@ class MidiScheduler:
         self, current_time: float, lookback: float = 5.0
     ) -> List[Dict[str, Any]]:
         """Get recently triggered cues"""
+        # Safety check for None or invalid current_time
+        if current_time is None or not isinstance(current_time, (int, float)):
+            return []
+
         recent_cues = []
         for cue in self.schedule:
             cue_time = cue.get("time", 0)
@@ -377,6 +394,10 @@ class MidiScheduler:
 
     def _get_loop_adjusted_time(self, current_time: float) -> float:
         """Get time adjusted for looping"""
+        # Safety check for None or invalid current_time
+        if current_time is None or not isinstance(current_time, (int, float)):
+            return 0.0
+
         if (
             self.enable_looping
             and self.video_duration

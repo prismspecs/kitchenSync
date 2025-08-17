@@ -247,7 +247,11 @@ class LeaderPi:
                     current_time = self.video_player.get_position()
                 except Exception:
                     current_time = time.time() - self.system_state.start_time
-                self.midi_scheduler.process_cues(current_time)
+
+                # Only process cues if we have a valid time and the system is still running
+                if current_time is not None and self.system_state.is_running:
+                    self.midi_scheduler.process_cues(current_time)
+
                 time.sleep(0.05)  # 20Hz cue check
 
         threading.Thread(target=midi_cue_loop, daemon=True).start()
