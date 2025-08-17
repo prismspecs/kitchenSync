@@ -46,7 +46,7 @@ sudo usermod -a -G plugdev,disk $USER
 
 # Install Python packages system-wide
 echo "Installing Python packages system-wide..."
-sudo pip install python-rtmidi dbus-python python-vlc --break-system-packages
+sudo pip install python-rtmidi dbus-python python-vlc pyserial --break-system-packages
 
 # Configure system for X11 mode (disable Wayland)
 echo "Configuring system for X11 mode..."

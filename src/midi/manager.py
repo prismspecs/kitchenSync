@@ -4,6 +4,7 @@ MIDI Management for KitchenSync
 Handles MIDI output and scheduling
 """
 
+
 import time
 from typing import List, Dict, Any, Set, Optional
 from core.logger import log_info, log_warning, log_error
@@ -15,6 +16,14 @@ try:
     MIDI_AVAILABLE = True
 except ImportError:
     MIDI_AVAILABLE = False
+
+# Try to import pyserial
+try:
+    import serial
+
+    SERIAL_AVAILABLE = True
+except ImportError:
+    SERIAL_AVAILABLE = False
 
 
 class MockMidiOut:
@@ -36,6 +45,65 @@ class MockMidiOut:
         return f"Mock MIDI Port {port}"
 
 
+class SerialMidiOut:
+    """Serial output for Arduino MIDI controller"""
+
+    def __init__(
+        self,
+        port: str = "/dev/tty.usbmodem112101",
+        baud: int = 31250,
+        timeout: float = 1.0,
+    ):
+        self.port = port
+        self.baud = baud
+        self.timeout = timeout
+        self.ser = None
+
+    def open_port(self, port: int = 0):
+        if not SERIAL_AVAILABLE:
+            print("pyserial not available, using mock serial")
+            self.ser = None
+            return
+        try:
+            self.ser = serial.Serial(self.port, self.baud, timeout=self.timeout)
+            time.sleep(2)  # Wait for Arduino to reset
+            print(f"✓ Serial MIDI output initialized on {self.port} @ {self.baud}")
+        except Exception as e:
+            print(f"⚠️ Serial MIDI setup failed: {e}")
+            self.ser = None
+
+    def send_message(self, message: List[int]):
+        # Not used for serial, but kept for compatibility
+        pass
+
+    def send_note_on(self, channel: int, pitch: int, velocity: int):
+        cmd = f"noteon {channel} {pitch} {velocity}\n"
+        self._send(cmd)
+
+    def send_note_off(self, channel: int, pitch: int):
+        cmd = f"noteoff {channel} {pitch} 0\n"
+        self._send(cmd)
+
+    def send_control_change(self, channel: int, control: int, value: int):
+        # Not implemented for Arduino serial version
+        pass
+
+    def close_port(self):
+        if self.ser:
+            self.ser.close()
+            print("Serial MIDI: Closed port")
+
+    def _send(self, cmd: str):
+        if self.ser:
+            try:
+                self.ser.write(cmd.encode("utf-8"))
+                print(f"Serial MIDI Sent: {cmd.strip()}")
+            except Exception as e:
+                print(f"Serial MIDI send failed: {e}")
+        else:
+            print(f"Serial MIDI (mock): {cmd.strip()}")
+
+
 class MidiError(Exception):
     """Raised when MIDI operations fail"""
 
@@ -45,29 +113,37 @@ class MidiError(Exception):
 class MidiManager:
     """Manages MIDI output and message sending"""
 
-    def __init__(self, port: int = 0, use_mock: bool = False):
+    def __init__(
+        self,
+        port: int = 0,
+        use_mock: bool = False,
+        use_serial: bool = True,
+        serial_port: str = "/dev/tty.usbmodem112101",
+        serial_baud: int = 31250,
+    ):
         self.port = port
-        self.use_mock = use_mock or not MIDI_AVAILABLE
+        self.use_mock = use_mock
+        self.use_serial = use_serial
+        self.serial_port = serial_port
+        self.serial_baud = serial_baud
         self.midi_out = None
         self._setup_midi()
 
     def _setup_midi(self) -> None:
-        """Initialize MIDI output"""
+        """Initialize MIDI or Serial output"""
         try:
-            if self.use_mock:
+            if self.use_serial:
+                self.midi_out = SerialMidiOut(self.serial_port, self.serial_baud)
+                self.midi_out.open_port()
+            elif self.use_mock or not MIDI_AVAILABLE:
                 self.midi_out = MockMidiOut()
+                self.midi_out.open_port(self.port)
             else:
                 self.midi_out = rtmidi.MidiOut()
-
-            self.midi_out.open_port(self.port)
-
-            if self.use_mock:
-                print(f"✓ MIDI mock output initialized on port {self.port}")
-            else:
+                self.midi_out.open_port(self.port)
                 print(f"✓ MIDI output initialized on port {self.port}")
-
         except Exception as e:
-            print(f"⚠️ MIDI setup failed: {e}")
+            print(f"⚠️ MIDI/Serial setup failed: {e}")
             print("Falling back to simulation mode")
             self.midi_out = MockMidiOut()
             self.midi_out.open_port(self.port)
@@ -75,49 +151,51 @@ class MidiManager:
     def send_note_on(self, channel: int, note: int, velocity: int) -> None:
         """Send MIDI note on message"""
         try:
-            # MIDI channels are 0-15, but often displayed as 1-16
-            channel = max(0, min(15, channel - 1))
-            note = max(0, min(127, note))
-            velocity = max(0, min(127, velocity))
-
-            message = [0x90 | channel, note, velocity]
-            self.midi_out.send_message(message)
-            print(f"🎵 MIDI Note ON: Ch{channel+1} Note{note} Vel{velocity}")
-
+            if self.use_serial:
+                self.midi_out.send_note_on(channel, note, velocity)
+            else:
+                # MIDI channels are 0-15, but often displayed as 1-16
+                channel = max(0, min(15, channel - 1))
+                note = max(0, min(127, note))
+                velocity = max(0, min(127, velocity))
+                message = [0x90 | channel, note, velocity]
+                self.midi_out.send_message(message)
+                print(f"🎵 MIDI Note ON: Ch{channel+1} Note{note} Vel{velocity}")
         except Exception as e:
             print(f"Error sending note on: {e}")
 
     def send_note_off(self, channel: int, note: int) -> None:
         """Send MIDI note off message"""
         try:
-            channel = max(0, min(15, channel - 1))
-            note = max(0, min(127, note))
-
-            message = [0x80 | channel, note, 0]
-            self.midi_out.send_message(message)
-            print(f"🎵 MIDI Note OFF: Ch{channel+1} Note{note}")
-
+            if self.use_serial:
+                self.midi_out.send_note_off(channel, note)
+            else:
+                channel = max(0, min(15, channel - 1))
+                note = max(0, min(127, note))
+                message = [0x80 | channel, note, 0]
+                self.midi_out.send_message(message)
+                print(f"🎵 MIDI Note OFF: Ch{channel+1} Note{note}")
         except Exception as e:
             print(f"Error sending note off: {e}")
 
     def send_control_change(self, channel: int, control: int, value: int) -> None:
         """Send MIDI control change message"""
         try:
-            channel = max(0, min(15, channel - 1))
-            control = max(0, min(127, control))
-            value = max(0, min(127, value))
-
-            message = [0xB0 | channel, control, value]
-            self.midi_out.send_message(message)
-            print(f"🎛️ MIDI CC: Ch{channel+1} CC{control}={value}")
-
+            if self.use_serial:
+                self.midi_out.send_control_change(channel, control, value)
+            else:
+                channel = max(0, min(15, channel - 1))
+                control = max(0, min(127, control))
+                value = max(0, min(127, value))
+                message = [0xB0 | channel, control, value]
+                self.midi_out.send_message(message)
+                print(f"🎛️ MIDI CC: Ch{channel+1} CC{control}={value}")
         except Exception as e:
             print(f"Error sending control change: {e}")
 
     def send_cue_message(self, cue: Dict[str, Any]) -> None:
         """Send MIDI message based on cue data"""
         cue_type = cue.get("type")
-
         if cue_type == "note_on":
             self.send_note_on(
                 cue.get("channel", 1), cue.get("note", 60), cue.get("velocity", 64)

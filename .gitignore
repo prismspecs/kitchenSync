@@ -106,6 +106,7 @@ celerybeat.pid
 .venv
 env/
 venv/
+# Ignore Python virtual environments
 ENV/
 env.bak/
 venv.bak/
