@@ -533,6 +533,7 @@ class CollaboratorPi:
         # --- Catchup Sync Mode ---
         if self.sync_mode == "catchup":
             # Only correct if deviation is above threshold
+            current_rate = self.video_player.get_playback_rate() or 1.0
             if abs(median_deviation) > self.deviation_threshold:
                 # If behind, speed up; if ahead, slow down
                 if median_deviation > 0:
@@ -541,11 +542,21 @@ class CollaboratorPi:
                     rate = 0.95
                 self.video_player.set_playback_rate(rate)
                 log_info(
-                    f"Catch-up mode: set rate to {rate} due to deviation {median_deviation:.3f}s",
+                    f"Catch-up mode: deviation={median_deviation:.3f}s, rate set to {rate:.2f}",
                     component="sync",
+                )
+                print(
+                    f"[CATCHUP] Deviation: {median_deviation:.3f}s | Playback rate: {rate:.2f}"
                 )
             else:
                 self.video_player.set_playback_rate(1.0)
+                log_info(
+                    f"Catch-up mode: deviation={median_deviation:.3f}s, rate reset to 1.00",
+                    component="sync",
+                )
+                print(
+                    f"[CATCHUP] Deviation: {median_deviation:.3f}s | Playback rate: 1.00"
+                )
             return
         # --- End Catchup Sync Mode ---
 
