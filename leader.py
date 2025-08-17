@@ -333,6 +333,8 @@ class LeaderPi:
             success = self.video_player.set_position(seconds)
             if success:
                 log_info(f"✓ Seek successful to {seconds}s", component="leader")
+                if seconds == 0:
+                    self.midi_scheduler.reset()
             else:
                 log_error("✗ Failed to seek video", component="leader")
         except ValueError:

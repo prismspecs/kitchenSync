@@ -240,6 +240,11 @@ class MidiManager:
 
 
 class MidiScheduler:
+    def reset(self):
+        """Reset triggered cues and loop count for fresh playback."""
+        self.triggered_cues.clear()
+        self.loop_count = 0
+        # Optionally reset other state if needed
     """Handles scheduled MIDI events"""
 
     def __init__(self, midi_manager: MidiManager):
@@ -265,9 +270,8 @@ class MidiScheduler:
         self.start_time = start_time
         self.video_duration = video_duration
         self.is_running = True
-        self.triggered_cues.clear()
-        self.loop_count = 0
-        print("🎵 Started MIDI playback")
+    self.reset()
+    print("🎵 Started MIDI playback")
 
     def stop_playback(self) -> None:
         """Stop MIDI playback"""
@@ -295,8 +299,8 @@ class MidiScheduler:
 
             # If we've entered a new loop, reset triggered cues
             if loop_number > self.loop_count:
+                self.reset()
                 self.loop_count = loop_number
-                self.triggered_cues.clear()
                 log_info(
                     f"MIDI schedule loop #{self.loop_count} started", component="midi"
                 )
