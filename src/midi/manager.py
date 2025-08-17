@@ -283,25 +283,25 @@ class MidiScheduler:
         playback_time = current_time
 
         # Handle looping if video duration is known and looping is enabled
-            if (
-                self.enable_looping
-                and self.video_duration is not None
-                and playback_time is not None
-                and playback_time >= self.video_duration
-            ):
-                # Calculate which loop we're in and the position within the loop
-                loop_number = int(playback_time // self.video_duration)
-                loop_time = playback_time % self.video_duration
+        if (
+            self.enable_looping
+            and self.video_duration is not None
+            and playback_time is not None
+            and playback_time >= self.video_duration
+        ):
+            # Calculate which loop we're in and the position within the loop
+            loop_number = int(playback_time // self.video_duration)
+            loop_time = playback_time % self.video_duration
 
-                # If we've entered a new loop, reset triggered cues
-                if loop_number > self.loop_count:
-                    self.loop_count = loop_number
-                    self.triggered_cues.clear()
-                    log_info(
-                        f"MIDI schedule loop #{self.loop_count} started", component="midi"
-                    )
+            # If we've entered a new loop, reset triggered cues
+            if loop_number > self.loop_count:
+                self.loop_count = loop_number
+                self.triggered_cues.clear()
+                log_info(
+                    f"MIDI schedule loop #{self.loop_count} started", component="midi"
+                )
 
-                playback_time = loop_time
+            playback_time = loop_time
 
         for cue in self.schedule:
             cue_time = cue.get("time", 0)
