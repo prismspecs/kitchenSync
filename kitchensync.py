@@ -18,10 +18,13 @@ import shutil
 # --- Upgrade logic: check for .zip release in upgrade folder ---
 def apply_upgrade_if_available():
     upgrade_dir = Path(__file__).parent / "upgrade"
+    print("[UPGRADE] Checking for upgrade zip...")
     if not upgrade_dir.exists():
+        print("[UPGRADE] No upgrade directory found.")
         return
     zip_files = list(upgrade_dir.glob("*.zip"))
     if not zip_files:
+        print("[UPGRADE] No upgrade zip found.")
         return
     zip_path = zip_files[0]
     log_path = "/tmp/kitchensync_startup.log"
