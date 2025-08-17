@@ -101,7 +101,7 @@ class SerialMidiOut:
             except Exception as e:
                 print(f"Serial MIDI send failed: {e}")
         else:
-            print(f"Serial MIDI (mock): {cmd.strip()}")
+            print(f"[MOCK] Would send to Arduino: {cmd.strip()}")
 
 
 class MidiError(Exception):
@@ -291,7 +291,7 @@ class MidiScheduler:
                 self.triggered_cues.add(cue_id)
                 loop_info = f" (Loop #{self.loop_count})" if self.loop_count > 0 else ""
                 print(
-                    f"⏰ MIDI triggered at {cue_time}s: {cue.get('type', 'unknown')}{loop_info}"
+                    f"⏰ Attempted MIDI at {cue_time}s: {cue.get('type', 'unknown')} Ch{cue.get('channel', 1)} Note{cue.get('note', 0)} Vel{cue.get('velocity', 0)}{loop_info}"
                 )
 
     def get_current_cues(
