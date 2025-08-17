@@ -16,10 +16,19 @@ import shutil
 
 
 # --- Upgrade logic: check for .zip release in upgrade folder ---
-def apply_upgrade_if_available():
-    upgrade_dir = Path(__file__).parent / "upgrade"
+def apply_upgrade_if_available(usb_mount_point=None):
+    # Prefer USB upgrade folder if available
+    upgrade_dir = None
+    if usb_mount_point:
+        candidate = Path(usb_mount_point) / "upgrade"
+        if candidate.exists():
+            upgrade_dir = candidate
+    if not upgrade_dir:
+        candidate = Path(__file__).parent / "upgrade"
+        if candidate.exists():
+            upgrade_dir = candidate
     print("[UPGRADE] Checking for upgrade zip...")
-    if not upgrade_dir.exists():
+    if not upgrade_dir:
         print("[UPGRADE] No upgrade directory found.")
         return
     zip_files = list(upgrade_dir.glob("*.zip"))
@@ -74,7 +83,23 @@ def apply_upgrade_if_available():
 
 
 # Run upgrade check before anything else
-apply_upgrade_if_available()
+# Try to find USB mount point (by looking for config ini)
+def find_usb_mount_point():
+    # Try to find config ini on USB
+    possible_mounts = ["/media/kitchensync", "/mnt", "/media"]
+    for base in possible_mounts:
+        base_path = Path(base)
+        if not base_path.exists():
+            continue
+        for sub in base_path.iterdir():
+            if sub.is_dir():
+                ini = sub / "kitchensync.ini"
+                if ini.exists():
+                    return str(sub)
+    return None
+
+
+apply_upgrade_if_available(find_usb_mount_point())
 # Emergency logging - capture startup issues
 try:
     with open("/tmp/kitchensync_startup.log", "w") as f:
