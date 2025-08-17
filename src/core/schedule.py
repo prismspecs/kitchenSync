@@ -8,14 +8,17 @@ import json
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 
+
 # Try to import mido for MIDI file support
 try:
     import mido
-
     MIDI_SUPPORT = True
 except ImportError:
     MIDI_SUPPORT = False
-    print("⚠️ mido not available - MIDI file support disabled")
+    import os
+    if not os.environ.get("KITCHENSYNC_MIDO_WARNED"):
+        print("⚠️ mido not available - MIDI file support disabled")
+        os.environ["KITCHENSYNC_MIDO_WARNED"] = "1"
 
 
 class ScheduleError(Exception):
