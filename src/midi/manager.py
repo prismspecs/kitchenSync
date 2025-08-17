@@ -6,6 +6,7 @@ Handles MIDI output and scheduling
 
 
 import time
+import glob
 from typing import List, Dict, Any, Set, Optional
 from core.logger import log_info, log_warning, log_error
 
@@ -25,27 +26,41 @@ try:
 except ImportError:
     SERIAL_AVAILABLE = False
 
+    """Serial output for Arduino MIDI controller"""
 
-class MockMidiOut:
-    """Mock MIDI output for testing/simulation"""
+    def __init__(self, port: str = None, baud: int = 31250, timeout: float = 1.0):
+        self.port = port or self._detect_port()
+        self.baud = baud
+        self.timeout = timeout
+        self.ser = None
 
-    def open_port(self, port: int = 0) -> None:
-        print(f"MIDI: Opened mock port {port}")
+    def _detect_port(self):
+        # Prefer /dev/ttyACM* or /dev/ttyUSB* (Linux, Pi)
+        acm_ports = glob.glob("/dev/ttyACM*")
+        usb_ports = glob.glob("/dev/ttyUSB*")
+        if acm_ports:
+            print(f"✓ Auto-detected Arduino port: {acm_ports[0]}")
+            return acm_ports[0]
+        elif usb_ports:
+            print(f"✓ Auto-detected Arduino port: {usb_ports[0]}")
+            return usb_ports[0]
+        else:
+            print("⚠️ No Arduino serial port detected, using default /dev/ttyACM0")
+            return "/dev/ttyACM0"
 
-    def send_message(self, message: List[int]) -> None:
-        print(f"MIDI: {message}")
+    def open_port(self, port: int = 0):
+        if not SERIAL_AVAILABLE:
+            print("pyserial not available, using mock serial")
+            self.ser = None
+            return
+        try:
+            self.ser = serial.Serial(self.port, self.baud, timeout=self.timeout)
+            time.sleep(2)  # Wait for Arduino to reset
+            print(f"✓ Serial MIDI output initialized on {self.port} @ {self.baud}")
+        except Exception as e:
+            print(f"⚠️ Serial MIDI setup failed: {e}")
+            self.ser = None
 
-    def close_port(self) -> None:
-        print("MIDI: Closed mock port")
-
-    def get_port_count(self) -> int:
-        return 1
-
-    def get_port_name(self, port: int) -> str:
-        return f"Mock MIDI Port {port}"
-
-
-class SerialMidiOut:
     """Serial output for Arduino MIDI controller"""
 
     def __init__(
