@@ -178,13 +178,7 @@ sudo systemctl enable kitchensync.service
    - Determines role from `is_leader` setting
    - Automatically starts `leader.py` or `collaborator.py`
 4. **System starts playing** synchronized videos with MIDI output
-### **Production Deployment Benefits**
-- ✅ **Zero manual configuration** required on each Pi
-- ✅ **Same installation** on every Pi - no per-device setup
-- ✅ **USB-drive deployment** - just prepare drives and plug in
-- ✅ **Automatic role detection** - no manual script selection
-- ✅ **Boot-time startup** - no manual intervention needed
-- ✅ **Easy reconfiguration** - just swap USB drives to change roles
+
 ## 🎮 Manual Operation
 ### Leader Pi
 ```bash
