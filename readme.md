@@ -1,5 +1,6 @@
 # KitchenSync - Synchronized Video Playback & MIDI Output System
-A modern, plug-and-play system for synchronized video playback and MIDI output across multiple Raspberry Pis. Features automatic USB drive detection, VLC-based video playback with drift correction, and **Arduino-based MIDI relay control** with JSON schedule support.
+A modern, plug-and-play system for synchronized video playback and MIDI output across multiple Raspberry Pis. Features automatic USB drive detection, VLC-based video playback with drift correction using filtered median sampling, and **Arduino-based MIDI relay control** with JSON schedule support.
+
 **🔄 SYSTEM STATUS: FULLY OPERATIONAL** - All major components working, MIDI system migrated to Arduino serial, comprehensive error handling implemented.
 ## 🚀 Quick Start
 ### 1. Install on All Pis (Identical Setup)
@@ -315,24 +316,7 @@ python3 leader.py --auto
 # Or use systemd service
 sudo systemctl start kitchensync.service
 ```
-## 🔄 Advanced Synchronization
-### VLC-Based Drift Correction
-KitchenSync uses advanced algorithms for maintaining perfect sync:
-**Median Deviation Filtering:**
-- Collects multiple sync measurements over time
-- Uses statistical median to filter network glitches
-- Only corrects when median deviation exceeds threshold
-- Prevents false corrections from temporary issues
-**Intelligent Correction Strategy:**
-- **Small deviations**: Seamless seeking without interruption
-- **Large deviations**: Temporary pause during correction
-- **Grace period**: Prevents immediate re-checking
-- **Configurable thresholds**: Tune for your network conditions
-**Technical Benefits:**
-- **Cross-Platform**: Works on Pi and desktop systems
-- **Precise Control**: Python VLC bindings for exact positioning
-- **Format Support**: Handles all modern video formats
-- **Robust Playback**: Mature VLC media engine
+
 ## 🎹 MIDI Output & Networking
 ### MIDI Message Types
 ```json
