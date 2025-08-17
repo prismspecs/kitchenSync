@@ -398,22 +398,22 @@ class CollaboratorPi:
             # Median calculation (same as below)
             samples = list(self.deviation_samples)
             sorted_samples = sorted(samples)
-                trim_count = max(1, len(sorted_samples) // 5)
-                if len(sorted_samples) > 2 * trim_count:
-                    trimmed = sorted_samples[trim_count:-trim_count]
-                else:
-                    trimmed = sorted_samples
-                if not trimmed:
-                    median_deviation = 0.0
-                elif len(trimmed) % 2 == 0:
-                    mid1 = trimmed[len(trimmed) // 2 - 1]
-                    mid2 = trimmed[len(trimmed) // 2]
-                    median_deviation = (mid1 + mid2) / 2.0
-                else:
-                    median_deviation = trimmed[len(trimmed) // 2]
-                print(
-                    f"[DEBUG_DEVIATION] Leader: {leader_time:.3f}s | Video: {video_position:.3f}s | Raw: {raw_deviation:.3f}s | Median: {median_deviation:.3f}s"
-                )
+            trim_count = max(1, len(sorted_samples) // 5)
+            if len(sorted_samples) > 2 * trim_count:
+                trimmed = sorted_samples[trim_count:-trim_count]
+            else:
+                trimmed = sorted_samples
+            if not trimmed:
+                median_deviation = 0.0
+            elif len(trimmed) % 2 == 0:
+                mid1 = trimmed[len(trimmed) // 2 - 1]
+                mid2 = trimmed[len(trimmed) // 2]
+                median_deviation = (mid1 + mid2) / 2.0
+            else:
+                median_deviation = trimmed[len(trimmed) // 2]
+            print(
+                f"[DEBUG_DEVIATION] Leader: {leader_time:.3f}s | Video: {video_position:.3f}s | Raw: {raw_deviation:.3f}s | Median: {median_deviation:.3f}s"
+            )
 
         # If NO_SYNC_AFTER_LOOP is enabled and a loop has occurred, block all corrections
         if self.no_sync_after_loop and self.no_sync_after_loop_active:
