@@ -26,15 +26,18 @@ def apply_upgrade_if_available():
     zip_path = zip_files[0]
     log_path = "/tmp/kitchensync_startup.log"
     try:
+        print(f"[UPGRADE] Found upgrade zip: {zip_path}")
         with open(log_path, "a") as f:
             f.write(f"\n[UPGRADE] Found upgrade zip: {zip_path}\n")
         # Extract to temp dir
+        print(f"[UPGRADE] Extracting zip to temporary directory...")
         temp_dir = Path("/tmp/kitchensync_upgrade")
         if temp_dir.exists():
             shutil.rmtree(temp_dir)
         temp_dir.mkdir(parents=True)
         with zipfile.ZipFile(zip_path, "r") as zip_ref:
             zip_ref.extractall(temp_dir)
+        print(f"[UPGRADE] Replacing contents of {Path.home() / 'kitchenSync'}...")
         # Replace contents of ~/kitchenSync
         target_dir = Path.home() / "kitchenSync"
         # Remove everything in target_dir except upgrade folder and log
@@ -52,17 +55,19 @@ def apply_upgrade_if_available():
                 shutil.copytree(item, dest)
             else:
                 shutil.copy2(item, dest)
+        print(f"[UPGRADE] Upgrade applied from {zip_path}")
         with open(log_path, "a") as f:
             f.write(f"[UPGRADE] Upgrade applied from {zip_path}\n")
         # Delete zip and temp dir
         zip_path.unlink()
         shutil.rmtree(temp_dir)
+        print(f"[UPGRADE] Upgrade zip deleted and temp cleaned up")
         with open(log_path, "a") as f:
             f.write(f"[UPGRADE] Upgrade zip deleted and temp cleaned up\n")
     except Exception as e:
+        print(f"[UPGRADE] Upgrade failed: {e}", file=sys.stderr)
         with open(log_path, "a") as f:
             f.write(f"[UPGRADE] Upgrade failed: {e}\n")
-        print(f"[UPGRADE] Upgrade failed: {e}", file=sys.stderr)
 
 
 # Run upgrade check before anything else
