@@ -238,6 +238,19 @@ class LeaderPi:
         }
         self.command_manager.send_command(start_command)
 
+        # --- MIDI SCHEDULER CUE PROCESSING LOOP ---
+        def midi_cue_loop():
+            while self.system_state.is_running:
+                # Use video position if available, else wall time
+                try:
+                    current_time = self.video_player.get_position()
+                except Exception:
+                    current_time = time.time() - self.system_state.start_time
+                self.midi_scheduler.process_cues(current_time)
+                time.sleep(0.05)  # 20Hz cue check
+
+        threading.Thread(target=midi_cue_loop, daemon=True).start()
+
         log_info("System started successfully!", component="leader")
         paths = log_file_paths()
         log_info(
