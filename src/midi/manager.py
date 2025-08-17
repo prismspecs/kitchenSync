@@ -18,14 +18,35 @@ try:
 except ImportError:
     MIDI_AVAILABLE = False
 
-# Try to import pyserial
-try:
-    import serial
 
-    SERIAL_AVAILABLE = True
-except ImportError:
-    SERIAL_AVAILABLE = False
+__all__ = [
+    "MidiManager",
+    "MidiScheduler",
+    "MidiError",
+    "MockMidiOut",
+]
 
+
+class MockMidiOut:
+    """Mock MIDI output for testing/simulation"""
+
+    def open_port(self, port: int = 0) -> None:
+        print(f"MIDI: Opened mock port {port}")
+
+    def send_message(self, message: List[int]) -> None:
+        print(f"MIDI: {message}")
+
+    def close_port(self) -> None:
+        print("MIDI: Closed mock port")
+
+    def get_port_count(self) -> int:
+        return 1
+
+    def get_port_name(self, port: int) -> str:
+        return f"Mock MIDI Port {port}"
+
+
+class SerialMidiOut:
     """Serial output for Arduino MIDI controller"""
 
     def __init__(self, port: str = None, baud: int = 31250, timeout: float = 1.0):
@@ -47,32 +68,6 @@ except ImportError:
         else:
             print("⚠️ No Arduino serial port detected, using default /dev/ttyACM0")
             return "/dev/ttyACM0"
-
-    def open_port(self, port: int = 0):
-        if not SERIAL_AVAILABLE:
-            print("pyserial not available, using mock serial")
-            self.ser = None
-            return
-        try:
-            self.ser = serial.Serial(self.port, self.baud, timeout=self.timeout)
-            time.sleep(2)  # Wait for Arduino to reset
-            print(f"✓ Serial MIDI output initialized on {self.port} @ {self.baud}")
-        except Exception as e:
-            print(f"⚠️ Serial MIDI setup failed: {e}")
-            self.ser = None
-
-    """Serial output for Arduino MIDI controller"""
-
-    def __init__(
-        self,
-        port: str = "/dev/tty.usbmodem112101",
-        baud: int = 31250,
-        timeout: float = 1.0,
-    ):
-        self.port = port
-        self.baud = baud
-        self.timeout = timeout
-        self.ser = None
 
     def open_port(self, port: int = 0):
         if not SERIAL_AVAILABLE:
