@@ -380,40 +380,68 @@ class CollaboratorPi:
         if not self.video_player.is_playing or not self.video_start_time:
             return
 
-        # Debug deviation mode: print raw and median deviation between leader and video (does not block sync logic)
+        # Get current video position
         video_position = self.video_player.get_position()
-        if video_position is not None:
-            raw_deviation = video_position - leader_time
-            # Calculate expected position with latency compensation
-            duration = self.video_player.get_duration()
-            expected_position = leader_time + self.latency_compensation
-            if duration and duration > 0:
-                expected_position = expected_position % duration
-            deviation = video_position - expected_position
-            # Loop-aware deviation calculation: find shortest path on timeline circle
-            if duration and duration > 0:
-                candidates = [deviation, deviation + duration, deviation - duration]
-                deviation = min(candidates, key=abs)
-            deviation = round(deviation, 4)
-            # Median calculation (same as below)
-            samples = list(self.deviation_samples)
-            sorted_samples = sorted(samples)
-            trim_count = max(1, len(sorted_samples) // 5)
-            if len(sorted_samples) > 2 * trim_count:
-                trimmed = sorted_samples[trim_count:-trim_count]
-            else:
-                trimmed = sorted_samples
-            if not trimmed:
-                median_deviation = 0.0
-            elif len(trimmed) % 2 == 0:
-                mid1 = trimmed[len(trimmed) // 2 - 1]
-                mid2 = trimmed[len(trimmed) // 2]
-                median_deviation = (mid1 + mid2) / 2.0
-            else:
-                median_deviation = trimmed[len(trimmed) // 2]
+        if video_position is None:
+            log_warning("Could not get video position for sync check", component="sync")
+            return
+
+        # Calculate expected position with latency compensation
+        duration = self.video_player.get_duration()
+        expected_position = leader_time + self.latency_compensation
+        if duration and duration > 0:
+            expected_position = expected_position % duration
+
+        deviation = video_position - expected_position
+        # Loop-aware deviation calculation: find shortest path on timeline circle
+        if duration and duration > 0:
+            candidates = [deviation, deviation + duration, deviation - duration]
+            deviation = min(candidates, key=abs)
+        deviation = round(deviation, 4)
+
+        # Always collect samples for analysis
+        self.deviation_samples.append(deviation)
+
+        # Calculate median with outlier filtering (trimmed mean)
+        sorted_samples = sorted(self.deviation_samples)
+        trim_count = max(1, len(sorted_samples) // 5)
+        if len(sorted_samples) > 2 * trim_count:
+            trimmed = sorted_samples[trim_count:-trim_count]
+        else:
+            trimmed = sorted_samples
+        if not trimmed:
+            median_deviation = 0.0
+        elif len(trimmed) % 2 == 0:
+            mid1 = trimmed[len(trimmed) // 2 - 1]
+            mid2 = trimmed[len(trimmed) // 2]
+            median_deviation = (mid1 + mid2) / 2.0
+        else:
+            median_deviation = trimmed[len(trimmed) // 2]
+
+        # --- Catchup Sync Mode ---
+        if self.sync_mode == "catchup":
+            # Print deviation, median, and playback rate
+            current_rate = self.video_player.get_playback_rate() or 1.0
             print(
-                f"[DEBUG_DEVIATION] Leader: {leader_time:.3f}s | Video: {video_position:.3f}s | Raw: {raw_deviation:.3f}s | Median: {median_deviation:.3f}s"
+                f"[CATCHUP] Leader: {leader_time:.3f}s | Video: {video_position:.3f}s | Deviation: {deviation:.3f}s | Median: {median_deviation:.3f}s | Playback rate: {current_rate:.2f}"
             )
+            if abs(median_deviation) > self.deviation_threshold:
+                if median_deviation > 0:
+                    rate = 1.05
+                else:
+                    rate = 0.95
+                self.video_player.set_playback_rate(rate)
+                log_info(
+                    f"Catch-up mode: deviation={median_deviation:.3f}s, rate set to {rate:.2f}",
+                    component="sync",
+                )
+            else:
+                self.video_player.set_playback_rate(1.0)
+                log_info(
+                    f"Catch-up mode: deviation={median_deviation:.3f}s, rate reset to 1.00",
+                    component="sync",
+                )
+            return
 
         # If NO_SYNC_AFTER_LOOP is enabled and a loop has occurred, block all corrections
         if self.no_sync_after_loop and self.no_sync_after_loop_active:
