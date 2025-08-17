@@ -293,6 +293,7 @@ class MidiScheduler:
         # Detect video loop by checking if position jumps backwards
         if (
             self.previous_playback_time is not None
+            and isinstance(self.previous_playback_time, (int, float))
             and playback_time < self.previous_playback_time
         ):
             self.reset()
