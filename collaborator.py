@@ -380,24 +380,24 @@ class CollaboratorPi:
         if not self.video_player.is_playing or not self.video_start_time:
             return
 
-            # Debug deviation mode: print raw and median deviation between leader and video (does not block sync logic)
-            video_position = self.video_player.get_position()
-            if video_position is not None:
-                raw_deviation = video_position - leader_time
-                # Calculate expected position with latency compensation
-                duration = self.video_player.get_duration()
-                expected_position = leader_time + self.latency_compensation
-                if duration and duration > 0:
-                    expected_position = expected_position % duration
-                deviation = video_position - expected_position
-                # Loop-aware deviation calculation: find shortest path on timeline circle
-                if duration and duration > 0:
-                    candidates = [deviation, deviation + duration, deviation - duration]
-                    deviation = min(candidates, key=abs)
-                deviation = round(deviation, 4)
-                # Median calculation (same as below)
-                samples = list(self.deviation_samples)
-                sorted_samples = sorted(samples)
+        # Debug deviation mode: print raw and median deviation between leader and video (does not block sync logic)
+        video_position = self.video_player.get_position()
+        if video_position is not None:
+            raw_deviation = video_position - leader_time
+            # Calculate expected position with latency compensation
+            duration = self.video_player.get_duration()
+            expected_position = leader_time + self.latency_compensation
+            if duration and duration > 0:
+                expected_position = expected_position % duration
+            deviation = video_position - expected_position
+            # Loop-aware deviation calculation: find shortest path on timeline circle
+            if duration and duration > 0:
+                candidates = [deviation, deviation + duration, deviation - duration]
+                deviation = min(candidates, key=abs)
+            deviation = round(deviation, 4)
+            # Median calculation (same as below)
+            samples = list(self.deviation_samples)
+            sorted_samples = sorted(samples)
                 trim_count = max(1, len(sorted_samples) // 5)
                 if len(sorted_samples) > 2 * trim_count:
                     trimmed = sorted_samples[trim_count:-trim_count]
