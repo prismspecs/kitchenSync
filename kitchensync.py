@@ -5,11 +5,68 @@ Clean, modular implementation using the new architecture
 """
 
 import os
+
+import os
 import sys
 import subprocess
 import time
 from pathlib import Path
+import zipfile
+import shutil
 
+
+# --- Upgrade logic: check for .zip release in upgrade folder ---
+def apply_upgrade_if_available():
+    upgrade_dir = Path(__file__).parent / "upgrade"
+    if not upgrade_dir.exists():
+        return
+    zip_files = list(upgrade_dir.glob("*.zip"))
+    if not zip_files:
+        return
+    zip_path = zip_files[0]
+    log_path = "/tmp/kitchensync_startup.log"
+    try:
+        with open(log_path, "a") as f:
+            f.write(f"\n[UPGRADE] Found upgrade zip: {zip_path}\n")
+        # Extract to temp dir
+        temp_dir = Path("/tmp/kitchensync_upgrade")
+        if temp_dir.exists():
+            shutil.rmtree(temp_dir)
+        temp_dir.mkdir(parents=True)
+        with zipfile.ZipFile(zip_path, "r") as zip_ref:
+            zip_ref.extractall(temp_dir)
+        # Replace contents of ~/kitchenSync
+        target_dir = Path.home() / "kitchenSync"
+        # Remove everything in target_dir except upgrade folder and log
+        for item in target_dir.iterdir():
+            if item.name in ["upgrade", "kitchensync_startup.log"]:
+                continue
+            if item.is_dir():
+                shutil.rmtree(item)
+            else:
+                item.unlink()
+        # Copy new files in
+        for item in temp_dir.iterdir():
+            dest = target_dir / item.name
+            if item.is_dir():
+                shutil.copytree(item, dest)
+            else:
+                shutil.copy2(item, dest)
+        with open(log_path, "a") as f:
+            f.write(f"[UPGRADE] Upgrade applied from {zip_path}\n")
+        # Delete zip and temp dir
+        zip_path.unlink()
+        shutil.rmtree(temp_dir)
+        with open(log_path, "a") as f:
+            f.write(f"[UPGRADE] Upgrade zip deleted and temp cleaned up\n")
+    except Exception as e:
+        with open(log_path, "a") as f:
+            f.write(f"[UPGRADE] Upgrade failed: {e}\n")
+        print(f"[UPGRADE] Upgrade failed: {e}", file=sys.stderr)
+
+
+# Run upgrade check before anything else
+apply_upgrade_if_available()
 # Emergency logging - capture startup issues
 try:
     with open("/tmp/kitchensync_startup.log", "w") as f:
