@@ -248,57 +248,52 @@ Create schedules using familiar music software:
 
 ## Hardware Requirements
 
-### MIDI Relay Box Specifications
+### Arduino MIDI Controller Specifications
 
-**Your specific MIDI relay box behavior:**
+**Current Arduino-based MIDI relay control system:**
 
-- **8 Outputs**: Controlled by MIDI notes 60-67 (C4 to G4)
-- **Note Mapping**: 
-  - Note 60 (C4) = Output 1
-  - Note 61 (C#4) = Output 2  
-  - Note 62 (D4) = Output 3
-  - Note 63 (D#4) = Output 4
-  - Note 64 (E4) = Output 5
-  - Note 65 (F4) = Output 6
-  - Note 66 (F#4) = Output 7
-  - Note 67 (G4) = Output 8
-- **Channel Independence**: MIDI channel is ignored (any channel 1-16 works)
-- **Power Control**: Velocity controls output power (0=OFF, 1-127=power level)
-- **Auto-Timeout**: Outputs automatically turn OFF after 5 seconds if no new messages
-- **Message Types**: Responds to Note On/Off only (not Control Change)
-- **Output Type**: Isolated dry contact closures (MOSFET-based, not mechanical relays)
+- **Arduino Board**: Uno, Nano, or compatible board with USB connection
+- **Output Pins**: Configurable digital outputs for relay control
+- **Communication**: USB serial communication (9600 baud)
+- **Protocol**: Simple text-based commands over serial
+- **Auto-Detection**: System automatically detects Arduino on `/dev/ttyACM*` or `/dev/ttyUSB*`
+- **Fallback**: Mock MIDI output when hardware not available
+
+### Arduino Sketch Features
+
+The system includes a custom Arduino sketch (`arduino/midi_controller/midi_controller.ino`):
+
+- **Serial Command Parsing**: Processes MIDI-like messages from Python
+- **Relay Output Control**: Configurable pin assignments for relay outputs
+- **Error Handling**: Comprehensive error handling and status reporting
+- **No External Libraries**: Uses only standard Arduino libraries
 
 ### Connection Setup
 
 ```
-[Raspberry Pi] → [USB MIDI Interface] → [5-pin DIN MIDI Cable] → [MIDI Relay Box] → [External Devices]
+[Raspberry Pi] → [USB Cable] → [Arduino Board] → [Relay Module] → [External Devices]
 ```
+
+**Simplified Connection:**
+- **USB Connection**: Standard USB cable between Pi and Arduino
+- **No External MIDI Interface**: Direct serial communication
+- **Automatic Detection**: System finds Arduino automatically
+- **Plug-and-Play**: Just connect USB cable and power Arduino
 
 ## Important Hardware Behavior
 
-### 5-Second Auto-Timeout
+### Arduino Relay Control
 
-**Critical**: Your MIDI box automatically turns OFF any output after 5 seconds if no new MIDI message is received for that note.
+**Current Arduino implementation provides:**
 
-**Implications for scheduling:**
-
-1. **Short events** (< 5s): Schedule normally with Note On/Off pairs
-2. **Long events** (> 5s): Need to send "keepalive" Note On messages every 4 seconds
-3. **Continuous operation**: Send Note On every 4s to maintain output
-
-**Example for long event:**
-```json
-[
-  {"time": 10.0, "type": "note_on", "note": 60, "velocity": 127, "description": "Start long event"},
-  {"time": 14.0, "type": "note_on", "note": 60, "velocity": 127, "description": "Keepalive 1"},
-  {"time": 18.0, "type": "note_on", "note": 60, "velocity": 127, "description": "Keepalive 2"},
-  {"time": 22.0, "type": "note_off", "note": 60, "velocity": 0, "description": "End long event"}
-]
-```
+1. **Direct Control**: No auto-timeout - relays stay on/off as commanded
+2. **Simple Protocol**: `noteon <channel> <note> <velocity>` and `noteoff <channel> <note> 0`
+3. **Configurable Pins**: Arduino sketch can be modified for different pin assignments
+4. **Reliable Operation**: No keepalive messages needed
 
 ### Power Control via Velocity
 
-Unlike traditional relays, your box supports **variable power output**:
+The Arduino system supports **variable power output**:
 
 - **Velocity 127**: Full power output  
 - **Velocity 100**: ~78% power output
@@ -306,7 +301,7 @@ Unlike traditional relays, your box supports **variable power output**:
 - **Velocity 32**: ~25% power output
 - **Velocity 0**: OFF (same as Note Off)
 
-This allows **dimming control** for compatible devices.
+This allows **dimming control** for compatible devices and PWM output on Arduino pins.
 
 ### Multiple Output Control
 
@@ -390,12 +385,13 @@ Debug overlay shows:
 
 ## Troubleshooting
 
-### No MIDI Output
+### No Arduino MIDI Output
 
-1. Check MIDI port configuration in `kitchensync.ini`
-2. Verify USB MIDI interface is connected
+1. Check Arduino USB connection and power
+2. Verify Arduino sketch is uploaded and running
 3. Check `dmesg` for USB device detection
-4. Test with `amidi -l` to list MIDI ports
+4. Test with `ls /dev/ttyACM* /dev/ttyUSB*` to list Arduino ports
+5. Ensure user has `dialout` group permissions: `sudo usermod -a -G dialout $USER`
 
 ### Schedule Not Loading
 
@@ -411,16 +407,22 @@ Debug overlay shows:
 3. Check video file performance/encoding
 4. Monitor debug overlay for timing drift
 
-### MIDI Hardware Testing
+### Arduino Hardware Testing
 
-Test MIDI output manually:
+Test Arduino connection manually:
 
 ```bash
-# Send Note On to channel 1
-amidi -p hw:1,0 --send-hex="90 3C 7F"
+# Check if Arduino is detected
+ls /dev/ttyACM* /dev/ttyUSB* 2>/dev/null || echo "No Arduino detected"
 
-# Send Note Off to channel 1  
-amidi -p hw:1,0 --send-hex="80 3C 00"
+# Check USB connections
+lsusb | grep -i arduino
+
+# Test serial communication
+python3 -c "from src.midi.manager import SerialMidiOut; s = SerialMidiOut(); print(f'Arduino port: {s.port}')"
+
+# Test MIDI system without hardware
+python3 -c "from src.midi.manager import MidiManager; m = MidiManager(use_mock=True); print('Mock MIDI system OK')"
 ```
 
 ## Example Workflows

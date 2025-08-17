@@ -223,5 +223,5 @@ KitchenSync builds on these concepts while adding VLC-based playback, Arduino MI
 
 ## 📚 Documentation
 
-- **[MIDI Relay Control Guide](docs/MIDI_RELAY_CONTROL.md)** - Complete guide for relay control via MIDI
+- **[MIDI Relay Control Guide](docs/MIDI_RELAY_CONTROL.md)** - Complete guide for Arduino MIDI relay control
 - **[Troubleshooting](#troubleshooting)** - Common issues and solutions
