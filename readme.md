@@ -8,6 +8,14 @@ A modern, plug-and-play system for synchronized video playback and MIDI output a
 - **[Setup Guide](#installation)** - Installation and configuration  
 - **[Troubleshooting](#troubleshooting)** - Common issues and solutions
 
+## Install
+```sh
+git clone https://github.com/prismspecs/kitchenSync.git
+cd kitchenSync
+./setup.sh
+sudo reboot
+```
+
 ## Download a test video
 ```sh
 wget https://download.blender.org/demo/movies/BBB/bbb_sunflower_1080p_30fps_normal.mp4.zip

@@ -380,8 +380,27 @@ def create_command_interface(leader: LeaderPi) -> CommandInterface:
     interface.register_command(
         "fullscreen", leader.force_fullscreen, "Force fullscreen mode"
     )
+    # Register handler for empty input (seek to zero and reset cues)
+    interface.register_command(
+        "seek_to_zero",
+        leader.seek_to_zero_and_reset_cues,
+        "Seek playback to zero and reset cues (press Enter with no input)",
+    )
 
     return interface
+
+    def seek_to_zero_and_reset_cues(self) -> None:
+        """Seek playback to zero and reset cues."""
+        if not self.video_player:
+            log_warning("No video player available", component="leader")
+            return
+        success = self.video_player.set_position(0)
+        if success:
+            log_info("✓ Seeked playback to zero.", component="leader")
+            self.midi_scheduler.reset()
+            log_info("✓ Cues reset.", component="leader")
+        else:
+            log_error("✗ Failed to seek playback to zero.", component="leader")
 
 
 def main():

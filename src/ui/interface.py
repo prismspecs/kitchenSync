@@ -39,6 +39,13 @@ class CommandInterface:
                     user_input = input(f"\n{self.app_name.lower()}> ").strip()
 
                     if not user_input:
+                        # Empty input: seek to zero and reset cues if handler exists
+                        if "seek_to_zero" in self.commands:
+                            try:
+                                self.commands["seek_to_zero"]["handler"]()
+                                print("✓ Playback seeked to zero and cues reset.")
+                            except Exception as e:
+                                print(f"Error seeking to zero/resetting cues: {e}")
                         continue
 
                     # Split command and arguments
