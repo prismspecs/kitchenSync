@@ -240,12 +240,6 @@ class MidiManager:
 
 
 class MidiScheduler:
-    def reset(self):
-        """Reset triggered cues for fresh playback or loop."""
-        self.triggered_cues.clear()
-        self.loop_count = 0
-        # Optionally reset other state if needed
-
     """Handles scheduled MIDI events"""
 
     def __init__(self, midi_manager: MidiManager):
@@ -257,6 +251,13 @@ class MidiScheduler:
         self.video_duration: Optional[float] = None
         self.loop_count = 0
         self.enable_looping = True
+        self.previous_playback_time = None  # Track previous position for loop detection
+
+    def reset(self):
+        """Reset triggered cues for fresh playback or loop."""
+        self.triggered_cues.clear()
+        self.loop_count = 0
+        # Optionally reset other state if needed
 
     def load_schedule(self, schedule: List[Dict[str, Any]]) -> None:
         """Load MIDI schedule"""
@@ -272,6 +273,7 @@ class MidiScheduler:
         self.video_duration = video_duration
         self.is_running = True
         self.loop_count = 0
+        self.previous_playback_time = None
         self.reset()
         print("🎵 Started MIDI playback")
 
@@ -287,6 +289,20 @@ class MidiScheduler:
             return
 
         playback_time = current_time
+
+        # Detect video loop by checking if position jumps backwards
+        if (
+            self.previous_playback_time is not None
+            and playback_time < self.previous_playback_time
+        ):
+            self.reset()
+            self.loop_count += 1
+            log_info(
+                f"MIDI schedule loop (detected by position jump) #{self.loop_count} started",
+                component="midi",
+            )
+
+        self.previous_playback_time = playback_time
 
         # Handle looping if video duration is known and looping is enabled
         if (
