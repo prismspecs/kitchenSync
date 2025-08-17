@@ -67,9 +67,9 @@ class LeaderPi:
         )
         self.command_manager = CommandManager()
 
-        # Initialize MIDI (for local MIDI if needed)
-        self.midi_manager = MidiManager(use_mock=True)
-        self.midi_scheduler = MidiScheduler(self.midi_manager)
+    # Initialize MIDI (for local MIDI if needed)
+    self.midi_manager = MidiManager(use_mock=False, use_serial=True, serial_port=None)
+    self.midi_scheduler = MidiScheduler(self.midi_manager)
 
         # Find video file before creating debug overlay
         self.video_path = self.video_manager.find_video_file()
