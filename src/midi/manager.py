@@ -245,6 +245,7 @@ class MidiScheduler:
         self.triggered_cues.clear()
         self.loop_count = 0
         # Optionally reset other state if needed
+
     """Handles scheduled MIDI events"""
 
     def __init__(self, midi_manager: MidiManager):
@@ -270,6 +271,7 @@ class MidiScheduler:
         self.start_time = start_time
         self.video_duration = video_duration
         self.is_running = True
+
     self.reset()
     print("🎵 Started MIDI playback")
 
