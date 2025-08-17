@@ -271,9 +271,8 @@ class MidiScheduler:
         self.start_time = start_time
         self.video_duration = video_duration
         self.is_running = True
-
-    self.reset()
-    print("🎵 Started MIDI playback")
+        self.reset()
+        print("🎵 Started MIDI playback")
 
     def stop_playback(self) -> None:
         """Stop MIDI playback"""
