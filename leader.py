@@ -147,7 +147,6 @@ class LeaderPi:
                 else:
                     # Position VLC window on the left side after it starts (debug mode only)
                     if self.config.debug_mode:
-                        import threading
 
                         def position_vlc_window():
                             time.sleep(1)  # Wait for VLC window to appear first
