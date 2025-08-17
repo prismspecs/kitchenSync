@@ -8,7 +8,7 @@ mido>=1.2.10
 python-vlc>=3.0.0
 
 # Pygame for debug overlay graphics (optional)
-pygame>=2.0.0
+
 
 # DBus support (optional, for legacy compatibility)
 dbus-python>=1.2.0
