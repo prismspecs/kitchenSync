@@ -4,6 +4,8 @@
 
 KitchenSync is a modern, production-ready system for synchronized video playback and MIDI output across multiple Raspberry Pis. The system features plug-and-play USB drive configuration, automatic role detection, VLC-based video playback with advanced drift correction, and systemd auto-start capabilities. One Pi acts as the leader, broadcasting synchronized time via UDP and coordinating the entire system, while collaborator Pis receive time sync and execute precisely timed MIDI events. The system supports different videos per Pi, automatic USB drive detection, and professional deployment workflows.
 
+**🔄 SYSTEM STATUS: FULLY OPERATIONAL** - All major components working, MIDI system migrated to Arduino serial, comprehensive error handling implemented.
+
 I am developing this on a separate computer than the one on which it will run. Commands given to the system will be through SSH (for development).
 
 ## Technical Stack
@@ -11,9 +13,9 @@ I am developing this on a separate computer than the one on which it will run. C
 - **Language:** Python 3 (system-wide installation, no virtual environment)
 - **Media Player:** VLC with Python bindings (consolidated approach for both leader and collaborator)
 - **Audio Support:** Full audio track synchronization with configurable output (HDMI/headphone jack)
-- **MIDI Library:** python-rtmidi for USB MIDI interface communication
+- **MIDI System:** **NEW** - Arduino serial-based MIDI controller with automatic port detection
 - **Networking:** UDP broadcast for time sync and control commands
-- **Hardware:** Raspberry Pi 4 (recommended) + USB MIDI interfaces
+- **Hardware:** Raspberry Pi 4 (recommended) + Arduino MIDI controller via USB serial
 - **Auto-Start:** systemd service for boot-time initialization
 - **Configuration:** USB-based .ini files for automatic role detection
 - **Sync Method:** Advanced median filtering with intelligent correction algorithms
@@ -35,6 +37,7 @@ I am developing this on a separate computer than the one on which it will run. C
 - Subprocess management for launching appropriate mode
 - Comprehensive error handling and logging
 - Systemd service integration
+- **NEW**: Automatic upgrade system from USB drives
 
 **leader.py** - Leader Pi coordinator
 
@@ -44,12 +47,13 @@ I am developing this on a separate computer than the one on which it will run. C
 - Interactive user interface with schedule editor
 - System control commands (start/stop/status)
 - Auto-start mode for production deployment
+- **NEW**: Enhanced MIDI scheduling with loop detection
 
 **collaborator.py** - Collaborator Pi worker
 
 - Time sync reception and drift correction
 - Python VLC-based synchronized video playback (same method as leader)
-- MIDI output via USB interfaces
+- **NEW**: Arduino serial MIDI output via USB
 - Advanced median filtering for sync accuracy
 - Automatic leader discovery and registration
 - Heartbeat status reporting
@@ -84,6 +88,16 @@ I am developing this on a separate computer than the one on which it will run. C
 - Intelligent video file selection with priority ordering
 - Configuration file parsing from USB drives
 - Graceful handling of multiple drives and file conflicts
+
+**NEW: Arduino Serial MIDI System**
+
+- **Hardware**: Arduino-based MIDI controller connected via USB serial
+- **Port Detection**: Automatic detection of Arduino ports (`/dev/ttyACM*`, `/dev/ttyUSB*`)
+- **Communication**: Serial protocol with commands like `noteon <channel> <note> <velocity>`
+- **Fallback**: Mock MIDI output when hardware not available
+- **Loop Detection**: Intelligent loop detection for synchronized MIDI playback
+- **Error Handling**: Comprehensive error handling with graceful fallbacks
+- **Serial Settings**: Configurable baud rate (default: 9600 for Arduino compatibility)
 
 **Video and Audio Synchronization Technology**
 
@@ -136,6 +150,10 @@ I am developing this on a separate computer than the one on which it will run. C
 - ✅ Interactive schedule editor and system control interface
 - ✅ Production-ready deployment workflow
 - ✅ Consolidated VLC approach - both leader and collaborator use identical Python VLC method
+- ✅ **NEW**: Arduino serial MIDI system with automatic port detection
+- ✅ **NEW**: Enhanced MIDI scheduling with loop detection and error handling
+- ✅ **NEW**: Automatic upgrade system from USB drives
+- ✅ **NEW**: Comprehensive null safety in MIDI system for graceful shutdown
 
 ### Technical Achievements
 
@@ -149,6 +167,10 @@ I am developing this on a separate computer than the one on which it will run. C
 - **Raspberry Pi OS Bookworm**: Full compatibility with latest Pi OS
 - **Simplified Architecture**: Single VLC playback method eliminates complexity and debug/production differences
 - **Configuration Consistency**: Default values in code always match INI file values for reliable fallback behavior
+- **NEW: Arduino MIDI Integration**: Serial-based MIDI control with automatic hardware detection
+- **NEW: Robust Error Handling**: Comprehensive null safety and graceful shutdown in MIDI system
+- **NEW: Auto-Upgrade System**: Seamless system updates from USB drives
+- **NEW: Enhanced Loop Detection**: Intelligent MIDI loop detection for synchronized playback
 
 ### Performance Characteristics
 
@@ -165,9 +187,18 @@ I am developing this on a separate computer than the one on which it will run. C
 
 - Raspberry Pi 4 (recommended for 4K video support)
 - Raspberry Pi OS Bookworm (latest)
-- USB MIDI interfaces (class-compliant devices)
+- **NEW**: Arduino board (Uno, Nano, or similar) with USB connection
+- **NEW**: Custom Arduino sketch for MIDI control (included in `arduino/` directory)
 - Network connectivity (Gigabit wired recommended)
 - USB drives for configuration and video content
+
+### Arduino Setup Requirements
+
+- **Hardware**: Arduino Uno, Nano, or compatible board
+- **USB Connection**: Standard USB cable for serial communication
+- **Sketch**: Custom MIDI control sketch (see `arduino/midi_controller/`)
+- **Power**: USB-powered or external power supply
+- **Port Detection**: System automatically detects Arduino on `/dev/ttyACM*` or `/dev/ttyUSB*`
 
 ### Installation Process
 
@@ -187,6 +218,40 @@ I am developing this on a separate computer than the one on which it will run. C
 - **Real-Time Control**: Interactive interface for live system management
 - **Status Monitoring**: Comprehensive system status and Pi health reporting
 - **Content Management**: USB-based video and configuration deployment
+
+## Current MIDI System Architecture
+
+### Arduino Serial MIDI Controller
+
+The system now uses an Arduino-based MIDI controller connected via USB serial instead of traditional USB MIDI interfaces.
+
+**Hardware Setup**
+- Arduino board (Uno, Nano, or similar) with USB connection
+- Custom Arduino sketch for MIDI control
+- USB serial connection to Raspberry Pi
+
+**Communication Protocol**
+- **Serial Commands**: Simple text-based protocol over USB serial
+- **Note On**: `noteon <channel> <note> <velocity>`
+- **Note Off**: `noteoff <channel> <note> 0`
+- **Baud Rate**: 9600 (configurable for Arduino compatibility)
+
+**Automatic Detection**
+- **Port Scanning**: Automatically detects Arduino ports (`/dev/ttyACM*`, `/dev/ttyUSB*`)
+- **Fallback**: Uses mock MIDI output when hardware not available
+- **Error Handling**: Graceful fallback to simulation mode
+
+**MIDI Scheduler Features**
+- **Loop Detection**: Intelligent detection of video loops for synchronized MIDI
+- **Cue Management**: Tracks triggered cues to prevent duplicate execution
+- **Time Synchronization**: Precise timing based on video position or wall clock
+- **Error Safety**: Comprehensive null checks and graceful error handling
+
+**Benefits of New System**
+- **Cost Effective**: Arduino boards are inexpensive and widely available
+- **Reliable**: Serial communication is more stable than USB MIDI
+- **Configurable**: Easy to modify Arduino code for custom MIDI behavior
+- **Debugging**: Simple text protocol for easy troubleshooting
 
 ## Audio Configuration
 
@@ -219,6 +284,37 @@ audio_output = hdmi  # or "headphone" or "both"
 ```
 
 **Note**: The `audio_output` configuration setting is reserved for future implementation. Currently, VLC outputs audio normally and the OS handles routing based on system settings. To change audio output (HDMI vs. headphone jack), use `raspi-config` → System Options → Audio → Force HDMI or Force 3.5mm jack.
+
+## Current System Architecture
+
+### Core Components Structure
+
+**Source Organization (`src/`)**
+```
+src/
+├── config/           # Configuration management and USB detection
+├── core/            # Core system components (schedule, system state, logger)
+├── debug/           # HTML debug overlay and template system
+├── midi/            # MIDI management and Arduino serial communication
+├── networking/      # UDP sync and communication protocols
+├── ui/              # User interface components
+└── video/           # VLC video player management
+```
+
+**Key Classes and Responsibilities**
+- **ConfigManager**: Handles configuration loading and USB detection
+- **USBConfigLoader**: Automatic USB drive detection and file loading
+- **VLCVideoPlayer**: VLC-based video playback with sync capabilities
+- **MidiManager**: Arduino serial MIDI communication with fallbacks
+- **MidiScheduler**: MIDI event scheduling and loop detection
+- **SyncBroadcaster**: UDP time synchronization broadcasting
+- **HTMLDebugManager**: Browser-based debug interface for leader
+
+**Configuration Files**
+- `leader_config.ini` - Leader Pi configuration
+- `collaborator_config.ini` - Collaborator Pi configuration
+- `kitchensync.ini` - Main system configuration (on USB drives)
+- `schedule.json` - MIDI event schedule
 
 ## Configuration Management Workflow
 
@@ -261,9 +357,16 @@ When adding/modifying any configuration setting, verify ALL of these match:
 4. ✅ Any hardcoded defaults in other components
 5. ✅ Documentation in plan.md
 
-## Future Enhancement Opportunities
+## Current Development Priorities
 
-### Potential Improvements
+### Immediate Focus Areas
+
+- **MIDI System Stability**: Continue improving error handling and robustness
+- **Arduino Code**: Optimize Arduino sketch for better performance and reliability
+- **Testing**: Comprehensive testing of MIDI system with real hardware
+- **Documentation**: Update Arduino setup and troubleshooting guides
+
+### Future Enhancement Opportunities
 
 - **Web Interface**: Browser-based control panel for easier management
 - **Content Streaming**: Network-based video distribution from leader Pi
@@ -271,6 +374,7 @@ When adding/modifying any configuration setting, verify ALL of these match:
 - **Mobile App**: Smartphone control interface for system management
 - **Cloud Integration**: Remote monitoring and configuration capabilities
 - **Video Effects**: Real-time video processing and effects synchronization
+- **MIDI Expansion**: Support for multiple Arduino controllers or additional MIDI protocols
 
 ### Scalability Considerations
 
@@ -538,27 +642,43 @@ echo "fallback_bg=~/set_black_background_fallback.sh" >> ~/.config/wayfire.ini
 
 ### Quick Test Procedure
 
-1. **Test logging first** (ensures system works):
+1. **Test basic functionality** (ensures system works):
    ```bash
-   python3 test_logging.py
+   python3 leader.py --help
+   python3 collaborator.py --help
    ```
 
-2. **Deploy and test service**:
+2. **Test MIDI system**:
+   ```bash
+   python3 -c "from src.midi.manager import MidiManager; m = MidiManager(use_serial=True); print('MIDI system OK')"
+   ```
+
+3. **Deploy and test service**:
    ```bash
    ./deploy_and_test.sh
    ```
 
-3. **Monitor logs in real-time**:
+4. **Monitor logs in real-time**:
    ```bash
    tail -f /tmp/kitchensync_system.log
    tail -f /tmp/kitchensync_vlc_stderr.log
    tail -f /tmp/kitchensync_debug_leader-pi.txt
    ```
 
+5. **Test Arduino MIDI** (if hardware available):
+   ```bash
+   # Check if Arduino is detected
+   ls /dev/ttyACM* /dev/ttyUSB* 2>/dev/null || echo "No Arduino detected"
+   
+   # Test serial communication
+   python3 -c "from src.midi.manager import SerialMidiOut; s = SerialMidiOut(); print(f'Arduino port: {s.port}')"
+   ```
+
 ### Current System Status
 
-The KitchenSync leader system is fully operational with:
+The KitchenSync system is fully operational with:
 
+**Leader Pi Features**
 - **VLC video playback**: Stable playback with window positioning on left side
 - **Full audio support**: Audio tracks are now enabled and synchronized across all nodes
 - **Simple audio output**: VLC outputs audio normally, OS handles routing (HDMI/headphone jack)
@@ -567,6 +687,19 @@ The KitchenSync leader system is fully operational with:
 - **Systemd auto-start**: Reliable boot-time initialization
 - **Window management**: Proper side-by-side layout using wmctrl
 - **Error handling**: Comprehensive logging and graceful fallbacks
+
+**MIDI System Features**
+- **Arduino integration**: Serial-based MIDI control with automatic port detection
+- **Loop detection**: Intelligent MIDI loop detection for synchronized playback
+- **Error safety**: Comprehensive null checks and graceful shutdown handling
+- **Fallback support**: Mock MIDI output when hardware not available
+- **Serial communication**: Reliable USB serial communication with Arduino
+
+**System Features**
+- **USB auto-detection**: Automatic configuration and video loading from USB drives
+- **Auto-upgrade system**: Seamless system updates from USB drives
+- **Role detection**: Automatic leader/collaborator role determination
+- **Network sync**: UDP-based time synchronization across all nodes
 
 ### Service Configuration
 

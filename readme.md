@@ -57,29 +57,66 @@ debug = false       # Optional debug mode
 ## ✨ Key Features
 
 - **🎬 Synchronized Video Playback**: Multiple Pis play videos in perfect sync using VLC with advanced drift correction
-- **🎹 Precise MIDI Output**: Timecoded MIDI events via USB interfaces with sub-50ms accuracy
+- **🎹 Precise MIDI Output**: Timecoded MIDI events via Arduino serial with sub-50ms accuracy
 - **🔌 Plug-and-Play USB**: Automatic USB drive detection, mounting, and video file selection
 - **🎯 Automatic Role Detection**: USB-based configuration determines leader vs collaborator roles
 - **🚀 Auto-Start System**: Systemd service for boot-time initialization and hands-free operation
 - **📡 Network Synchronization**: UDP broadcast for real-time time sync across all devices
 - **🎛️ Centralized Control**: Leader Pi provides interactive interface for system management
+- **🔌 Arduino Integration**: Serial-based MIDI control with automatic hardware detection and fallback
 
 ## �️ Hardware Requirements
 
 - Multiple Raspberry Pis (Pi 4 recommended for 4K video)
-- USB MIDI interface for each Pi
+- **NEW**: Arduino board (Uno, Nano, or similar) with USB connection for MIDI control
 - USB drives for video storage and configuration
 - Network connectivity (wired recommended for best sync)
+
+## 🔌 Arduino MIDI Setup
+
+### **Hardware Requirements**
+- **Arduino Board**: Uno, Nano, or compatible board
+- **USB Connection**: Standard USB cable for serial communication
+- **Power**: USB-powered or external power supply
+
+### **Arduino Sketch**
+The system includes a custom Arduino sketch for MIDI control:
+```
+arduino/midi_controller/midi_controller.ino
+```
+
+**Required Arduino Libraries:**
+- Standard Arduino libraries only (no external dependencies)
+- Serial communication for USB connectivity
+- Digital I/O for relay control outputs
+
+**Sketch Features:**
+- Serial command parsing for MIDI-like messages
+- Relay output control (configurable pin assignments)
+- Automatic port detection and communication
+- Error handling and status reporting
+
+### **Automatic Detection**
+- **Port Scanning**: System automatically detects Arduino on `/dev/ttyACM*` or `/dev/ttyUSB*`
+- **Fallback**: Uses mock MIDI output when hardware not available
+- **Error Handling**: Graceful fallback to simulation mode
+
+### **Communication Protocol**
+- **Serial Commands**: Simple text-based protocol over USB serial
+- **Note On**: `noteon <channel> <note> <velocity>`
+- **Note Off**: `noteoff <channel> <note> 0`
+- **Baud Rate**: 9600 (configurable for Arduino compatibility)
 
 ## 📂 Project Structure
 
 - `kitchensync.py` — Main auto-start script with USB configuration detection
 - `leader.py` — Leader Pi script with video playbook and system coordination
 - `collaborator.py` — Collaborator Pi script for synchronized playback and MIDI output
-- `schedule.json` — MIDI cue timings and events
+- `schedule.json` — MIDI cue timings and events (Arduino relay control format)
 - `kitchensync.service` — Systemd service for automatic startup
 - `requirements.txt` — Python dependencies
 - Configuration files for different Pi roles
+- `arduino/` — Arduino sketches and MIDI controller code
 
 ## 💾 USB Drive Configuration Examples
 
@@ -95,9 +132,12 @@ debug = false       # Optional debug mode
 ```ini
 [KITCHENSYNC]
 is_leader = true
-pi_id = leader-pi
+device_id = leader-pi
 debug = false
-video_file = leader_video.mp4
+video_file = test_video.mp4
+enable_vlc_logging = false
+enable_system_logging = false
+vlc_log_level = 0
 ```
 
 ### **Collaborator Pi USB Drive** 
@@ -111,10 +151,12 @@ video_file = leader_video.mp4
 ```ini
 [KITCHENSYNC]
 is_leader = false
-pi_id = pi-002
+device_id = pi-002
 debug = false
 video_file = collaborator_video.mp4
-midi_port = 0
+enable_vlc_logging = false
+enable_system_logging = false
+vlc_log_level = 0
 ```
 
 ### **Multiple Collaborators**
@@ -177,19 +219,19 @@ sudo systemctl enable kitchensync.service
 **Leader USB Drive:**
 ```
 📁 USB Drive
-├── kitchensync.ini      (is_leader = true)
-├── leader_video.mp4     (main video)
+├── kitchensync.ini      (is_leader = true, device_id = leader-pi)
+├── test_video.mp4       (main video)
 └── schedule.json        (MIDI schedule)
 ```
 
 **Collaborator USB Drives:** (one per collaborator Pi)
 ```
 📁 USB Drive Pi-002
-├── kitchensync.ini      (is_leader = false, pi_id = pi-002)
+├── kitchensync.ini      (is_leader = false, device_id = pi-002)
 └── video2.mp4           (video for this Pi)
 
 📁 USB Drive Pi-003  
-├── kitchensync.ini      (is_leader = false, pi_id = pi-003)
+├── kitchensync.ini      (is_leader = false, device_id = pi-003)
 └── video3.mp4           (video for this Pi)
 ```
 
@@ -219,9 +261,12 @@ For testing purposes, you can run scripts manually:
 # In your USB kitchensync.ini file:
 [KITCHENSYNC]
 is_leader = true
-pi_id = leader-pi  
+device_id = leader-pi  
 debug = false
-video_file = leader_video.mp4
+video_file = test_video.mp4
+enable_vlc_logging = false
+enable_system_logging = false
+vlc_log_level = 0
 ```
 
 **Collaborator Pi:**
@@ -229,10 +274,12 @@ video_file = leader_video.mp4
 # In your USB kitchensync.ini file:
 [KITCHENSYNC]
 is_leader = false
-pi_id = pi-002
+device_id = pi-002
 debug = false  
 video_file = collaborator_video.mp4
-midi_port = 0
+enable_vlc_logging = false
+enable_system_logging = false
+vlc_log_level = 0
 ```
 
 **Manual Commands:**
@@ -314,15 +361,68 @@ For advanced setups, create separate config files:
 
 ### MIDI Schedule (schedule.json)
 
-Define precisely timed MIDI events:
+Define precisely timed MIDI events for Arduino relay control:
 
 ```json
 [
-  { "time": 5.0, "note": 60, "velocity": 127, "channel": 1, "type": "note_on" },
-  { "time": 5.5, "note": 60, "velocity": 0, "channel": 1, "type": "note_off" },
-  { "time": 10.0, "control": 7, "value": 127, "channel": 1, "type": "control_change" }
+    {
+        "time": 2.0,
+        "type": "note_on",
+        "channel": 1,
+        "note": 63,
+        "velocity": 127,
+        "description": "Output 1 ON - House lights (Note 60)"
+    },
+    {
+        "time": 10.0,
+        "type": "note_off",
+        "channel": 1,
+        "note": 63,
+        "velocity": 0,
+        "description": "Output 1 OFF - House lights (Note 60)"
+    },
+    {
+        "time": 12.0,
+        "type": "note_on",
+        "channel": 1,
+        "note": 61,
+        "velocity": 127,
+        "description": "Output 2 ON - Stage lights (Note 61)"
+    },
+    {
+        "time": 25.0,
+        "type": "note_on",
+        "channel": 1,
+        "note": 62,
+        "velocity": 100,
+        "description": "Output 3 ON - Effect (Note 62, Medium power)"
+    },
+    {
+        "time": 27.0,
+        "type": "note_off",
+        "channel": 1,
+        "note": 62,
+        "velocity": 0,
+        "description": "Output 3 OFF - Effect (Note 62)"
+    },
+    {
+        "time": 30.0,
+        "type": "note_off",
+        "channel": 1,
+        "note": 61,
+        "velocity": 0,
+        "description": "Output 2 OFF - Stage lights (Note 61)"
+    }
 ]
 ```
+
+**Schedule Format Details:**
+- **time**: Seconds from video start (float)
+- **type**: `note_on` or `note_off` for relay control
+- **channel**: MIDI channel (1-16, typically 1 for Arduino)
+- **note**: MIDI note number (0-127, maps to Arduino outputs)
+- **velocity**: 127 for full power, 0 for off, intermediate values for dimming
+- **description**: Human-readable description of the event
 
 ## 🎬 Automatic Video Management
 
@@ -639,12 +739,37 @@ debug = true  # Can be overridden by leader
 - Ensure both leader and collaborator are running
 - Verify ports 5005 and 5006 are not blocked
 
-### MIDI Not Working
+### Arduino MIDI Not Working
 
-- Check USB MIDI interface connectivity: `aconnect -l` or `amidi -l`
-- Verify MIDI port configuration in `collaborator_config.ini`
-- Test with a MIDI monitor or DAW software
-- Ensure `python-rtmidi` is installed: `sudo pip install python-rtmidi --break-system-packages`
+**Hardware Detection:**
+```bash
+# Check if Arduino is detected
+ls /dev/ttyACM* /dev/ttyUSB* 2>/dev/null || echo "No Arduino detected"
+
+# Check USB connections
+lsusb | grep -i arduino
+
+# Test serial communication
+python3 -c "from src.midi.manager import SerialMidiOut; s = SerialMidiOut(); print(f'Arduino port: {s.port}')"
+```
+
+**Serial Communication:**
+- Ensure Arduino is connected via USB
+- Check Arduino sketch is uploaded and running
+- Verify baud rate matches (default: 9600)
+- Test with Arduino Serial Monitor
+
+**Fallback Testing:**
+```bash
+# Test MIDI system without hardware
+python3 -c "from src.midi.manager import MidiManager; m = MidiManager(use_mock=True); print('Mock MIDI system OK')"
+```
+
+**Common Issues:**
+- Arduino not detected: Check USB cable and drivers
+- Permission denied: Add user to `dialout` group: `sudo usermod -a -G dialout $USER`
+- Wrong port: Check `/dev/ttyACM*` vs `/dev/ttyUSB*` naming
+- Baud rate mismatch: Ensure Arduino sketch uses 9600 baud
 
 ### Video Not Playing
 
