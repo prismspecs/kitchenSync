@@ -467,15 +467,23 @@ class CollaboratorPi:
         # Always update last_video_position
         self.last_video_position = video_position
 
+        # Calculate median properly
+        if not trimmed:
+            median_deviation = 0.0
+        elif len(trimmed) % 2 == 0:
+            mid1 = trimmed[len(trimmed) // 2 - 1]
+            mid2 = trimmed[len(trimmed) // 2]
+            median_deviation = (mid1 + mid2) / 2.0
+        else:
+            median_deviation = trimmed[len(trimmed) // 2]
+
         # --- Catchup Sync Mode ---
         if self.sync_mode == "catchup":
-            # Always print deviation and playback rate for visibility
             current_rate = self.video_player.get_playback_rate() or 1.0
             print(
                 f"[CATCHUP] Deviation: {median_deviation:.3f}s | Playback rate: {current_rate:.2f}"
             )
             if abs(median_deviation) > self.deviation_threshold:
-                # If behind, speed up; if ahead, slow down
                 if median_deviation > 0:
                     rate = 1.05
                 else:
