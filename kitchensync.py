@@ -15,7 +15,7 @@ import zipfile
 import shutil
 
 
-# --- Upgrade logic: check for .zip release in upgrade folder ---
+# --- Upgrade logic will be called after config is loaded in main() ---
 def apply_upgrade_if_available(usb_mount_point=None):
     # Prefer USB upgrade folder if available
     upgrade_dir = None
@@ -60,13 +60,24 @@ def apply_upgrade_if_available(usb_mount_point=None):
                 shutil.rmtree(item)
             else:
                 item.unlink()
-        # Copy new files in
-        for item in temp_dir.iterdir():
-            dest = target_dir / item.name
-            if item.is_dir():
-                shutil.copytree(item, dest)
-            else:
-                shutil.copy2(item, dest)
+        # Determine if extracted zip contains a single top-level folder
+        extracted_items = list(temp_dir.iterdir())
+        if len(extracted_items) == 1 and extracted_items[0].is_dir():
+            # Copy contents of the folder
+            for item in extracted_items[0].iterdir():
+                dest = target_dir / item.name
+                if item.is_dir():
+                    shutil.copytree(item, dest)
+                else:
+                    shutil.copy2(item, dest)
+        else:
+            # Copy all items in temp_dir
+            for item in extracted_items:
+                dest = target_dir / item.name
+                if item.is_dir():
+                    shutil.copytree(item, dest)
+                else:
+                    shutil.copy2(item, dest)
         print(f"[UPGRADE] Upgrade applied from {zip_path}")
         with open(log_path, "a") as f:
             f.write(f"[UPGRADE] Upgrade applied from {zip_path}\n")
@@ -82,24 +93,6 @@ def apply_upgrade_if_available(usb_mount_point=None):
             f.write(f"[UPGRADE] Upgrade failed: {e}\n")
 
 
-# Run upgrade check before anything else
-# Try to find USB mount point (by looking for config ini)
-def find_usb_mount_point():
-    # Try to find config ini on USB
-    possible_mounts = ["/media/kitchensync", "/mnt", "/media"]
-    for base in possible_mounts:
-        base_path = Path(base)
-        if not base_path.exists():
-            continue
-        for sub in base_path.iterdir():
-            if sub.is_dir():
-                ini = sub / "kitchensync.ini"
-                if ini.exists():
-                    return str(sub)
-    return None
-
-
-apply_upgrade_if_available(find_usb_mount_point())
 # Emergency logging - capture startup issues
 try:
     with open("/tmp/kitchensync_startup.log", "w") as f:
@@ -371,11 +364,17 @@ def main():
     """Main entry point"""
     try:
         auto_start = KitchenSyncAutoStart()
+        # Load config first to get USB mount point
+        loaded = auto_start._load_configuration()
+        usb_mount = None
+        if loaded and hasattr(auto_start.config, "usb_mount_point"):
+            usb_mount = auto_start.config.usb_mount_point
+        # Run upgrade check with correct mount point
+        apply_upgrade_if_available(usb_mount)
+        # Continue with normal run
         success = auto_start.run()
-
         if not success:
             sys.exit(1)
-
     except KeyboardInterrupt:
         print("\n👋 Interrupted by user")
         sys.exit(0)
