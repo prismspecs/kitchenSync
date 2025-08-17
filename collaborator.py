@@ -381,7 +381,6 @@ class CollaboratorPi:
             return
 
         # Debug deviation mode: print raw and median deviation between leader and video (does not block sync logic)
-        if self.debug_deviation_mode:
             video_position = self.video_player.get_position()
             if video_position is not None:
                 raw_deviation = video_position - leader_time
@@ -468,6 +467,29 @@ class CollaboratorPi:
         # Always update last_video_position
         self.last_video_position = video_position
 
+            # --- Catchup Sync Mode ---
+            if self.sync_mode == "catchup":
+                # Always print deviation and playback rate for visibility
+                current_rate = self.video_player.get_playback_rate() or 1.0
+                print(f"[CATCHUP] Deviation: {median_deviation:.3f}s | Playback rate: {current_rate:.2f}")
+                if abs(median_deviation) > self.deviation_threshold:
+                    # If behind, speed up; if ahead, slow down
+                    if median_deviation > 0:
+                        rate = 1.05
+                    else:
+                        rate = 0.95
+                    self.video_player.set_playback_rate(rate)
+                    log_info(
+                        f"Catch-up mode: deviation={median_deviation:.3f}s, rate set to {rate:.2f}",
+                        component="sync",
+                    )
+                else:
+                    self.video_player.set_playback_rate(1.0)
+                    log_info(
+                        f"Catch-up mode: deviation={median_deviation:.3f}s, rate reset to 1.00",
+                        component="sync",
+                    )
+                return
         # Calculate expected position with latency compensation
         # Wrap to video duration if known
         duration = self.video_player.get_duration()
