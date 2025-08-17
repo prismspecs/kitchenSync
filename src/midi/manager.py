@@ -10,6 +10,7 @@ import glob
 from typing import List, Dict, Any, Set, Optional
 from core.logger import log_info, log_warning, log_error
 
+
 # Try to import rtmidi
 try:
     import rtmidi
@@ -17,6 +18,15 @@ try:
     MIDI_AVAILABLE = True
 except ImportError:
     MIDI_AVAILABLE = False
+
+# Try to import pyserial
+try:
+    import serial
+
+    SERIAL_AVAILABLE = True
+except ImportError:
+    serial = None
+    SERIAL_AVAILABLE = False
 
 
 __all__ = [
