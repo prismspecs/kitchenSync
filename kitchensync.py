@@ -54,7 +54,13 @@ def apply_upgrade_if_available(usb_mount_point=None):
         target_dir = Path.home() / "kitchenSync"
         # Remove everything in target_dir except upgrade folder and log
         for item in target_dir.iterdir():
-            if item.name in ["upgrade", "kitchensync_startup.log"]:
+            # Preserve upgrade folder, log, .git, and .gitignore
+            if item.name in [
+                "upgrade",
+                "kitchensync_startup.log",
+                ".git",
+                ".gitignore",
+            ]:
                 continue
             if item.is_dir():
                 shutil.rmtree(item)
