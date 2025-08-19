@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Schedule Editor</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 30px;
+            background: #f8f8f8;
+        }
+
+        h1 {
+            margin-bottom: 20px;
+        }
+
+        .controls {
+            margin-bottom: 20px;
+        }
+
+        button,
+        select,
+        input {
+            margin-right: 10px;
+            padding: 8px 16px;
+            font-size: 16px;
+        }
+
+        #durationDisplay {
+            color: #666;
+            font-style: italic;
+        }
+
+        label {
+            margin-right: 20px;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(61, 32px);
+            grid-template-rows: repeat(12, 32px);
+            gap: 2px;
+            background: #ddd;
+            border: 1px solid #bbb;
+            width: max-content;
+        }
+
+        .grid-label {
+            background: #eee;
+            text-align: center;
+            line-height: 32px;
+            font-size: 14px;
+            font-weight: bold;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .grid-cell {
+            background: #fff;
+            border: 1px solid #ccc;
+            cursor: pointer;
+            transition: background 0.2s;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        .grid-cell.active {
+            background: #4caf50;
+            color: #fff;
+        }
+
+        .grid-cell.off {
+            background: #f44336;
+            color: #fff;
+        }
+
+        .second-marker {
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            font-size: 11px;
+            color: #bbb;
+            pointer-events: none;
+            z-index: 1;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Schedule Editor</h1>
+    <div class="controls">
+        <label>Duration:
+            <input type="number" id="durationInput" min="1" max="3600" value="600" style="width: 80px;">
+            seconds
+            <span id="durationDisplay">(10:00)</span>
+        </label>
+        <button id="saveBtn">Save</button>
+        <input type="file" id="loadInput" style="display:none" />
+        <button id="loadBtn">Load</button>
+    </div>
+
+    <script>
+        const NUM_NOTES = 12;
+        let NUM_SECONDS = 600; // Start with 10 minutes (600 seconds)
+        const MAX_SECONDS = 3600; // Max 1 hour
+        const NOTE_START = 1; // Displayed as 1, but maps to MIDI note 60 + (row-1)
+        const NOTE_MIDI_BASE = 60;
+
+        // 0: blank, 1: on (velocity 127), 2: off (velocity 0)
+        let grid = Array.from({ length: NUM_NOTES }, () => Array(NUM_SECONDS).fill(0));
+
+        function createGrid() {
+            let gridEl = document.querySelector('.grid');
+            if (gridEl) gridEl.remove();
+
+            gridEl = document.createElement('div');
+            gridEl.className = 'grid';
+            gridEl.style.gridTemplateColumns = `repeat(${NUM_SECONDS + 1}, 32px)`;
+
+            // Create rows
+            for (let n = 0; n < NUM_NOTES; n++) {
+                // Y label
+                const yLabel = document.createElement('div');
+                yLabel.className = 'grid-label';
+                yLabel.textContent = NOTE_START + n;
+                gridEl.appendChild(yLabel);
+
+                // Cells for this row
+                for (let s = 0; s < NUM_SECONDS; s++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'grid-cell';
+                    cell.dataset.note = n;
+                    cell.dataset.second = s;
+                    updateCellState(cell, grid[n][s]);
+
+                    cell.addEventListener('click', () => {
+                        grid[n][s] = (grid[n][s] + 1) % 3;
+                        updateCellState(cell, grid[n][s]);
+                    });
+
+                    // Add faint second marker for first row
+                    if (n === 0) {
+                        const marker = document.createElement('span');
+                        marker.className = 'second-marker';
+                        marker.textContent = s;
+                        cell.appendChild(marker);
+                    }
+
+                    gridEl.appendChild(cell);
+                }
+            }
+
+            document.body.appendChild(gridEl);
+        }
+
+        function updateCellState(cell, state) {
+            cell.classList.remove('active', 'off');
+            if (state === 1) {
+                cell.classList.add('active'); // velocity 127
+                cell.textContent = '●';
+            } else if (state === 2) {
+                cell.classList.add('off'); // velocity 0
+                cell.textContent = '○';
+            } else {
+                cell.textContent = '';
+            }
+        }
+
+        function getSchedule() {
+            const schedule = [];
+            for (let n = 0; n < NUM_NOTES; n++) {
+                for (let s = 0; s < NUM_SECONDS; s++) {
+                    if (grid[n][s] === 1) {
+                        schedule.push({
+                            time: s,
+                            note: NOTE_MIDI_BASE + n,
+                            velocity: 127
+                        });
+                    } else if (grid[n][s] === 2) {
+                        schedule.push({
+                            time: s,
+                            note: NOTE_MIDI_BASE + n,
+                            velocity: 0
+                        });
+                    }
+                }
+            }
+            return schedule.sort((a, b) => a.time - b.time);
+        }
+
+        function formatTime(seconds) {
+            const minutes = Math.floor(seconds / 60);
+            const remainingSeconds = seconds % 60;
+            return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+        }
+
+        function updateDurationDisplay() {
+            const input = document.getElementById('durationInput');
+            const display = document.getElementById('durationDisplay');
+            const seconds = parseInt(input.value) || 0;
+            display.textContent = `(${formatTime(seconds)})`;
+        }
+
+        document.getElementById('durationInput').oninput = function () {
+            updateDurationDisplay();
+        };
+
+        document.getElementById('durationInput').onchange = function () {
+            const newDuration = parseInt(this.value) || 600;
+            if (newDuration !== NUM_SECONDS && newDuration >= 1 && newDuration <= 3600) {
+                NUM_SECONDS = newDuration;
+                // Resize grid array
+                for (let n = 0; n < NUM_NOTES; n++) {
+                    if (grid[n].length < NUM_SECONDS) {
+                        // Extend with zeros
+                        while (grid[n].length < NUM_SECONDS) {
+                            grid[n].push(0);
+                        }
+                    } else if (grid[n].length > NUM_SECONDS) {
+                        // Truncate
+                        grid[n] = grid[n].slice(0, NUM_SECONDS);
+                    }
+                }
+                createGrid();
+            }
+            // Update input to valid value
+            this.value = NUM_SECONDS;
+            updateDurationDisplay();
+        };
+
+        document.getElementById('saveBtn').onclick = function () {
+            const schedule = getSchedule();
+            const blob = new Blob([JSON.stringify(schedule, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'schedule.json';
+            a.click();
+            URL.revokeObjectURL(url);
+        };
+
+        document.getElementById('loadBtn').onclick = function () {
+            document.getElementById('loadInput').click();
+        };
+
+        document.getElementById('loadInput').onchange = function (e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function (evt) {
+                try {
+                    const schedule = JSON.parse(evt.target.result);
+                    // Reset grid with three-state logic
+                    grid = Array.from({ length: NUM_NOTES }, () => Array(NUM_SECONDS).fill(0));
+                    schedule.forEach(ev => {
+                        const n = ev.note - NOTE_MIDI_BASE;
+                        const s = Math.floor(ev.time);
+                        if (n >= 0 && n < NUM_NOTES && s >= 0 && s < NUM_SECONDS) {
+                            if (ev.velocity > 0) {
+                                grid[n][s] = 1;
+                            } else {
+                                grid[n][s] = 2;
+                            }
+                        }
+                    });
+                    createGrid();
+                } catch (err) {
+                    alert('Invalid schedule file');
+                }
+            };
+            reader.readAsText(file);
+        };
+
+        // Create grid on page load
+        window.onload = function () {
+            updateDurationDisplay();
+            createGrid();
+        };
+    </script>
+</body>
+
+</html>
