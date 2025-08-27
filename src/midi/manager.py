@@ -216,6 +216,15 @@ class MidiManager:
     def send_cue_message(self, cue: Dict[str, Any]) -> None:
         """Send MIDI message based on cue data"""
         cue_type = cue.get("type")
+
+        # If no type specified, auto-detect from velocity
+        if not cue_type:
+            velocity = cue.get("velocity", 0)
+            if velocity > 0:
+                cue_type = "note_on"
+            else:
+                cue_type = "note_off"
+
         if cue_type == "note_on":
             self.send_note_on(
                 cue.get("channel", 1), cue.get("note", 60), cue.get("velocity", 64)
