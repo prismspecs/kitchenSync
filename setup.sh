@@ -21,6 +21,11 @@ fi
 echo "Installing VLC and dependencies..."
 sudo apt install -y vlc libvlc-dev python3-vlc python3-pip python3-dev libasound2-dev alsa-utils
 
+# Set system volume to 90%
+echo "Setting system volume to 90%..."
+amixer set Master 90%
+sudo alsactl store
+
 # Install USB mounting utilities
 echo "Installing USB mounting utilities..."
 sudo apt install -y udisks2 usbutils
