@@ -117,6 +117,9 @@ class SerialMidiOut:
         if self.ser:
             try:
                 self.ser.write(cmd.encode("utf-8"))
+                time.sleep(
+                    0.01
+                )  # Add 10ms delay between commands to prevent Arduino buffer overflow
                 print(f"Serial MIDI Sent: {cmd.strip()}")
             except Exception as e:
                 print(f"Serial MIDI send failed: {e}")
