@@ -17,6 +17,36 @@ class NetworkError(Exception):
     pass
 
 
+def _get_broadcast_address():
+    """Get appropriate broadcast address, falling back for offline scenarios"""
+    try:
+        # Try standard broadcast first
+        test_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        test_sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+        # Test if we can create a broadcast socket (doesn't actually send)
+        test_sock.close()
+        return "255.255.255.255"
+    except Exception:
+        # Fallback: try to detect local network broadcast
+        try:
+            # Get local IP to determine network
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.connect(("1.1.1.1", 80))  # Dummy connection to get local IP
+            local_ip = s.getsockname()[0]
+            s.close()
+
+            # Calculate broadcast for common /24 network
+            ip_parts = local_ip.split(".")
+            if len(ip_parts) == 4:
+                broadcast = f"{ip_parts[0]}.{ip_parts[1]}.{ip_parts[2]}.255"
+                return broadcast
+        except Exception:
+            pass
+
+        # Final fallback for common local networks
+        return "192.168.1.255"
+
+
 class SyncBroadcaster:
     """Handles time sync broadcasting for leader"""
 
@@ -27,7 +57,7 @@ class SyncBroadcaster:
             self.tick_interval = max(0.02, min(float(tick_interval), 5.0))
         except Exception:
             self.tick_interval = 0.1
-        self.broadcast_ip = "255.255.255.255"
+        self.broadcast_ip = _get_broadcast_address()
         self.leader_id = "leader-001"
         self.is_running = False
         self.start_time = None
@@ -221,7 +251,7 @@ class CommandManager:
 
     def __init__(self, control_port: int = 5006):
         self.control_port = control_port
-        self.broadcast_ip = "255.255.255.255"
+        self.broadcast_ip = _get_broadcast_address()
         self.control_sock = None
         self.is_running = False
         self.collaborators = {}
@@ -399,11 +429,12 @@ class CommandListener:
         }
 
         try:
+            broadcast_addr = _get_broadcast_address()
             sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
             sock.sendto(
                 json.dumps(registration).encode(),
-                ("255.255.255.255", self.control_port),
+                (broadcast_addr, self.control_port),
             )
             sock.close()
             # print(f"Registered with leader as '{device_id}'")
@@ -415,10 +446,11 @@ class CommandListener:
         heartbeat = {"type": "heartbeat", "device_id": device_id, "status": status}
 
         try:
+            broadcast_addr = _get_broadcast_address()
             sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
             sock.sendto(
-                json.dumps(heartbeat).encode(), ("255.255.255.255", self.control_port)
+                json.dumps(heartbeat).encode(), (broadcast_addr, self.control_port)
             )
             sock.close()
         except Exception as e:
