@@ -1,42 +1,152 @@
 [
   {
-    "note": 70,
-    "velocity": 100,
-    "time": 0.0
+    "time": 1,
+    "note": 60,
+    "velocity": 0
   },
   {
-    "note": 70,
-    "velocity": 0,
-    "time": 1.0
+    "time": 2,
+    "note": 61,
+    "velocity": 0
   },
   {
-    "note": 70,
-    "velocity": 100,
-    "time": 2.0
+    "time": 3,
+    "note": 62,
+    "velocity": 0
   },
   {
-    "note": 70,
-    "velocity": 0,
-    "time": 3.0
+    "time": 4,
+    "note": 63,
+    "velocity": 0
   },
   {
-    "note": 70,
-    "velocity": 100,
-    "time": 4.0
+    "time": 5,
+    "note": 64,
+    "velocity": 0
   },
   {
-    "note": 70,
-    "velocity": 0,
-    "time": 5.0
+    "time": 6,
+    "note": 65,
+    "velocity": 0
   },
   {
-    "note": 70,
-    "velocity": 100,
-    "time": 6.0
+    "time": 7,
+    "note": 66,
+    "velocity": 0
   },
   {
+    "time": 8,
+    "note": 67,
+    "velocity": 0
+  },
+  {
+    "time": 9,
+    "note": 68,
+    "velocity": 0
+  },
+  {
+    "time": 10,
+    "note": 69,
+    "velocity": 0
+  },
+  {
+    "time": 11,
     "note": 70,
-    "velocity": 0,
-    "time": 7.0
+    "velocity": 0
+  },
+  {
+    "time": 12,
+    "note": 71,
+    "velocity": 0
+  },
+  {
+    "time": 428,
+    "note": 68,
+    "velocity": 127
+  },
+  {
+    "time": 429,
+    "note": 69,
+    "velocity": 127
+  },
+  {
+    "time": 430,
+    "note": 70,
+    "velocity": 127
+  },
+  {
+    "time": 469,
+    "note": 68,
+    "velocity": 0
+  },
+  {
+    "time": 470,
+    "note": 69,
+    "velocity": 0
+  },
+  {
+    "time": 471,
+    "note": 70,
+    "velocity": 0
+  },
+  {
+    "time": 478,
+    "note": 60,
+    "velocity": 127
+  },
+  {
+    "time": 479,
+    "note": 61,
+    "velocity": 127
+  },
+  {
+    "time": 480,
+    "note": 62,
+    "velocity": 127
+  },
+  {
+    "time": 483,
+    "note": 64,
+    "velocity": 127
+  },
+  {
+    "time": 484,
+    "note": 65,
+    "velocity": 127
+  },
+  {
+    "time": 485,
+    "note": 66,
+    "velocity": 127
+  },
+  {
+    "time": 499,
+    "note": 60,
+    "velocity": 0
+  },
+  {
+    "time": 500,
+    "note": 61,
+    "velocity": 0
+  },
+  {
+    "time": 501,
+    "note": 62,
+    "velocity": 0
+  },
+  {
+    "time": 502,
+    "note": 64,
+    "velocity": 0
+  },
+  {
+    "time": 503,
+    "note": 65,
+    "velocity": 0
+  },
+  {
+    "time": 504,
+    "note": 66,
+    "velocity": 0
   }
 ]

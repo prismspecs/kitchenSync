@@ -113,12 +113,36 @@ class SerialMidiOut:
             self.ser.close()
             print("Serial MIDI: Closed port")
 
+    def flush_buffers(self):
+        """Flush input/output buffers to clear any pending commands"""
+        if self.ser:
+            try:
+                self.ser.flushInput()  # Clear any pending input
+                self.ser.flushOutput()  # Clear any pending output
+                print("Serial MIDI: Buffers flushed")
+            except Exception as e:
+                print(f"Serial MIDI buffer flush failed: {e}")
+
+    def send_reset_command(self):
+        """Send a reset command to clear Arduino PWM state"""
+        if self.ser:
+            try:
+                # Send all channels to 0 (turn everything off)
+                for channel in range(12):  # PWM channels 0-11 (notes 60-71)
+                    note = 60 + channel
+                    cmd = f"noteoff {channel} {note} 0\n"
+                    self.ser.write(cmd.encode("utf-8"))
+                    time.sleep(0.01)  # Small delay between commands
+                print("Serial MIDI: Reset command sent (all channels off)")
+            except Exception as e:
+                print(f"Serial MIDI reset failed: {e}")
+
     def _send(self, cmd: str):
         if self.ser:
             try:
                 self.ser.write(cmd.encode("utf-8"))
-                # Add 10ms delay between commands to prevent Arduino buffer overflow
-                time.sleep(0.01)
+                # Increased delay to 25ms to prevent Arduino buffer overflow during rapid bursts
+                time.sleep(0.025)
                 print(f"Serial MIDI Sent: {cmd.strip()}")
             except Exception as e:
                 print(f"Serial MIDI send failed: {e}")
@@ -268,7 +292,18 @@ class MidiScheduler:
         """Reset triggered cues for fresh playback or loop."""
         self.triggered_cues.clear()
         self.loop_count = 0
-        # Optionally reset other state if needed
+
+        # Clear Arduino state and serial buffers when looping
+        if (
+            hasattr(self.midi_manager, "use_serial")
+            and self.midi_manager.use_serial
+            and hasattr(self.midi_manager.midi_out, "flush_buffers")
+        ):
+
+            print("🔄 Resetting Arduino state for loop...")
+            self.midi_manager.midi_out.flush_buffers()
+            self.midi_manager.midi_out.send_reset_command()
+            time.sleep(0.1)  # Give Arduino time to process reset
 
     def load_schedule(self, schedule: List[Dict[str, Any]]) -> None:
         """Load MIDI schedule"""
@@ -332,7 +367,16 @@ class MidiScheduler:
         # Process cues with effective (wrapped) time
         for cue in self.schedule:
             cue_time = cue.get("time", 0)
-            cue_id = f"{cue_time}_{cue.get('type', 'unknown')}_{cue.get('note', 0)}_{cue.get('channel', 1)}"
+
+            # Auto-detect type for proper cue ID generation
+            cue_type = cue.get("type")
+            if not cue_type:
+                velocity = cue.get("velocity", 0)
+                cue_type = "note_on" if velocity > 0 else "note_off"
+
+            cue_id = (
+                f"{cue_time}_{cue_type}_{cue.get('note', 0)}_{cue.get('channel', 1)}"
+            )
 
             if cue_time <= effective_time and cue_id not in self.triggered_cues:
                 self.midi_manager.send_cue_message(cue)

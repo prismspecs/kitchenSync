@@ -244,7 +244,22 @@ class LeaderPi:
             while self.system_state.is_running:
                 # Use video position if available, else wall time
                 try:
-                    current_time = self.video_player.get_position()
+                    raw_position = self.video_player.get_position()
+                    if raw_position is not None:
+                        # Ensure time is wrapped consistently for MIDI scheduling
+                        # VLC's natural looping might give us times > video_duration
+                        video_duration = self.video_player.get_duration()
+                        if (
+                            video_duration
+                            and video_duration > 0
+                            and raw_position >= video_duration
+                        ):
+                            # Wrap to video duration to ensure consistent MIDI loop behavior
+                            current_time = raw_position % video_duration
+                        else:
+                            current_time = raw_position
+                    else:
+                        current_time = None
                 except Exception:
                     current_time = time.time() - self.system_state.start_time
 
