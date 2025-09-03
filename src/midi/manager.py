@@ -296,7 +296,7 @@ class MidiScheduler:
         print("🛑 Stopped MIDI playback")
 
     def process_cues(self, current_time: float) -> None:
-        """Process MIDI cues for current time with looping support"""
+        """Process MIDI cues for current time with robust single loop detection"""
         if not self.is_running or not self.start_time:
             return
 
@@ -306,50 +306,40 @@ class MidiScheduler:
 
         playback_time = current_time
 
-        # Detect video loop by checking if position jumps backwards
-        if (
-            self.previous_playback_time is not None
-            and isinstance(self.previous_playback_time, (int, float))
-            and playback_time < self.previous_playback_time
-        ):
-            self.reset()
-            self.loop_count += 1
-            log_info(
-                f"MIDI schedule loop (detected by position jump) #{self.loop_count} started",
-                component="midi",
-            )
+        # Single unified loop detection using video duration
+        current_loop = 0
+        effective_time = playback_time
 
-        self.previous_playback_time = playback_time
-
-        # Handle looping if video duration is known and looping is enabled
         if (
             self.enable_looping
             and self.video_duration is not None
-            and playback_time is not None
-            and playback_time >= self.video_duration
+            and self.video_duration > 0
         ):
-            # Calculate which loop we're in and the position within the loop
-            loop_number = int(playback_time // self.video_duration)
-            loop_time = playback_time % self.video_duration
+            current_loop = int(playback_time // self.video_duration)
+            effective_time = playback_time % self.video_duration
 
-            # Always reset triggered cues when video loops
-            if loop_number > self.loop_count:
+            # Only reset when we definitively enter a new loop
+            if current_loop > self.loop_count:
                 self.reset()
-                self.loop_count = loop_number
-                log_info(f"MIDI schedule loop #{loop_number} started", component="midi")
+                self.loop_count = current_loop
+                log_info(
+                    f"MIDI schedule loop #{current_loop} started", component="midi"
+                )
 
-            playback_time = loop_time
+        # Always update previous time for diagnostics
+        self.previous_playback_time = playback_time
 
+        # Process cues with effective (wrapped) time
         for cue in self.schedule:
             cue_time = cue.get("time", 0)
             cue_id = f"{cue_time}_{cue.get('type', 'unknown')}_{cue.get('note', 0)}_{cue.get('channel', 1)}"
 
-            if cue_time <= playback_time and cue_id not in self.triggered_cues:
+            if cue_time <= effective_time and cue_id not in self.triggered_cues:
                 self.midi_manager.send_cue_message(cue)
                 self.triggered_cues.add(cue_id)
                 loop_info = f" (Loop #{self.loop_count})" if self.loop_count > 0 else ""
                 print(
-                    f"⏰ Attempted MIDI at {cue_time}s: {cue.get('type', 'unknown')} Ch{cue.get('channel', 1)} Note{cue.get('note', 0)} Vel{cue.get('velocity', 0)}{loop_info}"
+                    f"⏰ MIDI at {cue_time}s: {cue.get('type', 'unknown')} Ch{cue.get('channel', 1)} Note{cue.get('note', 0)} Vel{cue.get('velocity', 0)}{loop_info}"
                 )
 
     def get_current_cues(
