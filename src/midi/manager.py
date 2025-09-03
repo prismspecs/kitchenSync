@@ -143,7 +143,11 @@ class SerialMidiOut:
                 self.ser.write(cmd.encode("utf-8"))
                 # Increased delay to 25ms to prevent Arduino buffer overflow during rapid bursts
                 time.sleep(0.025)
-                print(f"Serial MIDI Sent: {cmd.strip()}")
+                # Add timestamp to show when command was actually sent
+                import time
+
+                send_time = time.time()
+                print(f"Serial MIDI Sent: {cmd.strip()} [SENT_AT={send_time:.3f}]")
             except Exception as e:
                 print(f"Serial MIDI send failed: {e}")
         else:
@@ -383,9 +387,19 @@ class MidiScheduler:
                 self.midi_manager.send_cue_message(cue)
                 self.triggered_cues.add(cue_id)
                 loop_info = f" (Loop #{self.loop_count})" if self.loop_count > 0 else ""
+
+                # Enhanced timing debug information
+                timing_info = (
+                    f"VIDEO_TIME={playback_time:.3f}s | "
+                    f"EFFECTIVE_TIME={effective_time:.3f}s | "
+                    f"CUE_TIME={cue_time:.3f}s | "
+                    f"LOOP={current_loop}"
+                )
+
                 print(
                     f"⏰ MIDI at {cue_time}s: {cue.get('type', 'unknown')} Ch{cue.get('channel', 1)} Note{cue.get('note', 0)} Vel{cue.get('velocity', 0)}{loop_info}"
                 )
+                print(f"   📊 {timing_info}")
 
     def get_current_cues(
         self, current_time: float, window: float = 0.5
