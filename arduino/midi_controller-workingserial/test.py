@@ -5,7 +5,7 @@ import time
 
 # Update this to your Arduino's serial port (e.g., '/dev/tty.usbmodemXXXX' or '/dev/ttyUSB0')
 SERIAL_PORT = "/dev/ttyACM0"
-BAUD_RATE = 9600  # MIDI baud rate
+BAUD_RATE = 115200  # Serial baud rate for USB communication
 
 
 def send_note_on(ser, channel=1, pitch=60, velocity=100):

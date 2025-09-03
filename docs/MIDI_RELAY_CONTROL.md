@@ -254,7 +254,7 @@ Create schedules using familiar music software:
 
 - **Arduino Board**: Uno, Nano, or compatible board with USB connection
 - **Output Pins**: Configurable digital outputs for relay control
-- **Communication**: USB serial communication (9600 baud)
+- **Communication**: USB serial communication (115200 baud)
 - **Protocol**: Simple text-based commands over serial
 - **Auto-Detection**: System automatically detects Arduino on `/dev/ttyACM*` or `/dev/ttyUSB*`
 - **Fallback**: Mock MIDI output when hardware not available

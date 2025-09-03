@@ -66,7 +66,7 @@ src/
 
 ### Arduino MIDI System
 - Hardware: Arduino Uno, Nano, or compatible board
-- Communication: Serial protocol over USB (9600 baud)
+- Communication: Serial protocol over USB (115200 baud)
 - Commands: `noteon <channel> <note> <velocity>`, `noteoff <channel> <note> 0`
 - Auto-detection: Scans `/dev/ttyACM*` and `/dev/ttyUSB*` ports
 - Fallback: Mock MIDI output when hardware unavailable

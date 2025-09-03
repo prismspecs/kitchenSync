@@ -17,7 +17,6 @@ const uint8_t PIN_LED_ACTIVITY = 12;
 const uint8_t CHANS_LEN = 16;
 uint32_t last_input_rx_ms = 0;
 String serial_buffer = "";
-uint16_t command_count = 0; // Track processed commands for diagnostics
 
 // --- Objects ---
 Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver();
@@ -38,30 +37,20 @@ void setup()
 
   Serial.begin(SERIAL_BAUD);
   serial_buffer.reserve(256); // Increased buffer size for rapid note bursts
-  Serial.println("System Initialized. Waiting for input...");
 
-  // MIDI on SoftwareSerial (pins 2,3) - Serial free for debugging
+  // MIDI on SoftwareSerial (pins 2,3)
   MIDI.begin(MIDI_CHANNEL_OMNI);
   MIDI.setHandleNoteOn(on_midi_note_on);
   MIDI.setHandleNoteOff(on_midi_note_off);
 
   pwm.begin();
   pwm.setPWMFreq(PWM_FREQ);
-  // Removed fast I2C mode - using default speed for reliability
 
   // Initialize all channels to off
   for (uint8_t i = 0; i < CHANS_LEN; i++)
   {
     pwm.setPWM(i, 0, 0);
   }
-
-  // Test PWM immediately after initialization
-  Serial.println("Testing PWM channel 0...");
-  pwm.setPWM(0, 0, 4000);
-  delay(1000);
-  pwm.setPWM(0, 0, 0);
-  Serial.println("PWM test complete - ready for commands");
-  Serial.println("Try: 'noteon 0 60 127' or simple format '60 127'");
 }
 
 void loop()
@@ -73,17 +62,6 @@ void loop()
   // Process incoming MIDI (on pins 2,3) and Serial messages
   MIDI.read();
   process_serial_input();
-
-  // Periodic diagnostics every 10 seconds
-  static uint32_t last_diag_ms = 0;
-  if (millis() - last_diag_ms > 10000)
-  {
-    Serial.print("Status: Commands processed: ");
-    Serial.print(command_count);
-    Serial.print(" | Buffer size: ");
-    Serial.println(serial_buffer.length());
-    last_diag_ms = millis();
-  }
 }
 
 // --- MIDI Callback Functions ---
@@ -106,10 +84,7 @@ void pwm_set_from_pitch(byte pitch, byte velocity)
   int8_t chan = pitch - MIDI_BASE_NOTE;
   if (chan < 0 || chan >= CHANS_LEN)
   {
-    Serial.print("Pitch ");
-    Serial.print(pitch);
-    Serial.println(" is outside channel range (60-75)");
-    return; // Ignore notes outside our target range
+    return; // Ignore notes outside our target range (60-75)
   }
 
   // Convert MIDI velocity (0-127) to PWM value (0-4095)
@@ -118,14 +93,6 @@ void pwm_set_from_pitch(byte pitch, byte velocity)
 
   // Send the command to the PWM driver
   pwm.setPWM(chan, 0, pwr);
-
-  // --- DEBUGGING ---
-  Serial.print("Set PWM Chan: ");
-  Serial.print(chan);
-  Serial.print(" from Pitch: ");
-  Serial.print(pitch);
-  Serial.print(" | Power: ");
-  Serial.println(pwr);
 }
 
 // --- Serial Input Handling ---
@@ -140,7 +107,6 @@ void process_serial_input()
       if (serial_buffer.length() > 0)
       {
         parse_serial_command(serial_buffer);
-        command_count++;
         serial_buffer = ""; // Clear buffer for next command
       }
     }
@@ -150,9 +116,8 @@ void process_serial_input()
     }
     else
     {
-      // Buffer overflow - clear and send error
+      // Buffer overflow - clear silently for performance
       serial_buffer = "";
-      Serial.println("ERROR: Buffer overflow - command too long");
     }
   }
 }
@@ -162,11 +127,6 @@ void parse_serial_command(String command)
   command.trim();
   command.toLowerCase();
 
-  // --- DEBUGGING ---
-  Serial.print("Received Serial Command: '");
-  Serial.print(command);
-  Serial.println("'");
-
   // Check for simple format first: "60 127" (pitch velocity)
   int spaceIndex = command.indexOf(' ');
   if (spaceIndex > 0 && command.indexOf(' ', spaceIndex + 1) == -1)
@@ -174,10 +134,6 @@ void parse_serial_command(String command)
     // Simple two-parameter format
     byte pitch = command.substring(0, spaceIndex).toInt();
     byte velocity = command.substring(spaceIndex + 1).toInt();
-    Serial.print("Simple format - pitch: ");
-    Serial.print(pitch);
-    Serial.print(" velocity: ");
-    Serial.println(velocity);
     pwm_set_from_pitch(pitch, velocity);
     return;
   }
@@ -200,9 +156,7 @@ void parse_serial_command(String command)
   // Fixed: Check for minimum required parts
   if (partIndex < 3)
   {
-    Serial.println("Error: Invalid command format.");
-    Serial.println("Try: 'noteon 0 60 127' or simple '60 127'");
-    return;
+    return; // Silently ignore invalid commands for performance
   }
 
   // parts[0] is command, parts[1] is channel, parts[2] is pitch, parts[3] is velocity
@@ -210,13 +164,6 @@ void parse_serial_command(String command)
   // byte channel = parts[1].toInt(); // Channel is not used in your pwm_set_from_pitch logic
   byte pitch = parts[2].toInt();
   byte velocity = parts[3].toInt();
-
-  Serial.print("Full format - cmd: ");
-  Serial.print(cmd_type);
-  Serial.print(" pitch: ");
-  Serial.print(pitch);
-  Serial.print(" velocity: ");
-  Serial.println(velocity);
 
   if (cmd_type == "noteon")
   {
@@ -226,8 +173,5 @@ void parse_serial_command(String command)
   {
     pwm_set_from_pitch(pitch, 0);
   }
-  else
-  {
-    Serial.println("Error: Unknown command. Use 'noteon' or 'noteoff'");
-  }
+  // Silently ignore unknown commands for performance
 }

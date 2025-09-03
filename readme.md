@@ -79,7 +79,7 @@ debug = false           # Optional debug mode
 - **Communication**: Simple text-based protocol over USB serial
   - **Note On**: `noteon <channel> <note> <velocity>`
   - **Note Off**: `noteoff <channel> <note> 0`
-  - **Baud Rate**: 9600
+  - **Baud Rate**: 115200
 
 ## 📂 Project Structure
 
