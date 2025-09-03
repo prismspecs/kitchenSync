@@ -242,28 +242,15 @@ class LeaderPi:
         # --- MIDI SCHEDULER CUE PROCESSING LOOP ---
         def midi_cue_loop():
             while self.system_state.is_running:
-                # Use video position if available, else wall time
+                # Get the raw, unwrapped position - let MidiScheduler handle loop detection
+                current_time = None
                 try:
-                    raw_position = self.video_player.get_position()
-                    if raw_position is not None:
-                        # Ensure time is wrapped consistently for MIDI scheduling
-                        # VLC's natural looping might give us times > video_duration
-                        video_duration = self.video_player.get_duration()
-                        if (
-                            video_duration
-                            and video_duration > 0
-                            and raw_position >= video_duration
-                        ):
-                            # Wrap to video duration to ensure consistent MIDI loop behavior
-                            current_time = raw_position % video_duration
-                        else:
-                            current_time = raw_position
-                    else:
-                        current_time = None
+                    current_time = self.video_player.get_position()
                 except Exception:
+                    # Fallback to wall time if player fails
                     current_time = time.time() - self.system_state.start_time
 
-                # Only process cues if we have a valid time and the system is still running
+                # Pass the raw time directly to the scheduler for proper loop detection
                 if current_time is not None and self.system_state.is_running:
                     self.midi_scheduler.process_cues(current_time)
 
