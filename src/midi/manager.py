@@ -294,16 +294,16 @@ class MidiScheduler:
         self.loop_count = 0
 
         # Clear Arduino state and serial buffers when looping
-        if (
-            hasattr(self.midi_manager, "use_serial")
-            and self.midi_manager.use_serial
-            and hasattr(self.midi_manager.midi_out, "flush_buffers")
-        ):
-
-            print("🔄 Resetting Arduino state for loop...")
-            self.midi_manager.midi_out.flush_buffers()
-            self.midi_manager.midi_out.send_reset_command()
-            time.sleep(0.1)  # Give Arduino time to process reset
+        # COMMENTED OUT: May be causing timing issues
+        # if (
+        #     hasattr(self.midi_manager, "use_serial")
+        #     and self.midi_manager.use_serial
+        #     and hasattr(self.midi_manager.midi_out, "flush_buffers")
+        # ):
+        #     print("🔄 Resetting Arduino state for loop...")
+        #     self.midi_manager.midi_out.flush_buffers()
+        #     self.midi_manager.midi_out.send_reset_command()
+        #     time.sleep(0.1)  # Give Arduino time to process reset
 
     def load_schedule(self, schedule: List[Dict[str, Any]]) -> None:
         """Load MIDI schedule"""
@@ -339,6 +339,7 @@ class MidiScheduler:
         if current_time is None or not isinstance(current_time, (int, float)):
             return
 
+        # current_time is video position, use it directly for cue processing
         playback_time = current_time
 
         # Single unified loop detection using video duration
