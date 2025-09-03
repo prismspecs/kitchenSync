@@ -140,14 +140,11 @@ class SerialMidiOut:
     def _send(self, cmd: str):
         if self.ser:
             try:
+                send_timestamp = time.time()
                 self.ser.write(cmd.encode("utf-8"))
-                # Reduced delay to 15ms for better responsiveness while preventing buffer overflow
-                time.sleep(0.015)
-                # Add timestamp to show when command was actually sent
-                import time
-
-                send_time = time.time()
-                print(f"Serial MIDI Sent: {cmd.strip()} [SENT_AT={send_time:.3f}]")
+                # Increased delay to 25ms to prevent Arduino buffer overflow during rapid bursts
+                time.sleep(0.025)
+                print(f"Serial MIDI Sent: {cmd.strip()} [SENT_AT={send_timestamp:.3f}]")
             except Exception as e:
                 print(f"Serial MIDI send failed: {e}")
         else:
@@ -297,8 +294,8 @@ class MidiScheduler:
         self.triggered_cues.clear()
         self.loop_count = 0
 
-        # Clear Arduino state and serial buffers when looping
-        # COMMENTED OUT: May be causing timing issues
+        # Arduino reset disabled to prevent timing delays
+        # The Arduino state persistence was causing 5-second timing delays
         # if (
         #     hasattr(self.midi_manager, "use_serial")
         #     and self.midi_manager.use_serial
@@ -336,14 +333,13 @@ class MidiScheduler:
 
     def process_cues(self, current_time: float) -> None:
         """Process MIDI cues for current time with robust single loop detection"""
-        if not self.is_running or self.start_time is None:
+        if not self.is_running or not self.start_time:
             return
 
         # Validate current_time parameter
         if current_time is None or not isinstance(current_time, (int, float)):
             return
 
-        # current_time is video position, use it directly for cue processing
         playback_time = current_time
 
         # Single unified loop detection using video duration
@@ -386,20 +382,15 @@ class MidiScheduler:
             if cue_time <= effective_time and cue_id not in self.triggered_cues:
                 self.midi_manager.send_cue_message(cue)
                 self.triggered_cues.add(cue_id)
+
+                # Enhanced debug logging with comprehensive timing information
                 loop_info = f" (Loop #{self.loop_count})" if self.loop_count > 0 else ""
-
-                # Enhanced timing debug information
-                timing_info = (
-                    f"🎬 VIDEO_POS={playback_time:.3f}s | "
-                    f"EFFECTIVE={effective_time:.3f}s | "
-                    f"CUE={cue_time:.3f}s | "
-                    f"LOOP={current_loop}"
-                )
-
                 print(
-                    f"⏰ MIDI at {cue_time}s: {cue.get('type', 'unknown')} Ch{cue.get('channel', 1)} Note{cue.get('note', 0)} Vel{cue.get('velocity', 0)}{loop_info}"
+                    f"⏰ MIDI at {cue_time}s: {cue_type} Ch{cue.get('channel', 1)} Note{cue.get('note', 0)} Vel{cue.get('velocity', 0)}{loop_info}"
                 )
-                print(f"   📊 {timing_info}")
+                print(
+                    f"   📊 🎬 VIDEO_POS={current_time:.3f}s | EFFECTIVE={effective_time:.3f}s | CUE={cue_time:.3f}s | LOOP={self.loop_count}"
+                )
 
     def get_current_cues(
         self, current_time: float, window: float = 0.5
