@@ -141,8 +141,8 @@ class SerialMidiOut:
         if self.ser:
             try:
                 self.ser.write(cmd.encode("utf-8"))
-                # Increased delay to 25ms to prevent Arduino buffer overflow during rapid bursts
-                time.sleep(0.025)
+                # Reduced delay to 15ms for better responsiveness while preventing buffer overflow
+                time.sleep(0.015)
                 # Add timestamp to show when command was actually sent
                 import time
 
@@ -390,9 +390,9 @@ class MidiScheduler:
 
                 # Enhanced timing debug information
                 timing_info = (
-                    f"VIDEO_TIME={playback_time:.3f}s | "
-                    f"EFFECTIVE_TIME={effective_time:.3f}s | "
-                    f"CUE_TIME={cue_time:.3f}s | "
+                    f"🎬 VIDEO_POS={playback_time:.3f}s | "
+                    f"EFFECTIVE={effective_time:.3f}s | "
+                    f"CUE={cue_time:.3f}s | "
                     f"LOOP={current_loop}"
                 )
 

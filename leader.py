@@ -253,20 +253,9 @@ class LeaderPi:
 
                 # Pass the raw time directly to the scheduler for proper loop detection
                 if current_time is not None and self.system_state.is_running:
-                    # Debug: Show what time we're passing to the scheduler
-                    if (
-                        hasattr(self, "_last_debug_time")
-                        and abs(current_time - self._last_debug_time) > 1.0
-                    ):
-                        print(f"🎬 VIDEO POSITION: {current_time:.3f}s")
-                        self._last_debug_time = current_time
-                    elif not hasattr(self, "_last_debug_time"):
-                        self._last_debug_time = current_time
-                        print(f"🎬 VIDEO POSITION: {current_time:.3f}s")
-
                     self.midi_scheduler.process_cues(current_time)
 
-                time.sleep(0.05)  # 20Hz cue check
+                time.sleep(0.02)  # 50Hz cue check for better timing precision
 
         threading.Thread(target=midi_cue_loop, daemon=True).start()
 
