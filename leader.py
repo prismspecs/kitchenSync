@@ -228,7 +228,8 @@ class LeaderPi:
 
         # Start MIDI playback with video duration for looping
         video_duration = self.video_player.get_duration()
-        self.midi_scheduler.start_playback(self.system_state.start_time, video_duration)
+        # Use video-relative timing (start at 0) instead of wall clock time
+        self.midi_scheduler.start_playback(0.0, video_duration)
 
         # Send start command to collaborators
         start_command = {
@@ -339,8 +340,9 @@ class LeaderPi:
             success = self.video_player.set_position(seconds)
             if success:
                 log_info(f"✓ Seek successful to {seconds}s", component="leader")
-                if seconds == 0:
-                    self.midi_scheduler.reset()
+                # Reset MIDI scheduler on any seek to clear triggered cues
+                self.midi_scheduler.reset()
+                log_info("MIDI scheduler reset after seek", component="leader")
             else:
                 log_error("✗ Failed to seek video", component="leader")
         except ValueError:

@@ -59,7 +59,7 @@ class MockMidiOut:
 class SerialMidiOut:
     """Serial output for Arduino MIDI controller"""
 
-    def __init__(self, port: str = None, baud: int = 31250, timeout: float = 1.0):
+    def __init__(self, port: str = None, baud: int = 115200, timeout: float = 1.0):
         self.port = port or self._detect_port()
         self.baud = baud
         self.timeout = timeout
@@ -132,7 +132,7 @@ class SerialMidiOut:
                     note = 60 + channel
                     cmd = f"noteoff {channel} {note} 0\n"
                     self.ser.write(cmd.encode("utf-8"))
-                    time.sleep(0.01)  # Small delay between commands
+                    time.sleep(0.002)  # Reduced delay for faster reset
                 print("Serial MIDI: Reset command sent (all channels off)")
             except Exception as e:
                 print(f"Serial MIDI reset failed: {e}")
@@ -140,11 +140,10 @@ class SerialMidiOut:
     def _send(self, cmd: str):
         if self.ser:
             try:
-                send_timestamp = time.time()
                 self.ser.write(cmd.encode("utf-8"))
-                # Reduced delay to 10ms for rapid bursts, but still prevent buffer overflow
-                time.sleep(0.01)
-                print(f"Serial MIDI Sent: {cmd.strip()} [SENT_AT={send_timestamp:.3f}]")
+                # Reduced delay to 5ms for faster communication with improved Arduino buffering
+                time.sleep(0.005)
+                print(f"Serial MIDI Sent: {cmd.strip()}")
             except Exception as e:
                 print(f"Serial MIDI send failed: {e}")
         else:
@@ -294,17 +293,17 @@ class MidiScheduler:
         self.triggered_cues.clear()
         self.loop_count = 0
 
-        # Arduino reset disabled to prevent timing delays
-        # The Arduino state persistence was causing 5-second timing delays
-        # if (
-        #     hasattr(self.midi_manager, "use_serial")
-        #     and self.midi_manager.use_serial
-        #     and hasattr(self.midi_manager.midi_out, "flush_buffers")
-        # ):
-        #     print("🔄 Resetting Arduino state for loop...")
-        #     self.midi_manager.midi_out.flush_buffers()
-        #     self.midi_manager.midi_out.send_reset_command()
-        #     time.sleep(0.1)  # Give Arduino time to process reset
+        # Clear Arduino state and serial buffers when looping
+        if (
+            hasattr(self.midi_manager, "use_serial")
+            and self.midi_manager.use_serial
+            and hasattr(self.midi_manager.midi_out, "flush_buffers")
+        ):
+
+            print("🔄 Resetting Arduino state for loop...")
+            self.midi_manager.midi_out.flush_buffers()
+            self.midi_manager.midi_out.send_reset_command()
+            time.sleep(0.1)  # Give Arduino time to process reset
 
     def load_schedule(self, schedule: List[Dict[str, Any]]) -> None:
         """Load MIDI schedule"""
@@ -333,7 +332,7 @@ class MidiScheduler:
 
     def process_cues(self, current_time: float) -> None:
         """Process MIDI cues for current time with robust single loop detection"""
-        if not self.is_running or not self.start_time:
+        if not self.is_running or self.start_time is None:
             return
 
         # Validate current_time parameter
@@ -382,27 +381,10 @@ class MidiScheduler:
             if cue_time <= effective_time and cue_id not in self.triggered_cues:
                 self.midi_manager.send_cue_message(cue)
                 self.triggered_cues.add(cue_id)
-
-                # Enhanced debug logging with comprehensive timing information
                 loop_info = f" (Loop #{self.loop_count})" if self.loop_count > 0 else ""
                 print(
-                    f"⏰ MIDI at {cue_time}s: {cue_type} Ch{cue.get('channel', 1)} Note{cue.get('note', 0)} Vel{cue.get('velocity', 0)}{loop_info}"
+                    f"⏰ MIDI at {cue_time}s: {cue.get('type', 'unknown')} Ch{cue.get('channel', 1)} Note{cue.get('note', 0)} Vel{cue.get('velocity', 0)}{loop_info}"
                 )
-                print(
-                    f"   📊 🎬 VIDEO_POS={current_time:.3f}s | EFFECTIVE={effective_time:.3f}s | CUE={cue_time:.3f}s | LOOP={self.loop_count}"
-                )
-
-                # Additional logging for rapid bursts (>1 cue per second)
-                if self.loop_count == 0:  # Only check on first loop to avoid spam
-                    recent_cues = [
-                        c
-                        for c in self.schedule
-                        if abs(c.get("time", 0) - cue_time) <= 1.0 and c != cue
-                    ]
-                    if len(recent_cues) >= 2:
-                        print(
-                            f"   ⚡ RAPID BURST: {len(recent_cues)+1} cues within 1s of {cue_time}s"
-                        )
 
     def get_current_cues(
         self, current_time: float, window: float = 0.5
