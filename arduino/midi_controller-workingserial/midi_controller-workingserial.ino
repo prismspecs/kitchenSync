@@ -6,8 +6,8 @@
 
 // --- Configuration ---
 const uint16_t PWM_FREQ = 200;
-const uint8_t MIDI_BASE_NOTE = 60; // C4 is mapped to the first PWM channel
-const uint32_t SERIAL_BAUD = 9600; // Use common high-speed baud rate
+const uint8_t MIDI_BASE_NOTE = 60;   // C4 is mapped to the first PWM channel
+const uint32_t SERIAL_BAUD = 115200; // Increased for faster serial communication
 
 // --- Pins ---
 const uint8_t PIN_LED_HEARTBEAT = 13;
@@ -17,6 +17,7 @@ const uint8_t PIN_LED_ACTIVITY = 12;
 const uint8_t CHANS_LEN = 16;
 uint32_t last_input_rx_ms = 0;
 String serial_buffer = "";
+const uint8_t BUFFER_SIZE = 256; // Increased buffer size for rapid bursts
 
 // --- Objects ---
 Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver();
@@ -36,7 +37,7 @@ void setup()
   pinMode(PIN_LED_ACTIVITY, OUTPUT);
 
   Serial.begin(SERIAL_BAUD);
-  serial_buffer.reserve(64); // Pre-allocate memory for the string
+  serial_buffer.reserve(BUFFER_SIZE); // Pre-allocate larger buffer for rapid bursts
   Serial.println("System Initialized. Waiting for input...");
 
   // MIDI on SoftwareSerial (pins 2,3) - Serial free for debugging
@@ -94,10 +95,8 @@ void pwm_set_from_pitch(byte pitch, byte velocity)
   int8_t chan = pitch - MIDI_BASE_NOTE;
   if (chan < 0 || chan >= CHANS_LEN)
   {
-    Serial.print("Pitch ");
-    Serial.print(pitch);
-    Serial.println(" is outside channel range (60-75)");
-    return; // Ignore notes outside our target range
+    // Silent ignore for out-of-range pitches during rapid bursts
+    return;
   }
 
   // Convert MIDI velocity (0-127) to PWM value (0-4095)
@@ -107,16 +106,17 @@ void pwm_set_from_pitch(byte pitch, byte velocity)
   // Send the command to the PWM driver
   pwm.setPWM(chan, 0, pwr);
 
-  // --- DEBUGGING ---
-  Serial.print("Set PWM Chan: ");
-  Serial.print(chan);
-  Serial.print(" from Pitch: ");
-  Serial.print(pitch);
-  Serial.print(" | Power: ");
-  Serial.println(pwr);
+  // Minimal debug output - only show first character to indicate activity
+  Serial.print("C"); // Compact debug: Channel active
+  Serial.println(chan);
 }
 
 // --- Serial Input Handling ---
+// Debug codes for rapid burst optimization:
+// R = Command Received
+// C# = Channel # active (0-15)
+// E = Error (invalid format)
+// U = Unknown command
 void process_serial_input()
 {
   while (Serial.available())
@@ -142,10 +142,8 @@ void parse_serial_command(String command)
   command.trim();
   command.toLowerCase();
 
-  // --- DEBUGGING ---
-  Serial.print("Received Serial Command: '");
-  Serial.print(command);
-  Serial.println("'");
+  // Minimal debug - just indicate command received
+  Serial.println("R"); // Compact debug: Received command
 
   // Check for simple format first: "60 127" (pitch velocity)
   int spaceIndex = command.indexOf(' ');
@@ -154,10 +152,6 @@ void parse_serial_command(String command)
     // Simple two-parameter format
     byte pitch = command.substring(0, spaceIndex).toInt();
     byte velocity = command.substring(spaceIndex + 1).toInt();
-    Serial.print("Simple format - pitch: ");
-    Serial.print(pitch);
-    Serial.print(" velocity: ");
-    Serial.println(velocity);
     pwm_set_from_pitch(pitch, velocity);
     return;
   }
@@ -180,23 +174,14 @@ void parse_serial_command(String command)
   // Fixed: Check for minimum required parts
   if (partIndex < 3)
   {
-    Serial.println("Error: Invalid command format.");
-    Serial.println("Try: 'noteon 0 60 127' or simple '60 127'");
+    Serial.println("E"); // Compact debug: Error
     return;
   }
 
   // parts[0] is command, parts[1] is channel, parts[2] is pitch, parts[3] is velocity
   String cmd_type = parts[0];
-  // byte channel = parts[1].toInt(); // Channel is not used in your pwm_set_from_pitch logic
   byte pitch = parts[2].toInt();
   byte velocity = parts[3].toInt();
-
-  Serial.print("Full format - cmd: ");
-  Serial.print(cmd_type);
-  Serial.print(" pitch: ");
-  Serial.print(pitch);
-  Serial.print(" velocity: ");
-  Serial.println(velocity);
 
   if (cmd_type == "noteon")
   {
@@ -208,6 +193,6 @@ void parse_serial_command(String command)
   }
   else
   {
-    Serial.println("Error: Unknown command. Use 'noteon' or 'noteoff'");
+    Serial.println("U"); // Compact debug: Unknown command
   }
 }

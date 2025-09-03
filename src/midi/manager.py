@@ -142,8 +142,8 @@ class SerialMidiOut:
             try:
                 send_timestamp = time.time()
                 self.ser.write(cmd.encode("utf-8"))
-                # Increased delay to 25ms to prevent Arduino buffer overflow during rapid bursts
-                time.sleep(0.025)
+                # Reduced delay to 10ms for rapid bursts, but still prevent buffer overflow
+                time.sleep(0.01)
                 print(f"Serial MIDI Sent: {cmd.strip()} [SENT_AT={send_timestamp:.3f}]")
             except Exception as e:
                 print(f"Serial MIDI send failed: {e}")
@@ -166,7 +166,7 @@ class MidiManager:
         use_mock: bool = False,
         use_serial: bool = True,
         serial_port: str = None,
-        serial_baud: int = 9600,  # Match Arduino Serial.begin
+        serial_baud: int = 115200,  # Match Arduino Serial.begin
     ):
         self.port = port
         self.use_mock = use_mock
@@ -391,6 +391,18 @@ class MidiScheduler:
                 print(
                     f"   📊 🎬 VIDEO_POS={current_time:.3f}s | EFFECTIVE={effective_time:.3f}s | CUE={cue_time:.3f}s | LOOP={self.loop_count}"
                 )
+
+                # Additional logging for rapid bursts (>1 cue per second)
+                if self.loop_count == 0:  # Only check on first loop to avoid spam
+                    recent_cues = [
+                        c
+                        for c in self.schedule
+                        if abs(c.get("time", 0) - cue_time) <= 1.0 and c != cue
+                    ]
+                    if len(recent_cues) >= 2:
+                        print(
+                            f"   ⚡ RAPID BURST: {len(recent_cues)+1} cues within 1s of {cue_time}s"
+                        )
 
     def get_current_cues(
         self, current_time: float, window: float = 0.5
