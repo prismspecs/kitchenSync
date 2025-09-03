@@ -340,8 +340,9 @@ class LeaderPi:
             success = self.video_player.set_position(seconds)
             if success:
                 log_info(f"✓ Seek successful to {seconds}s", component="leader")
-                if seconds == 0:
-                    self.midi_scheduler.reset()
+                # Reset MIDI scheduler on any seek to clear triggered cues
+                self.midi_scheduler.reset()
+                log_info("MIDI scheduler reset after seek", component="leader")
             else:
                 log_error("✗ Failed to seek video", component="leader")
         except ValueError:

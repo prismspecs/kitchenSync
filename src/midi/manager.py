@@ -332,7 +332,7 @@ class MidiScheduler:
 
     def process_cues(self, current_time: float) -> None:
         """Process MIDI cues for current time with robust single loop detection"""
-        if not self.is_running or not self.start_time:
+        if not self.is_running or self.start_time is None:
             return
 
         # Validate current_time parameter
