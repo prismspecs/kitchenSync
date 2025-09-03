@@ -228,7 +228,8 @@ class LeaderPi:
 
         # Start MIDI playback with video duration for looping
         video_duration = self.video_player.get_duration()
-        self.midi_scheduler.start_playback(self.system_state.start_time, video_duration)
+        # Use video-relative timing (start at 0) instead of wall clock time
+        self.midi_scheduler.start_playback(0.0, video_duration)
 
         # Send start command to collaborators
         start_command = {
