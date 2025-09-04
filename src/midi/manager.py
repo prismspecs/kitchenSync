@@ -97,11 +97,11 @@ class SerialMidiOut:
         pass
 
     def send_note_on(self, channel: int, pitch: int, velocity: int):
-        cmd = f"noteon {channel} {pitch} {velocity}\n"
+        cmd = f"{pitch} {velocity}\n"
         self._send(cmd)
 
     def send_note_off(self, channel: int, pitch: int):
-        cmd = f"noteoff {channel} {pitch} 0\n"
+        cmd = f"{pitch} 0\n"
         self._send(cmd)
 
     def send_control_change(self, channel: int, control: int, value: int):
@@ -290,7 +290,6 @@ class MidiScheduler:
     def reset(self):
         """Reset triggered cues for fresh playback or loop."""
         self.triggered_cues.clear()
-        self.loop_count = 0
 
         # Clear Arduino state and serial buffers when looping
         if (
@@ -339,24 +338,35 @@ class MidiScheduler:
 
         playback_time = current_time
 
-        # Single unified loop detection using video duration
-        current_loop = 0
+        # Robust loop detection: handle both monotonic time and VLC reset-to-zero behavior
         effective_time = playback_time
+        loop_detected = False
 
         if (
             self.enable_looping
             and self.video_duration is not None
             and self.video_duration > 0
         ):
-            current_loop = int(playback_time // self.video_duration)
+            # Detect if VLC reset time to ~0 at loop boundary
+            if (
+                self.previous_playback_time is not None
+                and playback_time + 0.5 < self.previous_playback_time
+            ):
+                loop_detected = True
+                self.loop_count += 1
+            else:
+                # Fallback: compute absolute loop index when time is monotonic
+                computed_loop = int(playback_time // self.video_duration)
+                if computed_loop > self.loop_count:
+                    loop_detected = True
+                    self.loop_count = computed_loop
+
             effective_time = playback_time % self.video_duration
 
-            # Only reset when we definitively enter a new loop
-            if current_loop > self.loop_count:
+            if loop_detected:
                 self.reset()
-                self.loop_count = current_loop
                 log_info(
-                    f"MIDI schedule loop #{current_loop} started", component="midi"
+                    f"MIDI schedule loop #{self.loop_count} started", component="midi"
                 )
 
         # Always update previous time for diagnostics

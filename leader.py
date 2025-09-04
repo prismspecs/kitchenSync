@@ -255,7 +255,7 @@ class LeaderPi:
                 if current_time is not None and self.system_state.is_running:
                     self.midi_scheduler.process_cues(current_time)
 
-                time.sleep(0.05)  # 20Hz cue check
+                time.sleep(0.02)  # 50Hz cue check
 
         threading.Thread(target=midi_cue_loop, daemon=True).start()
 
