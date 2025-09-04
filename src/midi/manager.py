@@ -286,6 +286,9 @@ class MidiScheduler:
         self.loop_count = 0
         self.enable_looping = True
         self.previous_playback_time = None  # Track previous position for loop detection
+        self.last_effective_time: Optional[float] = (
+            None  # Fire cues only as time advances
+        )
 
     def reset(self):
         """Reset triggered cues for fresh playback or loop."""
@@ -302,6 +305,10 @@ class MidiScheduler:
             self.midi_manager.midi_out.flush_buffers()
             # self.midi_manager.midi_out.send_reset_command()
 
+        # After a reset (loop or seek), treat the next tick as a fresh start
+        self.previous_playback_time = None
+        self.last_effective_time = None
+
     def load_schedule(self, schedule: List[Dict[str, Any]]) -> None:
         """Load MIDI schedule"""
         self.schedule = sorted(schedule, key=lambda x: x.get("time", 0))
@@ -317,6 +324,7 @@ class MidiScheduler:
         self.is_running = True
         self.loop_count = 0
         self.previous_playback_time = None
+        self.last_effective_time = None
         self.reset()
         print("🎵 Started MIDI playback")
 
@@ -339,60 +347,78 @@ class MidiScheduler:
         playback_time = current_time
 
         # Robust loop detection: handle both monotonic time and VLC reset-to-zero behavior
-        effective_time = playback_time
         loop_detected = False
+        regression_detected = (
+            self.previous_playback_time is not None
+            and playback_time + 0.5 < self.previous_playback_time
+        )
 
-        if (
-            self.enable_looping
-            and self.video_duration is not None
-            and self.video_duration > 0
-        ):
-            # Detect if VLC reset time to ~0 at loop boundary
-            if (
-                self.previous_playback_time is not None
-                and playback_time + 0.5 < self.previous_playback_time
-            ):
+        # Compute effective_time based on duration availability
+        if self.video_duration is not None and self.video_duration > 0:
+            # Duration known: use modulus for effective time
+            effective_time = playback_time % self.video_duration
+
+            # Detect loop either by regression or by computed loop index
+            if regression_detected:
                 loop_detected = True
                 self.loop_count += 1
             else:
-                # Fallback: compute absolute loop index when time is monotonic
                 computed_loop = int(playback_time // self.video_duration)
                 if computed_loop > self.loop_count:
                     loop_detected = True
                     self.loop_count = computed_loop
+        else:
+            # Duration unknown: treat raw playback_time as effective time and rely on regression detection
+            effective_time = playback_time
+            if regression_detected:
+                loop_detected = True
+                self.loop_count += 1
 
-            effective_time = playback_time % self.video_duration
+        if loop_detected:
+            self.reset()
+            log_info(f"MIDI schedule loop #{self.loop_count} started", component="midi")
+            # After reset, skip firing on this exact tick to avoid backfill
+            self.previous_playback_time = playback_time
+            self.last_effective_time = effective_time
+            return
 
-            if loop_detected:
-                self.reset()
-                log_info(
-                    f"MIDI schedule loop #{self.loop_count} started", component="midi"
-                )
+        # On first tick after a reset/seek/start, initialize and skip firing to avoid backfill
+        if self.last_effective_time is None:
+            self.last_effective_time = effective_time
+            self.previous_playback_time = playback_time
+            return
 
-        # Always update previous time for diagnostics
+        # Process cues only as time advances beyond the last effective time
+        # Normal forward case
+        if effective_time >= self.last_effective_time:
+            for cue in self.schedule:
+                cue_time = cue.get("time", 0)
+                if self.last_effective_time < cue_time <= effective_time:
+                    # Auto-detect type for proper cue ID generation
+                    cue_type = cue.get("type")
+                    if not cue_type:
+                        velocity = cue.get("velocity", 0)
+                        cue_type = "note_on" if velocity > 0 else "note_off"
+
+                    cue_id = f"{cue_time}_{cue_type}_{cue.get('note', 0)}_{cue.get('channel', 1)}"
+
+                    if cue_id not in self.triggered_cues:
+                        self.midi_manager.send_cue_message(cue)
+                        self.triggered_cues.add(cue_id)
+                        loop_info = (
+                            f" (Loop #{self.loop_count})" if self.loop_count > 0 else ""
+                        )
+                        print(
+                            f"⏰ MIDI at {cue_time}s: {cue.get('type', 'unknown')} Ch{cue.get('channel', 1)} Note{cue.get('note', 0)} Vel{cue.get('velocity', 0)}{loop_info}"
+                        )
+        else:
+            # This indicates a backward time jump (seek or glitch) without explicit reset.
+            # Clear triggered cues to allow correct re-triggering from the new position.
+            self.triggered_cues.clear()
+
+        # Update trackers for next iteration
+        self.last_effective_time = effective_time
         self.previous_playback_time = playback_time
-
-        # Process cues with effective (wrapped) time
-        for cue in self.schedule:
-            cue_time = cue.get("time", 0)
-
-            # Auto-detect type for proper cue ID generation
-            cue_type = cue.get("type")
-            if not cue_type:
-                velocity = cue.get("velocity", 0)
-                cue_type = "note_on" if velocity > 0 else "note_off"
-
-            cue_id = (
-                f"{cue_time}_{cue_type}_{cue.get('note', 0)}_{cue.get('channel', 1)}"
-            )
-
-            if cue_time <= effective_time and cue_id not in self.triggered_cues:
-                self.midi_manager.send_cue_message(cue)
-                self.triggered_cues.add(cue_id)
-                loop_info = f" (Loop #{self.loop_count})" if self.loop_count > 0 else ""
-                print(
-                    f"⏰ MIDI at {cue_time}s: {cue.get('type', 'unknown')} Ch{cue.get('channel', 1)} Note{cue.get('note', 0)} Vel{cue.get('velocity', 0)}{loop_info}"
-                )
 
     def get_current_cues(
         self, current_time: float, window: float = 0.5
