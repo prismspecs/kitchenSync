@@ -142,7 +142,6 @@ class SerialMidiOut:
             try:
                 self.ser.write(cmd.encode("utf-8"))
                 # Reduced delay to 5ms for faster communication with improved Arduino buffering
-                time.sleep(0.005)
                 print(f"Serial MIDI Sent: {cmd.strip()}")
             except Exception as e:
                 print(f"Serial MIDI send failed: {e}")
@@ -302,8 +301,7 @@ class MidiScheduler:
 
             print("🔄 Resetting Arduino state for loop...")
             self.midi_manager.midi_out.flush_buffers()
-            self.midi_manager.midi_out.send_reset_command()
-            time.sleep(0.1)  # Give Arduino time to process reset
+            # self.midi_manager.midi_out.send_reset_command()
 
     def load_schedule(self, schedule: List[Dict[str, Any]]) -> None:
         """Load MIDI schedule"""
