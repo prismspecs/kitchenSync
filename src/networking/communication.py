@@ -18,33 +18,42 @@ class NetworkError(Exception):
 
 
 def _get_broadcast_address():
-    """Get appropriate broadcast address, falling back for offline scenarios"""
+    """Get appropriate broadcast address, prioritizing local subnet for offline support"""
+    # 1. Try using the 'ip' command (Linux standard, works offline)
     try:
-        # Try standard broadcast first
-        test_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        test_sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-        # Test if we can create a broadcast socket (doesn't actually send)
-        test_sock.close()
-        return "255.255.255.255"
+        import subprocess
+        # Get all global IPv4 addresses
+        cmd = ["ip", "-4", "-o", "addr", "show", "scope", "global"]
+        output = subprocess.check_output(cmd, stderr=subprocess.DEVNULL).decode()
+        
+        # Parse output for the first interface with a broadcast address
+        # Output format: "2: eth0    inet 192.168.1.5/24 brd 192.168.1.255 ..."
+        for line in output.splitlines():
+            parts = line.split()
+            if "brd" in parts:
+                idx = parts.index("brd")
+                if idx + 1 < len(parts):
+                    return parts[idx + 1]
     except Exception:
-        # Fallback: try to detect local network broadcast
-        try:
-            # Get local IP to determine network
-            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            s.connect(("1.1.1.1", 80))  # Dummy connection to get local IP
-            local_ip = s.getsockname()[0]
-            s.close()
+        pass
 
-            # Calculate broadcast for common /24 network
-            ip_parts = local_ip.split(".")
-            if len(ip_parts) == 4:
-                broadcast = f"{ip_parts[0]}.{ip_parts[1]}.{ip_parts[2]}.255"
-                return broadcast
-        except Exception:
-            pass
+    # 2. Fallback: Try to detect local IP via dummy connection (requires gateway/internet)
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("1.1.1.1", 80))  # Dummy connection to get local IP
+        local_ip = s.getsockname()[0]
+        s.close()
 
-        # Final fallback for common local networks
-        return "192.168.1.255"
+        # Calculate broadcast for common /24 network
+        ip_parts = local_ip.split(".")
+        if len(ip_parts) == 4:
+            broadcast = f"{ip_parts[0]}.{ip_parts[1]}.{ip_parts[2]}.255"
+            return broadcast
+    except Exception:
+        pass
+
+    # 3. Final Fallback: Global broadcast (may fail on some setups without route)
+    return "255.255.255.255"
 
 
 class SyncBroadcaster:
