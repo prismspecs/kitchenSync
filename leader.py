@@ -52,18 +52,23 @@ class LeaderPi:
         self.video_manager = VideoFileManager(
             self.config.video_file, self.config.usb_mount_point
         )
+        print(f"DEBUG: Configured video file: {self.config.video_file}")
 
         # Select video player backend
         backend = self.config.player_backend.lower()
+        print(f"DEBUG: Player backend: {backend}")
+        
         if backend == "gstreamer":
             log_info("Using GStreamer backend", component="leader")
             # Check for headless flag in sys.argv since config is loaded before args
             is_headless = "--headless" in sys.argv
+            print(f"DEBUG: Initializing GStreamer Player (headless={is_headless})")
             self.video_player = GstVideoPlayer(
                 debug_mode=self.config.debug_mode,
                 headless=is_headless
             )
         else:
+            print("DEBUG: Initializing VLC Player")
             log_info("Using VLC backend", component="leader")
             self.video_player = VLCVideoPlayer(
                 debug_mode=self.config.debug_mode,
@@ -88,11 +93,14 @@ class LeaderPi:
 
         # Find video file before creating debug overlay
         self.video_path = self.video_manager.find_video_file()
+        print(f"DEBUG: Found video path: {self.video_path}")
+        
         if self.video_path:
             self.video_player.load_video(self.video_path)
             log_info(f"Video file loaded: {self.video_path}", component="leader")
         else:
             log_warning("No video file found at startup.", component="leader")
+            print("DEBUG: WARNING - No video file found!")
 
         # Create HTML debug overlay only if debug mode is enabled
         self.html_debug = None
