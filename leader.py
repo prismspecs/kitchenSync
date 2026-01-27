@@ -57,8 +57,11 @@ class LeaderPi:
         backend = self.config.player_backend.lower()
         if backend == "gstreamer":
             log_info("Using GStreamer backend", component="leader")
+            # Check for headless flag in sys.argv since config is loaded before args
+            is_headless = "--headless" in sys.argv
             self.video_player = GstVideoPlayer(
-                debug_mode=self.config.debug_mode
+                debug_mode=self.config.debug_mode,
+                headless=is_headless
             )
         else:
             log_info("Using VLC backend", component="leader")
@@ -414,6 +417,11 @@ def main():
         "--debug",
         action="store_true",
         help="Enable debug mode with detailed console output",
+    )
+    parser.add_argument(
+        "--headless",
+        action="store_true",
+        help="Run in headless mode (no video output, fakesink)",
     )
     args = parser.parse_args()
 

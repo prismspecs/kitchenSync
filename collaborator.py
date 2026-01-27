@@ -89,8 +89,11 @@ class CollaboratorPi:
         backend = self.config.player_backend.lower()
         if backend == "gstreamer":
             log_info("Using GStreamer backend", component="collaborator")
+            # Check for headless flag in sys.argv
+            is_headless = "--headless" in sys.argv
             self.video_player = GstVideoPlayer(
-                debug_mode=self.config.debug_mode
+                debug_mode=self.config.debug_mode,
+                headless=is_headless
             )
         else:
             log_info("Using VLC backend", component="collaborator")
@@ -786,6 +789,11 @@ def main():
         "--debug_deviation",
         action="store_true",
         help="Print raw deviation between leader and collaborator video positions to the console",
+    )
+    parser.add_argument(
+        "--headless",
+        action="store_true",
+        help="Run in headless mode (no video output, fakesink)",
     )
     args = parser.parse_args()
 
