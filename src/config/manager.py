@@ -180,7 +180,7 @@ class ConfigManager:
             # Audio output selection
             "audio_output": "hdmi",  # hdmi or headphone
             # Video player backend selection
-            "player_backend": "vlc",  # vlc or gstreamer
+            "player_backend": "gstreamer",  # vlc or gstreamer
         }
 
         if self.config_file and not os.path.exists(self.config_file):
@@ -318,5 +318,5 @@ class ConfigManager:
 
     @property
     def player_backend(self) -> str:
-        """Get video player backend (vlc or gstreamer, default: vlc)."""
-        return self.get("player_backend", "vlc")
+        """Get video player backend (vlc or gstreamer, default: gstreamer)."""
+        return self.get("player_backend", "gstreamer")
