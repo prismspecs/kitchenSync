@@ -21,6 +21,14 @@ fi
 echo "Installing VLC and dependencies..."
 sudo apt install -y vlc libvlc-dev python3-vlc python3-pip python3-dev libasound2-dev alsa-utils
 
+# Install GStreamer and dependencies (New Video Player)
+echo "Installing GStreamer and dependencies..."
+sudo apt install -y python3-gst-1.0 \
+    gstreamer1.0-plugins-base gstreamer1.0-plugins-good \
+    gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly \
+    gstreamer1.0-libav gstreamer1.0-tools \
+    gstreamer1.0-gl libgstreamer1.0-dev
+
 # Set system volume to 90%
 echo "Setting system volume to 90%..."
 amixer set Master 90%

@@ -35,7 +35,7 @@ sudo reboot
 
 ## ✨ Key Features
 
-- **🎬 Synchronized Video Playback**: Multiple Pis play videos in perfect sync using VLC with advanced drift correction
+- **🎬 Synchronized Video Playback**: Multiple Pis play videos in perfect sync using GStreamer (hardware accelerated) or VLC with advanced drift correction
 - **🎹 Precise MIDI Output**: Timecoded MIDI events via Arduino serial with sub-50ms accuracy
 - **🔌 Plug-and-Play USB**: Automatic USB drive detection, mounting, and video file selection
 - **🎯 Automatic Role Detection**: USB-based configuration determines leader vs collaborator roles
