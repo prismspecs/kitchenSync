@@ -15,16 +15,19 @@ except ImportError:
     sys.exit(1)
 
 class GstHardwareTest:
-    def __init__(self, file_path):
+    def __init__(self, file_path, headless=False):
         self.file_path = os.path.abspath(file_path)
         Gst.init(None)
         
+        # Define the sink based on headless mode
+        sink = "fakesink sync=true" if headless else "autovideosink"
+        
         # Define the hardware-accelerated pipeline
-        # filesrc -> qtdemux -> h264parse -> v4l2h264dec -> videoconvert -> autovideosink
+        # filesrc -> qtdemux -> h264parse -> v4l2h264dec -> videoconvert -> sink
         pipeline_str = (
             f"filesrc location={self.file_path} ! "
             "qtdemux ! h264parse ! v4l2h264dec ! "
-            "videoconvert ! autovideosink"
+            f"videoconvert ! {sink}"
         )
         
         print(f"DEBUG: Launching pipeline: {pipeline_str}")
@@ -80,8 +83,14 @@ class GstHardwareTest:
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("Usage: python3 test_gst_hardware.py <path_to_video.mp4>")
+        print("Usage: python3 test_gst_hardware.py <path_to_video.mp4> [--headless]")
         sys.exit(1)
         
-    test = GstHardwareTest(sys.argv[1])
+    video_path = sys.argv[1]
+    headless_mode = "--headless" in sys.argv
+    
+    if headless_mode:
+        print("Running in HEADLESS mode (no video output)")
+        
+    test = GstHardwareTest(video_path, headless=headless_mode)
     test.run()
