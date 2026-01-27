@@ -17,7 +17,7 @@ import subprocess
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 
 from config import ConfigManager
-from video import VideoFileManager, VLCVideoPlayer, LoopStrategy
+from video import VideoFileManager, VLCVideoPlayer, LoopStrategy, GstVideoPlayer
 from networking import SyncBroadcaster, CommandManager
 from midi import MidiScheduler, MidiManager
 from core import Schedule, ScheduleEditor, SystemState, CollaboratorRegistry
@@ -52,13 +52,23 @@ class LeaderPi:
         self.video_manager = VideoFileManager(
             self.config.video_file, self.config.usb_mount_point
         )
-        self.video_player = VLCVideoPlayer(
-            debug_mode=self.config.debug_mode,
-            enable_vlc_logging=self.config.enable_vlc_logging,
-            vlc_log_level=self.config.vlc_log_level,
-            enable_looping=True,  # Ensure leader also loops
-            loop_strategy=LoopStrategy.NATURAL,  # Force natural VLC looping
-        )
+
+        # Select video player backend
+        backend = self.config.player_backend.lower()
+        if backend == "gstreamer":
+            log_info("Using GStreamer backend", component="leader")
+            self.video_player = GstVideoPlayer(
+                debug_mode=self.config.debug_mode
+            )
+        else:
+            log_info("Using VLC backend", component="leader")
+            self.video_player = VLCVideoPlayer(
+                debug_mode=self.config.debug_mode,
+                enable_vlc_logging=self.config.enable_vlc_logging,
+                vlc_log_level=self.config.vlc_log_level,
+                enable_looping=True,  # Ensure leader also loops
+                loop_strategy=LoopStrategy.NATURAL,  # Force natural VLC looping
+            )
 
         # Initialize networking (wire tick_interval from config)
         self.sync_broadcaster = SyncBroadcaster(

@@ -302,6 +302,7 @@ class KitchenSyncAutoStart:
             "video_file": self.config.video_file,
             "debug": str(self.config.debug_mode).lower(),
             "usb_mount_point": self.config.usb_mount_point or "",
+            "player_backend": self.config.player_backend,
         }
 
         if self.config.is_leader:

@@ -15,7 +15,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 
 from config import ConfigManager
-from video import VideoFileManager, VLCVideoPlayer, LoopStrategy
+from video import VideoFileManager, VLCVideoPlayer, LoopStrategy, GstVideoPlayer
 from networking import CommandListener, SyncReceiver
 from midi import MidiManager, MidiScheduler
 from core import SystemState, Schedule, SyncTracker
@@ -84,17 +84,27 @@ class CollaboratorPi:
         self.video_manager = VideoFileManager(
             self.config.video_file, self.config.usb_mount_point
         )
-        self.video_player = VLCVideoPlayer(
-            debug_mode=self.config.debug_mode,
-            enable_vlc_logging=self.config.enable_vlc_logging,
-            vlc_log_level=self.config.vlc_log_level,
-            enable_looping=True,  # Re-enable looping for collaborator
-            loop_strategy=LoopStrategy.NATURAL,
-        )
-        log_info(
-            "Collaborator using Python VLC for precise sync control",
-            component="collaborator",
-        )
+
+        # Select video player backend
+        backend = self.config.player_backend.lower()
+        if backend == "gstreamer":
+            log_info("Using GStreamer backend", component="collaborator")
+            self.video_player = GstVideoPlayer(
+                debug_mode=self.config.debug_mode
+            )
+        else:
+            log_info("Using VLC backend", component="collaborator")
+            self.video_player = VLCVideoPlayer(
+                debug_mode=self.config.debug_mode,
+                enable_vlc_logging=self.config.enable_vlc_logging,
+                vlc_log_level=self.config.vlc_log_level,
+                enable_looping=True,  # Re-enable looping for collaborator
+                loop_strategy=LoopStrategy.NATURAL,
+            )
+            log_info(
+                "Collaborator using Python VLC for precise sync control",
+                component="collaborator",
+            )
 
         # Initialize MIDI
         midi_port = self.config.getint("midi_port", 0)
@@ -539,6 +549,7 @@ class CollaboratorPi:
                 if duration and video_position is not None
                 else 0
             )
+            # Safe zone logic (only for VLC, GStreamer handles looping internally differently but safe zone is good practice)
             if duration and time_to_end < 2.0:
                 log_info(
                     f"In loop safe zone ({time_to_end:.2f}s to end), "
@@ -568,6 +579,52 @@ class CollaboratorPi:
                 component="sync",
             )
             print(f"🔄 Sync correction: {median_deviation:.3f}s deviation")
+
+            # --- GSTREAMER RATE CONTROL LOGIC ---
+            if isinstance(self.video_player, GstVideoPlayer):
+                # Calculate target position with latency compensation
+                correction_offset = (
+                    -self.latency_compensation
+                    if median_deviation > 0
+                    else self.latency_compensation
+                )
+                target_position = expected_position + correction_offset
+                if duration and duration > 0:
+                    target_position = target_position % duration
+
+                # Clear samples
+                self.deviation_samples.clear()
+                self.last_correction_time = time.time()
+
+                # Strategy:
+                # If deviation is MASSIVE (> 2s), do a hard seek.
+                # If deviation is manageable, adjust playback rate.
+                
+                if abs(median_deviation) > 2.0:
+                    log_warning(f"Large deviation ({median_deviation:.2f}s), performing HARD SEEK", component="sync")
+                    self.video_player.set_position(target_position)
+                    self.video_player.set_rate(1.0) # Reset rate
+                else:
+                    # Calculate required rate adjustment
+                    # If we are BEHIND (deviation < 0), we need rate > 1.0 (speed up)
+                    # If we are AHEAD (deviation > 0), we need rate < 1.0 (slow down)
+                    
+                    # Simple P-controller: rate = 1.0 - (Kp * deviation)
+                    # Kp = 0.1 means for 1s deviation, we change speed by 10%
+                    Kp = 0.2
+                    
+                    # Clamp rate to safe limits (0.8x to 1.2x)
+                    new_rate = 1.0 - (median_deviation * Kp)
+                    new_rate = max(0.8, min(1.2, new_rate))
+                    
+                    log_info(f"Adjusting rate to {new_rate:.3f}x to correct {median_deviation:.3f}s deviation", component="sync")
+                    self.video_player.set_rate(new_rate)
+                    
+                    # Reset rate to 1.0 after a short duration? 
+                    # Ideally, we keep this rate until the next check reduces deviation to near zero.
+                    # But if we overshoot, the next check will correct back.
+                return
+            # --- END GSTREAMER LOGIC ---
 
             # Calculate target position with latency compensation
             correction_offset = (
