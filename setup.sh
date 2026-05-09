@@ -49,11 +49,17 @@ sudo chown -R $USER:$USER /media/usb* 2>/dev/null || true
 echo "Configuring USB access permissions..."
 sudo usermod -a -G plugdev,disk $USER
 
-# Install Python packages system-wide
-echo "Installing Python packages system-wide..."
-sudo pip install python-rtmidi dbus-python python-vlc pyserial --break-system-packages
+# Create and configure Python Virtual Environment
+echo "Setting up Python virtual environment (with system-site-packages)..."
+python3 -m venv --system-site-packages "$HOME/ks-env"
+source "$HOME/ks-env/bin/activate"
 
-# Configure system for X11 mode (disable Wayland)
+# Install Python packages inside venv
+echo "Installing Python packages inside venv..."
+pip install python-rtmidi python-vlc pyserial mido
+
+# Ensure the service uses the venv interpreter
+sed -i "s|ExecStart=.*|ExecStart=$HOME/ks-env/bin/python3 kitchensync.py|" kitchensync.service
 echo "Configuring system for X11 mode..."
 # Set X11 as default session
 if [ -f /etc/gdm3/daemon.conf ]; then

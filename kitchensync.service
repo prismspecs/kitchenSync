@@ -7,17 +7,21 @@ Requires=display-manager.service
 
 [Service]
 Type=simple
-User=kitchensync
-Group=kitchensync
-WorkingDirectory=/home/kitchensync/kitchenSync
-ExecStart=/home/kitchensync/kitchenSync/start_clean.sh
+User=gsync
+Group=gsync
+WorkingDirectory=/home/gsync/kitchenSync
+# Use the virtual environment Python interpreter directly
+ExecStart=/home/gsync/ks-env/bin/python3 kitchensync.py
 Restart=always
 RestartSec=10
 
 # Environment variables for X11 display access - FORCE X11 mode
 Environment=DISPLAY=:0
-Environment=XAUTHORITY=/home/kitchensync/.Xauthority
+Environment=XAUTHORITY=/home/gsync/.Xauthority
 Environment=XDG_RUNTIME_DIR=/run/user/1000
+Environment=PYTHONPATH=/home/gsync/kitchenSync/src
+Environment=VIRTUAL_ENV=/home/gsync/ks-env
+Environment=PATH=/home/gsync/ks-env/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 Environment=SDL_VIDEODRIVER=x11
 Environment=XDG_SESSION_TYPE=x11
 Environment=GDK_BACKEND=x11
