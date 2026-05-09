@@ -419,10 +419,10 @@ ls /dev/ttyACM* /dev/ttyUSB* 2>/dev/null || echo "No Arduino detected"
 lsusb | grep -i arduino
 
 # Test serial communication
-python3 -c "from src.midi.manager import SerialMidiOut; s = SerialMidiOut(); print(f'Arduino port: {s.port}')"
+python3 -c "from src.protocols.midi_handler import SerialMidiOut; s = SerialMidiOut(); print(f'Arduino port: {s.port}')"
 
 # Test MIDI system without hardware
-python3 -c "from src.midi.manager import MidiManager; m = MidiManager(use_mock=True); print('Mock MIDI system OK')"
+python3 -c "from src.protocols.midi_handler import MidiManager; m = MidiManager(use_mock=True); print('Mock MIDI system OK')"
 ```
 
 ## Example Workflows

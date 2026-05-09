@@ -265,6 +265,11 @@ class ConfigManager:
         print(f"✓ Updated {target_file}")
 
     @property
+    def video_driver(self) -> str:
+        """Get selected video driver (vlc or gstreamer)"""
+        return self.get("video_driver", "vlc")
+
+    @property
     def is_leader(self) -> bool:
         """Check if this instance should run as leader"""
         return self.getboolean("is_leader", False)

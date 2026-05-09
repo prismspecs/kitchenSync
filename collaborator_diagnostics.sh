@@ -236,7 +236,7 @@ echo ""
 
 # Test MIDI system if KitchenSync source is available
 if [[ -d "src" ]]; then
-    run_check "MIDI System Test" "python3 -c 'import sys; sys.path.insert(0, \"./src\"); from midi.manager import MidiManager; m = MidiManager(use_serial=True); print(\"MIDI system initialized successfully\")'"
+    run_check "MIDI System Test" "python3 -c 'import sys; sys.path.insert(0, \"./src\"); from protocols.midi_handler import MidiManager; m = MidiManager(use_serial=True); print(\"MIDI system initialized successfully\")'"
 else
     echo "KitchenSync source directory not found - skipping MIDI test"
 fi

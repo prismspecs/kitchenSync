@@ -17,9 +17,9 @@ import subprocess
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 
 from config import ConfigManager
-from video import VideoFileManager, VLCVideoPlayer, LoopStrategy
+from video import VideoFileManager, get_video_driver
 from networking import SyncBroadcaster, CommandManager
-from midi import MidiScheduler, MidiManager
+from protocols.midi_handler import MidiScheduler, MidiManager
 from core import Schedule, ScheduleEditor, SystemState, CollaboratorRegistry
 from ui import CommandInterface, StatusDisplay
 from debug.html_overlay import HTMLDebugManager
@@ -315,18 +315,9 @@ class LeaderPi:
             log_warning("No video player available", component="leader")
             return
 
-        current_status = self.video_player.is_fullscreen()
-        log_info(f"Current fullscreen status: {current_status}", component="leader")
-
-        if not current_status:
-            log_info("Forcing fullscreen mode...", component="leader")
-            success = self.video_player.force_fullscreen()
-            if success:
-                log_info("✓ Fullscreen mode enabled", component="leader")
-            else:
-                log_error("✗ Failed to enable fullscreen mode", component="leader")
-        else:
-            log_info("✓ Already in fullscreen mode", component="leader")
+        # VLCDriver handles fullscreen via init, but we can call it
+        self.video_player.set_fullscreen(True)
+        log_info("✓ Fullscreen mode requested", component="leader")
 
     def seek_video(self, time_str: str) -> None:
         """Seek the video to a specific time."""
@@ -337,7 +328,7 @@ class LeaderPi:
         try:
             seconds = float(time_str)
             log_info(f"Seeking video to {seconds} seconds...", component="leader")
-            success = self.video_player.set_position(seconds)
+            success = self.video_player.seek(seconds)
             if success:
                 log_info(f"✓ Seek successful to {seconds}s", component="leader")
                 # Reset MIDI scheduler on any seek to clear triggered cues
@@ -480,4 +471,25 @@ def main():
 
 
 if __name__ == "__main__":
+    main()
+stem...")
+                leader_instance.stop_system()
+        else:
+            # Interactive mode
+            interface = create_command_interface(leader_instance)
+            interface.run()
+
+        leader_instance.cleanup()
+
+    except KeyboardInterrupt:
+        print("\nExiting...")
+    except Exception as e:
+        print(f"Fatal error: {e}")
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()
+()
+_":
     main()

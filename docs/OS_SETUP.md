@@ -34,7 +34,10 @@ sudo apt install -y --no-install-recommends \
     xserver-xorg xinit openbox x11-xserver-utils \
     udevil firefox-esr vlc libvlc-dev python3-vlc \
     python3-pip python3-dev python3-full \
-    alsa-utils libasound2-dev libdbus-1-dev libglib2.0-dev libgl1-mesa-dri
+    alsa-utils libasound2-dev libdbus-1-dev libglib2.0-dev libgl1-mesa-dri \
+    gstreamer1.0-plugins-base gstreamer1.0-plugins-good \
+    gstreamer1.0-plugins-bad gstreamer1.0-libav \
+    gstreamer1.0-tools python3-gst-1.0 gir1.2-gst-plugins-base-1.0
 
 # Enable auto-mounting service
 # udevil provides devmon, which handles instant USB mounting to /media/
@@ -58,7 +61,12 @@ pip install -r requirements.txt
 ## 5. Graphical Configuration (Openbox)
 KitchenSync runs within a minimal Openbox session.
 
-Create/Edit `~/.config/openbox/autostart`:
+**Create the config directory:**
+```bash
+mkdir -p ~/.config/openbox
+```
+
+**Create/Edit `~/.config/openbox/autostart`:**
 ```bash
 # Disable screen blanking
 xset s off
@@ -93,3 +101,11 @@ WantedBy=multi-user.target
 - **GPU Memory:** For Pi 4/5, ensure `dtoverlay=vc4-kms-v3d` is in `/boot/config.txt`.
 - **Network:** Use a static IP or reserved DHCP for faster discovery.
 - **USB:** High-speed USB 3.0 drives are recommended for high-bitrate video.
+
+## 8. Test Media
+To verify your installation, you can download a standardized H.264 test video:
+
+```bash
+mkdir -p ~/kitchenSync/videos
+wget -O ~/kitchenSync/videos/test_video.mp4 https://download.blender.org/peach/bigbuckbunny_movies/big_buck_bunny_1080p_h264.mov
+```

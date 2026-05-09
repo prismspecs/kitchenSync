@@ -15,9 +15,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 
 from config import ConfigManager
-from video import VideoFileManager, VLCVideoPlayer, LoopStrategy
+from video import VideoFileManager, get_video_driver
 from networking import CommandListener, SyncReceiver
-from midi import MidiManager, MidiScheduler
+from protocols.midi_handler import MidiManager, MidiScheduler
 from core import SystemState, Schedule, SyncTracker
 from core.logger import (
     log_info,
@@ -562,12 +562,34 @@ class CollaboratorPi:
                     )
                 return
 
-            # Always log sync corrections (this is important)
+            # SEAMLESS SYNC: Use rate adjustment if using GStreamer and deviation is small
+            # Small deviation is defined as < 0.5s (tunable)
+            if self.config.video_driver in ["gstreamer", "gst"] and abs(median_deviation) < 0.5:
+                # If median_deviation is negative, we are BEHIND, so speed up
+                # If median_deviation is positive, we are AHEAD, so slow down
+                new_rate = 1.0 - (median_deviation * 0.5) # P-controller style adjustment
+                # Clamp rate to reasonable values (0.9 to 1.1)
+                new_rate = max(0.9, min(1.1, new_rate))
+                
+                if self.video_player.set_speed(new_rate):
+                    log_info(
+                        f"Seamless sync: Adjusting speed to {new_rate:.4f} (deviation: {median_deviation:.3f}s)",
+                        component="sync"
+                    )
+                    self.last_correction_time = current_time
+                    return
+                else:
+                    log_warning("Seamless sync failed, falling back to hard seek", component="sync")
+
+            # HARD SEEK: Fallback for large deviations or VLC driver
             log_info(
-                f"🔄 SYNC CORRECTION: {median_deviation:.3f}s deviation > {self.deviation_threshold:.3f}s threshold at {leader_time:.1f}s",
+                f"🔄 HARD SYNC: {median_deviation:.3f}s deviation > {self.deviation_threshold:.3f}s threshold",
                 component="sync",
             )
-            print(f"🔄 Sync correction: {median_deviation:.3f}s deviation")
+            print(f"🔄 Hard sync: {median_deviation:.3f}s deviation")
+
+            # Reset speed to normal before hard seek
+            self.video_player.set_speed(1.0)
 
             # Calculate target position with latency compensation
             correction_offset = (
@@ -587,14 +609,14 @@ class CollaboratorPi:
                 log_warning("Failed to pause for correction", component="sync")
                 return
 
-            time.sleep(0.1)  # Let VLC settle
+            time.sleep(0.1)  # Let player settle
 
             # Seek with jump-ahead
             seek_position = target_position + self.sync_jump_ahead
             if duration and duration > 0:
                 seek_position = seek_position % duration
 
-            if self.video_player.set_position(seek_position):
+            if self.video_player.seek(seek_position):
                 log_info(
                     f"Seeking to {seek_position:.3f}s (target: {target_position:.3f}s)",
                     component="sync",
@@ -609,17 +631,15 @@ class CollaboratorPi:
                 )
             else:
                 log_warning("Seek failed, resuming playback", component="sync")
-                self.video_player.resume()
+                self.video_player.play()
         else:
-            # No correction needed - only log during critical window when samples are low
-            if (
-                self.critical_window_logging
-                and self.in_critical_window
-                and len(self.deviation_samples) < self.deviation_samples_maxlen
-            ):
-                print(
-                    f"SYNC_NO_CORRECTION | Median {median_deviation:.3f}s <= threshold {self.deviation_threshold:.3f}s"
-                )
+            # No correction needed - return to normal speed if we were adjusted
+            if hasattr(self.video_player, 'current_rate') and self.video_player.current_rate != 1.0:
+                 self.video_player.set_speed(1.0)
+                 log_info("Sync achieved, returning to 1.0x speed", component="sync")
+            
+            # ... rest of debug logic ...
+
 
     def _log_sync_debug_info(self, leader_time: float) -> None:
         """Log sync information for debugging"""

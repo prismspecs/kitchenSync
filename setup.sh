@@ -17,9 +17,12 @@ else
     echo "APT cache is healthy"
 fi
 
-# Install VLC and dependencies
-echo "Installing VLC and dependencies..."
-sudo apt install -y vlc libvlc-dev python3-vlc python3-pip python3-dev libasound2-dev alsa-utils
+# Install VLC, GStreamer and dependencies
+echo "Installing VLC, GStreamer and dependencies..."
+sudo apt install -y vlc libvlc-dev python3-vlc python3-pip python3-dev \
+    libasound2-dev alsa-utils gstreamer1.0-plugins-base gstreamer1.0-plugins-good \
+    gstreamer1.0-plugins-bad gstreamer1.0-libav gstreamer1.0-tools \
+    python3-gst-1.0 gir1.2-gst-plugins-base-1.0
 
 # Set system volume to 90%
 echo "Setting system volume to 90%..."
@@ -56,7 +59,7 @@ source "$HOME/ks-env/bin/activate"
 
 # Install Python packages inside venv
 echo "Installing Python packages inside venv..."
-pip install python-rtmidi python-vlc pyserial mido
+pip install python-rtmidi python-vlc pyserial mido python-osc
 
 # Ensure the service uses the venv interpreter
 sed -i "s|ExecStart=.*|ExecStart=$HOME/ks-env/bin/python3 kitchensync.py|" kitchensync.service

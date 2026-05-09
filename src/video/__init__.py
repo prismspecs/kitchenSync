@@ -1,6 +1,37 @@
-"""Video management package for KitchenSync"""
+#!/usr/bin/env python3
+"""
+Video Driver Factory for KitchenSync
+Loads the appropriate driver backend based on configuration.
+"""
 
-from .file_manager import VideoFileManager
-from .vlc_player import VLCVideoPlayer, LoopStrategy
+from typing import Optional
+from src.video.driver import VideoDriver
+from src.core.logger import log_info, log_error
 
-__all__ = ["VideoFileManager", "VLCVideoPlayer", "LoopStrategy"]
+def get_video_driver(driver_name: str, debug_mode: bool = False) -> Optional[VideoDriver]:
+    """
+    Factory function to instantiate a video driver.
+    """
+    driver_name = driver_name.lower()
+    
+    try:
+        if driver_name == "vlc":
+            from src.video.drivers.vlc_driver import VLCDriver
+            log_info("Video: Using VLC driver backend")
+            return VLCDriver(debug_mode=debug_mode)
+        
+        elif driver_name == "gstreamer" or driver_name == "gst":
+            from src.video.drivers.gst_driver import GstDriver
+            log_info("Video: Using GStreamer driver backend")
+            return GstDriver(debug_mode=debug_mode)
+            
+        else:
+            log_error(f"Video: Unknown driver backend '{driver_name}'")
+            return None
+            
+    except ImportError as e:
+        log_error(f"Video: Failed to load driver '{driver_name}': {e}")
+        return None
+    except Exception as e:
+        log_error(f"Video: Error initializing driver '{driver_name}': {e}")
+        return None
