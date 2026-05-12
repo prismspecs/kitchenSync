@@ -169,14 +169,20 @@ def _build_explicit_hevc_pipeline(video_path: Path, report: dict):
         sink_elem = "autovideosink"
         sink_name = "autovideosink"
 
-    # v4l2slh265dec is a stateless V4L2 decoder that requires exactly one
-    # access unit per buffer in Annex-B byte-stream format (alignment=au).
-    # parsebin autoplugs h265parse internally to satisfy those caps;
-    # an explicit capsfilter here causes parsebin to try to route audio
-    # through the video caps filter, which fails at the qtdemux level with
-    # a fatal NOT_LINKED bus error.  Let parsebin handle caps negotiation.
+    # Fully explicit pipeline - no dynamic-bin pad-linking uncertainty.
+    # qtdemux: unwrap MP4 container, video pad only gets linked (audio pad
+    #          returns NOT_LINKED which qtdemux handles gracefully).
+    # h265parse: reframe into byte-stream / alignment=au as required by
+    #            the stateless V4L2 kernel driver.
+    # videoconvert: accepts NV12 DMA-buf from v4l2slh265dec and converts to
+    #               a format the display sink can render directly.
     pipeline = Gst.parse_launch(
-        f"filesrc name=filesrc ! parsebin ! v4l2slh265dec ! {sink_elem} name=videosink"
+        "filesrc name=filesrc"
+        " ! qtdemux name=demux"
+        " demux. ! h265parse"
+        " ! v4l2slh265dec"
+        " ! videoconvert"
+        f" ! {sink_elem} name=videosink"
     )
     if not pipeline:
         raise RuntimeError("Gst.parse_launch failed to create explicit HEVC pipeline")
