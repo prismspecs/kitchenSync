@@ -166,6 +166,8 @@ def _build_explicit_hevc_pipeline(video_path: Path, report: dict):
         raise RuntimeError("Failed to create explicit HEVC pipeline elements")
 
     filesrc.set_property("location", str(video_path.resolve()))
+    parser.set_property("disable-passthrough", True)
+    parser.set_property("config-interval", -1)
     capsfilter.set_property(
         "caps",
         Gst.Caps.from_string("video/x-h265,stream-format=byte-stream,alignment=au"),

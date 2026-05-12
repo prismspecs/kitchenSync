@@ -254,6 +254,8 @@ class GstDriver(VideoDriver):
             return None, None
 
         filesrc.set_property("location", os.path.abspath(video_path))
+        parser.set_property("disable-passthrough", True)
+        parser.set_property("config-interval", -1)
         capsfilter.set_property(
             "caps",
             Gst.Caps.from_string("video/x-h265,stream-format=byte-stream,alignment=au"),
