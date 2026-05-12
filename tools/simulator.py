@@ -20,6 +20,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 from video import get_video_driver
 from networking import SyncBroadcaster, SyncReceiver
 from core import SyncTracker, SystemState
+from core.logger import enable_system_logging
 
 class SimulatorState:
     def __init__(self):
