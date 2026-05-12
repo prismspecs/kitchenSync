@@ -158,6 +158,29 @@ def _discover_active_decoder(pipeline):
     return None
 
 
+def _is_video_decoder_factory(factory) -> bool:
+    if factory is None:
+        return False
+
+    klass = factory.get_klass() or ""
+    return "Decoder" in klass and "Video" in klass
+
+
+def _attach_decoder_probe(pipeline, report):
+    report["observed_decoder_candidates"] = []
+
+    def on_deep_element_added(_bin, _sub_bin, element):
+        factory = element.get_factory()
+        if not _is_video_decoder_factory(factory):
+            return
+
+        factory_name = factory.get_name()
+        if factory_name not in report["observed_decoder_candidates"]:
+            report["observed_decoder_candidates"].append(factory_name)
+
+    pipeline.connect("deep-element-added", on_deep_element_added)
+
+
 def build_report(video_path: Path, sample_seconds: float) -> dict:
     if not GST_AVAILABLE:
         raise RuntimeError("GStreamer Python bindings are not available")
@@ -187,6 +210,8 @@ def build_report(video_path: Path, sample_seconds: float) -> dict:
     pipeline = Gst.ElementFactory.make("playbin", "verifier")
     if not pipeline:
         raise RuntimeError("Failed to create GStreamer playbin")
+
+    _attach_decoder_probe(pipeline, report)
 
     sink, sink_name = _create_video_sink()
     if sink is not None:
@@ -221,7 +246,11 @@ def build_report(video_path: Path, sample_seconds: float) -> dict:
             raise RuntimeError("Failed to start GStreamer playback")
 
         time.sleep(sample_seconds)
-        report["active_decoder"] = _discover_active_decoder(pipeline) or "unknown"
+        report["active_decoder"] = (
+            _discover_active_decoder(pipeline)
+            or (report["observed_decoder_candidates"][-1] if report["observed_decoder_candidates"] else None)
+            or "unknown"
+        )
 
         state_change = pipeline.get_state(0.5)
         state = state_change.state if hasattr(state_change, "state") else state_change[1]

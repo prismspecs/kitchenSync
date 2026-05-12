@@ -40,6 +40,7 @@ class GstDriver(VideoDriver):
         self.video_sink_name = None
         self.hardware_accel_preferred = False
         self.decoder_name = None
+        self.decoder_candidates = []
         
         # MainLoop for GStreamer bus messages
         self.loop = None
@@ -139,6 +140,22 @@ class GstDriver(VideoDriver):
 
         return None
 
+    def _is_video_decoder_factory(self, factory) -> bool:
+        if factory is None:
+            return False
+
+        klass = factory.get_klass() or ""
+        return "Decoder" in klass and "Video" in klass
+
+    def _on_deep_element_added(self, _bin, _sub_bin, element):
+        factory = element.get_factory()
+        if not self._is_video_decoder_factory(factory):
+            return
+
+        factory_name = factory.get_name()
+        if factory_name not in self.decoder_candidates:
+            self.decoder_candidates.append(factory_name)
+
     def _preferred_sink_names(self):
         """Return sink candidates in priority order for the current environment."""
         if os.environ.get("DISPLAY"):
@@ -166,6 +183,10 @@ class GstDriver(VideoDriver):
         if not self.pipeline:
             log_error("Gst: Failed to create playbin element")
             return False
+
+        self.decoder_candidates = []
+        self.decoder_name = None
+        self.pipeline.connect("deep-element-added", self._on_deep_element_added)
 
         # Set the URI
         uri = "file://" + os.path.abspath(video_path)
@@ -223,6 +244,8 @@ class GstDriver(VideoDriver):
         self.state = PlayerState.PLAYING
         time.sleep(0.1)
         self.decoder_name = self._discover_active_decoder()
+        if not self.decoder_name and self.decoder_candidates:
+            self.decoder_name = self.decoder_candidates[-1]
         if self.decoder_name:
             log_info(f"Gst: Active decoder '{self.decoder_name}'")
         return True
@@ -331,6 +354,7 @@ class GstDriver(VideoDriver):
         if self.loop:
             self.loop.quit()
         self.pipeline = None
+        self.decoder_candidates = []
         log_info("Gst: Cleanup complete")
 
     def get_info(self) -> Dict[str, Any]:
