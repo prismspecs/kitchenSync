@@ -130,12 +130,23 @@ def _create_video_sink():
     return None, None
 
 
+def _create_video_converter():
+    for converter_name in ["v4l2convert", "videoconvert"]:
+        converter = Gst.ElementFactory.make(converter_name, converter_name)
+        if converter:
+            return converter, converter_name
+    return None, None
+
+
 def _should_use_explicit_hevc_pipeline(video_stream: dict) -> bool:
     if video_stream.get("codec_name") != "hevc":
         return False
     return all(
         Gst.ElementFactory.find(name) is not None
-        for name in ["qtdemux", "h265parse", "v4l2slh265dec", "videoconvert"]
+        for name in ["qtdemux", "h265parse", "v4l2slh265dec"]
+    ) and any(
+        Gst.ElementFactory.find(name) is not None
+        for name in ["v4l2convert", "videoconvert"]
     )
 
 
@@ -147,7 +158,7 @@ def _build_explicit_hevc_pipeline(video_path: Path, report: dict):
     parser = Gst.ElementFactory.make("h265parse", "videoparse")
     capsfilter = Gst.ElementFactory.make("capsfilter", "hevc_caps")
     decoder = Gst.ElementFactory.make("v4l2slh265dec", "videodecoder")
-    convert = Gst.ElementFactory.make("videoconvert", "videoconvert")
+    convert, converter_name = _create_video_converter()
     sink, sink_name = _create_video_sink()
 
     elements = [filesrc, demux, queue, parser, capsfilter, decoder, convert, sink]
@@ -191,6 +202,7 @@ def _build_explicit_hevc_pipeline(video_path: Path, report: dict):
 
     demux.connect("pad-added", on_pad_added)
     report["pipeline_kind"] = "explicit-hevc"
+    report["selected_converter"] = converter_name or "unknown"
     return pipeline, sink_name
 
 
@@ -340,6 +352,9 @@ def build_report(video_path: Path, sample_seconds: float) -> dict:
             name: _element_available(name)
             for name in ["glsinkbin", "glimagesink", "xvimagesink", "kmssink", "autovideosink"]
         },
+        "available_converters": {
+            name: _element_available(name) for name in ["v4l2convert", "videoconvert"]
+        },
         "available_decoders": {
             name: _element_available(name) for name in KNOWN_DECODERS
         },
@@ -355,6 +370,7 @@ def build_report(video_path: Path, sample_seconds: float) -> dict:
             raise RuntimeError("Failed to create GStreamer playbin")
 
         report["pipeline_kind"] = "playbin"
+        report["selected_converter"] = "autoplugged"
 
         sink, sink_name = _create_video_sink()
         if sink is not None:
@@ -487,6 +503,7 @@ def main() -> int:
     print(f"Session: {report['session_type'] or 'unknown'}")
     print(f"Preferred sinks: {', '.join(report['preferred_sinks'])}")
     print(f"Selected sink: {report.get('selected_sink', 'unknown')}")
+    print(f"Selected converter: {report.get('selected_converter', 'unknown')}")
     print(f"Playback state: {report.get('state', 'unknown')}")
     print(f"Source codec: {report.get('video_stream', {}).get('codec_name', 'unknown')}")
     print(f"Source profile: {report.get('video_stream', {}).get('profile', 'unknown')}")

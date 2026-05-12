@@ -43,6 +43,7 @@ class GstDriver(VideoDriver):
         self.decoder_name = None
         self.decoder_candidates = []
         self.pipeline_kind = "playbin"
+        self.video_converter_name = None
         
         # MainLoop for GStreamer bus messages
         self.loop = None
@@ -173,6 +174,13 @@ class GstDriver(VideoDriver):
                 return sink, sink_name
         return None, None
 
+    def _create_video_converter(self):
+        for converter_name in ["v4l2convert", "videoconvert"]:
+            converter = Gst.ElementFactory.make(converter_name, converter_name)
+            if converter:
+                return converter, converter_name
+        return None, None
+
     def _probe_video_stream(self, video_path: str) -> Dict[str, Any]:
         try:
             result = subprocess.run(
@@ -224,7 +232,10 @@ class GstDriver(VideoDriver):
             return False
         return all(
             Gst.ElementFactory.find(name) is not None
-            for name in ["qtdemux", "h265parse", "v4l2slh265dec", "videoconvert"]
+            for name in ["qtdemux", "h265parse", "v4l2slh265dec"]
+        ) and any(
+            Gst.ElementFactory.find(name) is not None
+            for name in ["v4l2convert", "videoconvert"]
         )
 
     def _build_explicit_hevc_pipeline(self, video_path: str):
@@ -235,7 +246,7 @@ class GstDriver(VideoDriver):
         parser = Gst.ElementFactory.make("h265parse", "videoparse")
         capsfilter = Gst.ElementFactory.make("capsfilter", "hevc_caps")
         decoder = Gst.ElementFactory.make("v4l2slh265dec", "videodecoder")
-        convert = Gst.ElementFactory.make("videoconvert", "videoconvert")
+        convert, converter_name = self._create_video_converter()
         sink, sink_name = self._create_video_sink()
 
         elements = [filesrc, demux, queue, parser, capsfilter, decoder, convert, sink]
@@ -278,6 +289,7 @@ class GstDriver(VideoDriver):
                 pad.link(sink_pad)
 
         demux.connect("pad-added", on_pad_added)
+        self.video_converter_name = converter_name
         return pipeline, sink_name
 
     def load(self, video_path: str) -> bool:
@@ -310,6 +322,7 @@ class GstDriver(VideoDriver):
 
         self.decoder_candidates = []
         self.decoder_name = None
+        self.video_converter_name = None
         self.pipeline.connect("deep-element-added", self._on_deep_element_added)
 
         self.video_sink_name = sink_name
@@ -478,6 +491,7 @@ class GstDriver(VideoDriver):
     def get_info(self) -> Dict[str, Any]:
         info = super().get_info()
         info["video_sink"] = self.video_sink_name or "default"
+        info["video_converter"] = self.video_converter_name or "unknown"
         info["hardware_accel_preferred"] = self.hardware_accel_preferred
         info["decoder"] = self.decoder_name or "unknown"
         info["pipeline_kind"] = self.pipeline_kind
