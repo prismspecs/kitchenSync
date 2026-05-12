@@ -132,20 +132,6 @@ class LeaderPi:
             log_info("Starting video playback...", component="video")
             try:
                 self.video_player.play()
-                
-                # If using VLC driver, we might need a hack to force it to top or fullscreen
-                if self.config.video_driver == "vlc":
-                    def position_vlc_window():
-                        time.sleep(2)  # Wait for VLC to spawn
-                        if sys.platform.startswith("linux"):
-                            try:
-                                subprocess.run(
-                                    ["wmctrl", "-r", "VLC media player", "-e", "0,0,0,1280,1080"],
-                                    check=False, timeout=5, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
-                                )
-                            except Exception:
-                                pass
-                        threading.Thread(target=position_vlc_window, daemon=True).start()
             except Exception as e:
                 log_error(f"Exception starting video playback: {e}", component="leader")
 
@@ -166,14 +152,19 @@ class LeaderPi:
         if self.midi_scheduler:
             self.midi_scheduler.start_playback(0.0, video_duration)
 
-        # Send start command to collaborators
-        start_command = {
-            "type": "start",
-            "schedule": self.schedule.get_cues(),
-            "start_time": self.system_state.start_time,
-            "debug_mode": self.config.debug_mode,
-        }
-        self.command_manager.send_command(start_command)
+        # Periodically send start command to collaborators (handles late joiners/packet loss)
+        def start_broadcast_loop():
+            start_command = {
+                "type": "start",
+                "schedule": self.schedule.get_cues(),
+                "start_time": self.system_state.start_time,
+                "debug_mode": self.config.debug_mode,
+            }
+            while self.system_state.is_running:
+                self.command_manager.send_command(start_command)
+                time.sleep(2.0)
+
+        threading.Thread(target=start_broadcast_loop, daemon=True).start()
 
         # MIDI SCHEDULER CUE PROCESSING LOOP
         def midi_cue_loop():
