@@ -159,7 +159,7 @@ def start_web_server(port=8080):
 def log(msg):
     print(f"[{time.strftime('%H:%M:%S')}] {msg}")
 
-def run_leader(driver_name):
+def run_leader(driver_name, target_ip=None):
     sim_state.role = "leader"
     sim_state.status = "Broadcasting"
     
@@ -167,14 +167,17 @@ def run_leader(driver_name):
     player.load("dummy.mp4")
     player.play()
     
-    broadcaster = SyncBroadcaster(sync_port=5005, tick_interval=0.1)
+    broadcaster = SyncBroadcaster(sync_port=5005, tick_interval=0.1, broadcast_ip=target_ip)
     broadcaster.set_time_provider(player.get_position)
     broadcaster.set_duration_provider(player.get_duration)
     
     # Add CommandManager to trigger real collaborators
-    command_manager = CommandManager()
+    command_manager = CommandManager(broadcast_ip=target_ip)
     
     log(f"Leader simulation started with '{driver_name}' driver.")
+    if target_ip:
+        log(f"🎯 Target IP: {target_ip} (Unicast Mode)")
+    
     start_time = time.time()
     broadcaster.start_broadcasting(start_time)
     
@@ -237,13 +240,14 @@ def main():
     parser.add_argument("--mode", choices=["leader", "collaborator", "standalone"], required=True)
     parser.add_argument("--driver", default="mock", choices=["mock", "vlc", "gst"])
     parser.add_argument("--port", type=int, default=8080, help="Web UI port")
+    parser.add_argument("--target_ip", help="Explicit target IP (skips broadcast)")
     args = parser.parse_args()
 
     # Start Web UI in background
     threading.Thread(target=start_web_server, args=(args.port,), daemon=True).start()
 
     if args.mode == "leader":
-        run_leader(args.driver)
+        run_leader(args.driver, args.target_ip)
     elif args.mode == "collaborator":
         run_collaborator(args.driver)
     elif args.mode == "standalone":

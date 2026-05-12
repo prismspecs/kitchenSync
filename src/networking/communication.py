@@ -50,14 +50,14 @@ def _get_broadcast_address():
 class SyncBroadcaster:
     """Handles time sync broadcasting for leader"""
 
-    def __init__(self, sync_port: int = 5005, tick_interval: float = 0.1):
+    def __init__(self, sync_port: int = 5005, tick_interval: float = 0.1, broadcast_ip: Optional[str] = None):
         self.sync_port = sync_port
         # Clamp to a safe range to avoid CPU burn or sluggish updates
         try:
             self.tick_interval = max(0.02, min(float(tick_interval), 5.0))
         except Exception:
             self.tick_interval = 0.1
-        self.broadcast_ip = _get_broadcast_address()
+        self.broadcast_ip = broadcast_ip or _get_broadcast_address()
         self.leader_id = "leader-001"
         self.is_running = False
         self.start_time = None
@@ -252,9 +252,9 @@ class SyncReceiver:
 class CommandManager:
     """Handles command communication for leader"""
 
-    def __init__(self, control_port: int = 5006):
+    def __init__(self, control_port: int = 5006, broadcast_ip: Optional[str] = None):
         self.control_port = control_port
-        self.broadcast_ip = _get_broadcast_address()
+        self.broadcast_ip = broadcast_ip or _get_broadcast_address()
         self.control_sock = None
         self.is_running = False
         self.collaborators = {}
