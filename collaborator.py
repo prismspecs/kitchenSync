@@ -10,6 +10,10 @@ import argparse
 import signal
 import statistics
 import threading
+from pathlib import Path
+
+# Add src to path
+sys.path.insert(0, str(Path(__file__).parent / "src"))
 
 from config.manager import ConfigManager
 from video import get_video_driver
