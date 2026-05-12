@@ -141,8 +141,6 @@ class CollaboratorPi:
                 self.deviation_samples.clear()
             # Fine-grained speed adjustment for smaller drifts
             elif abs(median_dev) > 0.01:
-                # new_rate = 1.0 - (median_dev * gain)
-                # Gain of 0.5 means a 100ms drift is corrected by 5% speed change
                 new_rate = 1.0 - (median_dev * 0.5)
                 new_rate = max(0.9, min(1.1, new_rate))
                 self.video_player.set_speed(new_rate)
