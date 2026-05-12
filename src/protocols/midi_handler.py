@@ -76,7 +76,7 @@ class SerialMidiOut:
             print(f" Auto-detected Arduino port: {usb_ports[0]}")
             return usb_ports[0]
         else:
-            print("️ No Arduino serial port detected, using default /dev/ttyACM0")
+            print(" No Arduino serial port detected, using default /dev/ttyACM0")
             return "/dev/ttyACM0"
 
     def open_port(self, port: int = 0):
@@ -89,7 +89,7 @@ class SerialMidiOut:
             time.sleep(2)  # Wait for Arduino to reset
             print(f" Serial MIDI output initialized on {self.port} @ {self.baud}")
         except Exception as e:
-            print(f"️ Serial MIDI setup failed: {e}")
+            print(f" Serial MIDI setup failed: {e}")
             self.ser = None
 
     def send_message(self, message: List[int]):
@@ -188,7 +188,7 @@ class MidiManager:
                 self.midi_out.open_port(self.port)
                 print(f" MIDI output initialized on port {self.port}")
         except Exception as e:
-            print(f"️ MIDI/Serial setup failed: {e}")
+            print(f" MIDI/Serial setup failed: {e}")
             print("Falling back to simulation mode")
             self.midi_out = MockMidiOut()
             self.midi_out.open_port(self.port)
@@ -234,7 +234,7 @@ class MidiManager:
                 value = max(0, min(127, value))
                 message = [0xB0 | channel, control, value]
                 self.midi_out.send_message(message)
-                print(f"🎛️ MIDI CC: Ch{channel+1} CC{control}={value}")
+                print(f" MIDI CC: Ch{channel+1} CC{control}={value}")
         except Exception as e:
             print(f"Error sending control change: {e}")
 
@@ -261,7 +261,7 @@ class MidiManager:
                 cue.get("channel", 1), cue.get("control", 0), cue.get("value", 0)
             )
         else:
-            print(f"️ Unknown MIDI cue type: {cue_type}")
+            print(f" Unknown MIDI cue type: {cue_type}")
 
     def cleanup(self) -> None:
         """Clean up MIDI resources"""
@@ -313,7 +313,7 @@ class MidiScheduler:
         """Load MIDI schedule"""
         self.schedule = sorted(schedule, key=lambda x: x.get("time", 0))
         self.triggered_cues.clear()
-        print(f"📋 Loaded MIDI schedule with {len(self.schedule)} cues")
+        print(f" Loaded MIDI schedule with {len(self.schedule)} cues")
 
     def start_playback(
         self, start_time: float, video_duration: Optional[float] = None
@@ -409,7 +409,7 @@ class MidiScheduler:
                             f" (Loop #{self.loop_count})" if self.loop_count > 0 else ""
                         )
                         print(
-                            f"⏰ MIDI at {cue_time}s: {cue.get('type', 'unknown')} Ch{cue.get('channel', 1)} Note{cue.get('note', 0)} Vel{cue.get('velocity', 0)}{loop_info}"
+                            f" MIDI at {cue_time}s: {cue.get('type', 'unknown')} Ch{cue.get('channel', 1)} Note{cue.get('note', 0)} Vel{cue.get('velocity', 0)}{loop_info}"
                         )
         else:
             # This indicates a backward time jump (seek or glitch) without explicit reset.

@@ -125,7 +125,7 @@ try:
         f.write(f" Added src to path: {src_path}\n")
 except Exception as e:
     with open("/tmp/kitchensync_startup.log", "a") as f:
-        f.write(f"✗ Failed to add src to path: {e}\n")
+        f.write(f" Failed to add src to path: {e}\n")
     print(f"Failed to add src to path: {e}", file=sys.stderr)
 
 try:
@@ -145,7 +145,7 @@ try:
 
 except Exception as e:
     with open("/tmp/kitchensync_startup.log", "a") as f:
-        f.write(f"✗ Import failed: {e}\n")
+        f.write(f" Import failed: {e}\n")
     print(f"Import failed: {e}", file=sys.stderr)
     sys.exit(1)
 
@@ -159,7 +159,7 @@ class KitchenSyncAutoStart:
 
     def _handle_no_config_found(self) -> bool:
         """Handle the case where no USB configuration is found."""
-        print("️  No USB config found. Defaulting to COLLABORATOR mode.")
+        print("No USB config found. Defaulting to COLLABORATOR mode.")
         log_warning(
             "No USB config found, defaulting to collaborator", component="autostart"
         )
@@ -178,7 +178,7 @@ class KitchenSyncAutoStart:
 
     def run(self) -> bool:
         """Main execution flow"""
-        print("\n🎬 KitchenSync Auto-Start")
+        print("\nKitchenSync Auto-Start")
         print("=" * 40)
         snapshot_env()
 
@@ -208,7 +208,7 @@ class KitchenSyncAutoStart:
 
     def _load_configuration(self) -> bool:
         """Load configuration from USB drive."""
-        print("🔍 Looking for USB drive configuration...")
+        print("Looking for USB drive configuration...")
 
         usb_config_path = USBConfigLoader.find_config_on_usb()
         if not usb_config_path:
@@ -267,7 +267,7 @@ class KitchenSyncAutoStart:
                         continue
 
             except Exception as e:
-                print(f"️ Could not set desktop background: {e}")
+                print(f" Could not set desktop background: {e}")
 
     def _check_usb_schedule(self) -> None:
         """Check for and report USB schedule files"""
@@ -283,17 +283,17 @@ class KitchenSyncAutoStart:
                 )
             else:
                 print(
-                    "📋 No MIDI schedule found on USB - will use local/empty schedule"
+                    " No MIDI schedule found on USB - will use local/empty schedule"
                 )
 
             # Also check for MIDI files that could be converted
             usb_midi_path = USBConfigLoader.find_midi_file_on_usb()
             if usb_midi_path:
-                print(f"🎼 Found MIDI file: {usb_midi_path} (not auto-converted)")
+                print(f" Found MIDI file: {usb_midi_path} (not auto-converted)")
                 log_info(f"USB MIDI file: {usb_midi_path}", component="autostart")
 
         except Exception as e:
-            print(f"️ Error checking USB schedule: {e}")
+            print(f" Error checking USB schedule: {e}")
 
     def _update_local_configs(self) -> None:
         """Update local configuration files"""
@@ -382,7 +382,7 @@ def main():
         if not success:
             sys.exit(1)
     except KeyboardInterrupt:
-        print("\n👋 Interrupted by user")
+        print("\nInterrupted by user")
         sys.exit(0)
     except Exception as e:
         ErrorDisplay.show_error("Fatal error", str(e))

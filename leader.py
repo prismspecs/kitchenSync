@@ -96,6 +96,11 @@ class LeaderPi:
         # We'll use its get_collaborators() method for the UI
         self.collaborators = self.command_manager
 
+        # Register remote control handlers
+        self.command_manager.register_handler("remote_start", lambda msg, addr: self.start_system())
+        self.command_manager.register_handler("remote_stop", lambda msg, addr: self.stop_system())
+        self.command_manager.register_handler("remote_seek", lambda msg, addr: self.seek_video(str(msg.get("value", 0))))
+
         # Wire command listener for registration handled internally by CommandManager
         # but we can add an extra callback if we want custom logging
         self.command_manager.start_listening()

@@ -99,7 +99,7 @@ class CollaboratorRegistry:
         """Remove a collaborator"""
         if device_id in self.collaborators:
             del self.collaborators[device_id]
-            print(f"🗑️ Removed collaborator: {device_id}")
+            print(f" Removed collaborator: {device_id}")
 
     def get_collaborators(self) -> Dict[str, Dict[str, Any]]:
         """Get all collaborators with online status"""

@@ -19,7 +19,7 @@ except ImportError:
     import os
 
     if not os.environ.get("KITCHENSYNC_MIDO_WARNED"):
-        print("️ mido not available - MIDI file support disabled")
+        print(" mido not available - MIDI file support disabled")
         os.environ["KITCHENSYNC_MIDO_WARNED"] = "1"
 
 
@@ -51,7 +51,7 @@ class Schedule:
                     self.cues = json.load(f)
                 print(f" Loaded local schedule with {len(self.cues)} cues")
             else:
-                print("📋 No schedule file found, using empty schedule")
+                print(" No schedule file found, using empty schedule")
                 self.cues = []
         except json.JSONDecodeError as e:
             raise ScheduleError(f"Invalid JSON in schedule file: {e}")
@@ -76,12 +76,12 @@ class Schedule:
                 return self._load_midi_schedule(usb_midi_path)
             elif usb_midi_path and not MIDI_SUPPORT:
                 print(
-                    f"🎼 Found MIDI file {usb_midi_path} but mido library not available"
+                    f" Found MIDI file {usb_midi_path} but mido library not available"
                 )
                 print("   Install with: pip install mido")
 
         except Exception as e:
-            print(f"️ Error loading schedule from USB: {e}")
+            print(f" Error loading schedule from USB: {e}")
         return False
 
     def _load_json_schedule(self, schedule_path: str) -> bool:
@@ -91,17 +91,17 @@ class Schedule:
                 self.cues = json.load(f)
             self.usb_schedule_path = schedule_path
             print(
-                f"🔌 Loaded USB JSON schedule with {len(self.cues)} cues from {schedule_path}"
+                f" Loaded USB JSON schedule with {len(self.cues)} cues from {schedule_path}"
             )
             return True
         except Exception as e:
-            print(f"️ Error loading JSON schedule: {e}")
+            print(f" Error loading JSON schedule: {e}")
             return False
 
     def _load_midi_schedule(self, midi_path: str) -> bool:
         """Load and convert MIDI file to schedule"""
         if not MIDI_SUPPORT:
-            print("❌ MIDI file support not available - install mido library")
+            print(" MIDI file support not available - install mido library")
             return False
 
         try:
@@ -110,14 +110,14 @@ class Schedule:
                 self.cues = midi_cues
                 self.usb_schedule_path = midi_path
                 print(
-                    f"🎼 Loaded USB MIDI file with {len(self.cues)} cues from {midi_path}"
+                    f" Loaded USB MIDI file with {len(self.cues)} cues from {midi_path}"
                 )
                 return True
             else:
-                print(f"️ No usable MIDI events found in {midi_path}")
+                print(f" No usable MIDI events found in {midi_path}")
                 return False
         except Exception as e:
-            print(f"️ Error loading MIDI file: {e}")
+            print(f" Error loading MIDI file: {e}")
             return False
 
     def _parse_midi_file(self, midi_path: str) -> List[Dict[str, Any]]:
@@ -305,20 +305,20 @@ class Schedule:
         """Add a cue to the schedule"""
         self.cues.append(cue)
         self._sort_cues()
-        print(f"➕ Added cue at {cue.get('time', 0)}s")
+        print(f" Added cue at {cue.get('time', 0)}s")
 
     def remove_cue(self, index: int) -> Optional[Dict[str, Any]]:
         """Remove a cue by index"""
         if 0 <= index < len(self.cues):
             removed = self.cues.pop(index)
-            print(f"➖ Removed cue at {removed.get('time', 0)}s")
+            print(f" Removed cue at {removed.get('time', 0)}s")
             return removed
         return None
 
     def clear_schedule(self) -> None:
         """Clear all cues"""
         self.cues.clear()
-        print("🗑️ Schedule cleared")
+        print(" Schedule cleared")
 
     def get_cues(self) -> List[Dict[str, Any]]:
         """Get all cues"""
@@ -437,7 +437,7 @@ class Schedule:
             channel: MIDI channel (1-16, ignored by hardware)
         """
         if duration > 5.0:
-            print("️ Warning: Duration > 5s, hardware will auto-timeout at 5s")
+            print(" Warning: Duration > 5s, hardware will auto-timeout at 5s")
 
         return [
             Schedule.create_relay_on_cue(time, relay_output, velocity, channel),
