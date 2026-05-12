@@ -7,7 +7,9 @@ These tests verify pure Python logic (math, scheduling, state) without hardware.
 
 ```bash
 # Run the core logic tests
-python3 tests/test_core.py
+python3 -m unittest tests.test_core
+python3 -m unittest tests.test_networking
+python3 -m unittest tests.test_sync_regressions
 ```
 
 ## 2. Cross-Platform Simulator (Tier 2)
@@ -29,7 +31,7 @@ python3 tools/simulator.py --mode collaborator --driver mock
 
 ### Standalone Mode (Just play video)
 ```bash
-python3 tools/simulator.py --mode standalone --driver vlc
+python3 tools/simulator.py --mode standalone --driver gst
 ```
 
 ## 3. Distributed Hardware Testing (Tier 3)
@@ -37,15 +39,25 @@ Testing between your Desktop and the Raspberry Pi (gSync).
 
 ### Scenario A: Pi as Collaborator, Desktop as Leader
 1. **On Desktop:** `python3 tools/simulator.py --mode leader`
-2. **On Pi:** `python3 collaborator.py --debug`
+2. **On Pi:** `DISPLAY=:0 python3 collaborator.py --config collaborator_config.ini --debug`
 3. **Verify:** The Pi should report receiving sync from your Desktop IP.
 
 ### Scenario B: Pi as Leader, Desktop as Collaborator
-1. **On Pi:** `python3 leader.py --debug`
+1. **On Pi:** `DISPLAY=:0 python3 leader.py --config leader_config.ini --debug`
 2. **On Desktop:** `python3 tools/simulator.py --mode collaborator`
 3. **Verify:** Open `http://DESKTOP_IP:8080` to see real-time drift analysis of your Desktop relative to the Pi.
 
-## 4. The TDD Workflow
+## 4. Hardware Acceleration Check
+
+On the Pi, start leader or collaborator in debug mode and verify the GStreamer sink log:
+
+```text
+Gst: Using hardware-preferred video sink 'glimagesink'
+```
+
+If the log reports a fallback sink instead, acceleration is not fully confirmed on that node.
+
+## 5. The TDD Workflow
 When adding a new feature (e.g., OSC Support):
 
 1. **Write a Test:** Add a test case to `tests/` (e.g., `test_osc_send`).
@@ -54,7 +66,7 @@ When adding a new feature (e.g., OSC Support):
 4. **Human Verification:** Use `tools/simulator.py` to see the results in real-time.
 5. **Commit:** Only commit once automated tests pass and human verification is satisfied.
 
-## 5. Web UI Portability
+## 6. Web UI Portability
 The simulator hosts a tiny web server. You can access this from your phone or any browser on the network to monitor sync health without being tied to a terminal.
 - Default: `http://localhost:8080`
 - JSON Data: `http://localhost:8080/json`

@@ -283,7 +283,7 @@ class ConfigManager:
 
     @property
     def video_driver(self) -> str:
-        """Get selected video driver (vlc or gstreamer)"""
+        """Get selected video driver (gstreamer or mock)."""
         return self.get("video_driver", "gst")
 
     @property

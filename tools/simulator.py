@@ -246,7 +246,7 @@ def main():
     
     parser = argparse.ArgumentParser(description="KitchenSync Simulator")
     parser.add_argument("--mode", choices=["leader", "collaborator", "standalone"], required=True)
-    parser.add_argument("--driver", default="mock", choices=["mock", "vlc", "gst"])
+    parser.add_argument("--driver", default="mock", choices=["mock", "gst"])
     parser.add_argument("--port", type=int, default=8080, help="Web UI port")
     parser.add_argument("--target_ip", help="Explicit target IP (skips broadcast)")
     args = parser.parse_args()

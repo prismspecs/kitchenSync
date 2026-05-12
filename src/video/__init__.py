@@ -6,21 +6,20 @@ Loads the appropriate driver backend based on configuration.
 
 from typing import Optional
 from video.driver import VideoDriver
-from core.logger import log_info, log_error
+from core.logger import log_info, log_error, log_warning
 
 def get_video_driver(driver_name: str, debug_mode: bool = False) -> Optional[VideoDriver]:
     """
     Factory function to instantiate a video driver.
     """
     driver_name = driver_name.lower()
+
+    if driver_name == "vlc":
+        log_warning("Video: VLC backend has been removed; falling back to GStreamer")
+        driver_name = "gst"
     
     try:
-        if driver_name == "vlc":
-            from video.drivers.vlc_driver import VLCDriver
-            log_info("Video: Using VLC driver backend")
-            return VLCDriver(debug_mode=debug_mode)
-        
-        elif driver_name == "gstreamer" or driver_name == "gst":
+        if driver_name == "gstreamer" or driver_name == "gst":
             from video.drivers.gst_driver import GstDriver
             log_info("Video: Using GStreamer driver backend")
             return GstDriver(debug_mode=debug_mode)

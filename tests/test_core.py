@@ -6,15 +6,13 @@ Verifies that drivers and state management work as expected.
 
 import unittest
 import sys
-import os
 from pathlib import Path
 from unittest.mock import MagicMock
 
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-# Mock VLC and GStreamer before importing video
-sys.modules['vlc'] = MagicMock()
+# Mock GStreamer before importing video
 sys.modules['gi'] = MagicMock()
 sys.modules['gi.repository'] = MagicMock()
 
@@ -25,11 +23,14 @@ from core import SyncTracker, SystemState
 class TestKitchenSync(unittest.TestCase):
     def test_video_driver_factory(self):
         """Verify the driver factory returns the correct classes."""
-        vlc = get_video_driver("vlc")
-        self.assertIsNotNone(vlc)
-        
         gst = get_video_driver("gstreamer")
         self.assertIsNotNone(gst)
+
+        mock = get_video_driver("mock")
+        self.assertIsNotNone(mock)
+
+        legacy_alias = get_video_driver("vlc")
+        self.assertIsNotNone(legacy_alias)
 
     def test_sync_tracker(self):
         """Verify the sync tracker correctly calculates drift."""

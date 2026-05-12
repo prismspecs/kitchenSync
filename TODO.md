@@ -1,32 +1,20 @@
 # KitchenSync Todo
 
-## 🚨 Critical Priority: Video Player Replacement
-The current VLC-based player lacks the low-level control needed for seamless synchronization.
-- [ ] **Research & Prototype GStreamer Pipeline**
-    - Target: Hardware accelerated playback on Pi (`v4l2h264dec` or `mmal`).
-    - Feature: Rate control (playback speed) without pitch shifting (optional, or just allow pitch shift for micro-corrections).
-    - Feature: Instant seeking without buffer flushing.
-- [ ] **Implement `GstPlayer` Class**
-    - Create `src/video/gst_player.py`.
-    - Implement standard interface: `load`, `play`, `pause`, `seek`, `get_position`, `set_rate`.
-- [ ] **Update `collaborator.py` Sync Logic**
-    - Move from "Stop-Seek-Wait" to "Rate Adjustment" (PID controller approach).
-    - If drift < 1s: Adjust speed (e.g., 1.05x).
-    - If drift > 1s: Hard seek.
+## Current Cleanup Follow-Up
+- [ ] Rename remaining `vlc_*` debug labels and log keys to generic player terminology.
+- [ ] Remove stale VLC wording from deeper docs and debug overlay templates.
+- [ ] Decide whether the archived Firefox cleanup flow should be revived or deleted permanently.
 
-## 🛠 Features & Improvements
-- [ ] **Local Content Caching**
-    - Copy videos from USB to local SD/SSD on boot to improve read performance and seeking.
-    - Verify checksums to avoid re-copying unchanged files.
-- [ ] **Leader Web Config**
-    - Allow setting volume and schedule via the web interface.
-- [ ] **Openbox / Display Setup**
-    - Verify `cleanup_firefox.sh` and display scripts for production deployment.
+## Playback And Sync
+- [ ] Add runtime reporting for the active GStreamer sink in the debug overlay.
+- [ ] Tune collaborator drift control after live hardware measurements.
+- [ ] Add a focused sync test that exercises repeated corrections with the mock driver.
 
-## 🐛 Bugs & Maintenance
-- [ ] Refactor `TODO.md` (Done).
-- [ ] Clean up `src/networking` to handle packet loss more gracefully.
+## Deployment
+- [ ] Consolidate setup docs so `setup_pi5.sh` is the only documented install path.
+- [ ] Add a deployment checklist for Pi imaging, X11 readiness, and USB content validation.
 
-## 📝 Backlog / Ideas
-- [ ] Mobile App for management.
-- [ ] Multi-channel MIDI support improvements.
+## Backlog
+- [ ] Local content caching.
+- [ ] Leader web configuration.
+- [ ] Multi-channel MIDI improvements.

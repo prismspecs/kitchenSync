@@ -3,14 +3,10 @@
 # MIDI Support
 python-rtmidi>=1.4.0
 mido>=1.2.10
+pyserial>=3.5
 
 # OSC Support
 python-osc>=1.8.3
-
-# VLC Python bindings for video control
-python-vlc>=3.0.0
-
-# Pygame for debug overlay graphics (optional)
 
 
 # Standard library modules used:
@@ -18,7 +14,7 @@ python-vlc>=3.0.0
 # - configparser, pathlib, os, sys, statistics, collections
 
 # System Dependencies (install via apt):
-# sudo apt install vlc libvlc-dev python3-vlc python3-pip python3-venv python3-dev libasound2-dev libdbus-1-dev libglib2.0-dev
+# sudo apt install python3-pip python3-venv python3-dev libasound2-dev libdbus-1-dev libglib2.0-dev python3-gst-1.0 gir1.2-gst-plugins-base-1.0
 
 # Installation:
 # python3 -m venv --system-site-packages ~/ks-env

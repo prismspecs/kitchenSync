@@ -66,6 +66,22 @@ class TestGstDriverSetSpeed(unittest.TestCase):
             gst_driver.Gst = original_gst
             gst_driver.GST_AVAILABLE = original_available
 
+    def test_preferred_sink_names_prioritize_x11_acceleration(self):
+        driver = gst_driver.GstDriver.__new__(gst_driver.GstDriver)
+
+        with patch.dict(os.environ, {"DISPLAY": ":0", "WAYLAND_DISPLAY": ""}, clear=False):
+            sink_names = driver._preferred_sink_names()
+
+        self.assertEqual(sink_names[:2], ["glimagesink", "xvimagesink"])
+
+    def test_preferred_sink_names_prioritize_kms_without_display(self):
+        driver = gst_driver.GstDriver.__new__(gst_driver.GstDriver)
+
+        with patch.dict(os.environ, {"DISPLAY": "", "WAYLAND_DISPLAY": ""}, clear=False):
+            sink_names = driver._preferred_sink_names()
+
+        self.assertEqual(sink_names[:2], ["kmssink", "glimagesink"])
+
 
 class TestCollaboratorDuplicateStart(unittest.TestCase):
     def test_duplicate_start_ignores_small_drift(self):

@@ -37,10 +37,26 @@ class GstDriver(VideoDriver):
         self.video_path = None
         self.state = PlayerState.STOPPED
         self.current_rate = 1.0
+        self.video_sink_name = None
+        self.hardware_accel_preferred = False
         
         # MainLoop for GStreamer bus messages
         self.loop = None
         self.loop_thread = None
+
+    def _preferred_sink_names(self):
+        """Return sink candidates in priority order for the current environment."""
+        if os.environ.get("DISPLAY"):
+            return ["glimagesink", "xvimagesink", "autovideosink"]
+        return ["kmssink", "glimagesink", "autovideosink"]
+
+    def _create_video_sink(self):
+        """Create the best available sink for the current runtime."""
+        for sink_name in self._preferred_sink_names():
+            sink = Gst.ElementFactory.make(sink_name, "videosink")
+            if sink:
+                return sink, sink_name
+        return None, None
 
     def load(self, video_path: str) -> bool:
         if not os.path.exists(video_path):
@@ -59,13 +75,19 @@ class GstDriver(VideoDriver):
         uri = "file://" + os.path.abspath(video_path)
         self.pipeline.set_property("uri", uri)
 
-        # Configure video sink.
-        # autovideosink lets GStreamer pick the best available backend:
-        # xvimagesink (X11), kmssink (DRM/KMS), glimagesink (GL), etc.
-        sink = Gst.ElementFactory.make("autovideosink", "videosink")
+        # Prefer a hardware-oriented sink and only fall back to autovideosink
+        # when no explicit accelerated path is available.
+        sink, sink_name = self._create_video_sink()
         if sink:
             self.pipeline.set_property("video-sink", sink)
-            log_info("Gst: Using autovideosink")
+            self.video_sink_name = sink_name
+            self.hardware_accel_preferred = sink_name in {"kmssink", "glimagesink", "xvimagesink"}
+            if self.hardware_accel_preferred:
+                log_info(f"Gst: Using hardware-preferred video sink '{sink_name}'")
+            else:
+                log_warning(
+                    f"Gst: Using fallback video sink '{sink_name}'; hardware acceleration is not confirmed"
+                )
         else:
             log_warning("Gst: autovideosink unavailable; using default sink")
 
@@ -210,3 +232,9 @@ class GstDriver(VideoDriver):
             self.loop.quit()
         self.pipeline = None
         log_info("Gst: Cleanup complete")
+
+    def get_info(self) -> Dict[str, Any]:
+        info = super().get_info()
+        info["video_sink"] = self.video_sink_name or "default"
+        info["hardware_accel_preferred"] = self.hardware_accel_preferred
+        return info
