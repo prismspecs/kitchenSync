@@ -49,6 +49,7 @@ class GstDriver(VideoDriver):
         return [
             "v4l2slh264dec",
             "v4l2h264dec",
+            "v4l2slh265dec",
             "v4l2slhevcdec",
             "v4l2h265dec",
             "vah264dec",

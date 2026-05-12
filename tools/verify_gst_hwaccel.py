@@ -23,6 +23,7 @@ KNOWN_DECODERS = [
     "v4l2h264dec",
     "v4l2slh264dec",
     "v4l2h265dec",
+    "v4l2slh265dec",
     "v4l2slhevcdec",
     "vah264dec",
     "vah265dec",
@@ -57,6 +58,7 @@ def _reprioritize_decoders():
     hardware_decoder_names = [
         "v4l2slh264dec",
         "v4l2h264dec",
+        "v4l2slh265dec",
         "v4l2slhevcdec",
         "v4l2h265dec",
         "vah264dec",
