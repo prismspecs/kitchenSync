@@ -22,9 +22,16 @@ except ImportError:
 KNOWN_DECODERS = [
     "v4l2h264dec",
     "v4l2slh264dec",
+    "v4l2h265dec",
+    "v4l2slhevcdec",
+    "vah264dec",
+    "vah265dec",
     "vaapih264dec",
+    "vaapih265dec",
     "nvh264dec",
+    "nvh265dec",
     "avdec_h264",
+    "avdec_h265",
 ]
 
 
@@ -44,6 +51,69 @@ def _create_video_sink():
         if sink:
             return sink, sink_name
     return None, None
+
+
+def _reprioritize_decoders():
+    hardware_decoder_names = [
+        "v4l2slh264dec",
+        "v4l2h264dec",
+        "v4l2slhevcdec",
+        "v4l2h265dec",
+        "vah264dec",
+        "vah265dec",
+        "vaapih264dec",
+        "vaapih265dec",
+        "nvh264dec",
+        "nvh265dec",
+    ]
+    software_decoder_names = ["avdec_h264", "avdec_h265"]
+
+    primary_rank = int(getattr(Gst.Rank, "PRIMARY", 256))
+    secondary_rank = int(getattr(Gst.Rank, "SECONDARY", 128))
+    available_hw = []
+
+    for offset, decoder_name in enumerate(hardware_decoder_names):
+        factory = Gst.ElementFactory.find(decoder_name)
+        if factory is None:
+            continue
+        factory.set_rank(primary_rank + 64 - offset)
+        available_hw.append(decoder_name)
+
+    if not available_hw:
+        return []
+
+    for decoder_name in software_decoder_names:
+        factory = Gst.ElementFactory.find(decoder_name)
+        if factory is None:
+            continue
+        factory.set_rank(min(factory.get_rank(), secondary_rank - 1))
+
+    return available_hw
+
+
+def _discover_active_decoder(pipeline):
+    try:
+        iterator = pipeline.iterate_recurse()
+        while True:
+            result, value = iterator.next()
+            if result == Gst.IteratorResult.OK:
+                factory = value.get_factory()
+                if factory is None:
+                    continue
+                factory_name = factory.get_name()
+                if "dec" in factory_name and factory_name not in {
+                    "decodebin",
+                    "uridecodebin",
+                    "decodebin3",
+                }:
+                    return factory_name
+            elif result == Gst.IteratorResult.DONE:
+                break
+            else:
+                break
+    except Exception:
+        return None
+    return None
 
 
 def build_report(video_path: Path, sample_seconds: float) -> dict:
@@ -68,6 +138,8 @@ def build_report(video_path: Path, sample_seconds: float) -> dict:
             name: _element_available(name) for name in KNOWN_DECODERS
         },
     }
+
+    report["reprioritized_hardware_decoders"] = _reprioritize_decoders()
 
     pipeline = Gst.ElementFactory.make("playbin", "verifier")
     if not pipeline:
@@ -106,6 +178,7 @@ def build_report(video_path: Path, sample_seconds: float) -> dict:
             raise RuntimeError("Failed to start GStreamer playback")
 
         time.sleep(sample_seconds)
+        report["active_decoder"] = _discover_active_decoder(pipeline) or "unknown"
 
         state_change = pipeline.get_state(0.5)
         state = state_change.state if hasattr(state_change, "state") else state_change[1]
@@ -126,8 +199,8 @@ def build_report(video_path: Path, sample_seconds: float) -> dict:
             report["hardware_preferred_sink"] and report["playback_progress_ok"]
         )
         report["decode_path_note"] = (
-            "Hardware decode cannot be fully proven here; this report only confirms sink preference "
-            "and available decoder plugins on the current machine."
+            "Hardware decode is only confirmed when the active decoder is a hardware decoder element, "
+            "not avdec_h264/avdec_h265."
         )
     finally:
         pipeline.set_state(Gst.State.NULL)

@@ -39,10 +39,83 @@ class GstDriver(VideoDriver):
         self.current_rate = 1.0
         self.video_sink_name = None
         self.hardware_accel_preferred = False
+        self.decoder_name = None
         
         # MainLoop for GStreamer bus messages
         self.loop = None
         self.loop_thread = None
+
+    def _hardware_decoder_names(self):
+        return [
+            "v4l2slh264dec",
+            "v4l2h264dec",
+            "v4l2slhevcdec",
+            "v4l2h265dec",
+            "vah264dec",
+            "vah265dec",
+            "vaapih264dec",
+            "vaapih265dec",
+            "nvh264dec",
+            "nvh265dec",
+        ]
+
+    def _software_decoder_names(self):
+        return ["avdec_h264", "avdec_h265"]
+
+    def _reprioritize_decoders(self):
+        """Prefer hardware decoders over software decoders when both exist."""
+        available_hw = []
+        primary_rank = int(getattr(Gst.Rank, "PRIMARY", 256))
+        secondary_rank = int(getattr(Gst.Rank, "SECONDARY", 128))
+
+        for offset, decoder_name in enumerate(self._hardware_decoder_names()):
+            factory = Gst.ElementFactory.find(decoder_name)
+            if factory is None:
+                continue
+            factory.set_rank(primary_rank + 64 - offset)
+            available_hw.append(decoder_name)
+
+        if not available_hw:
+            return
+
+        for decoder_name in self._software_decoder_names():
+            factory = Gst.ElementFactory.find(decoder_name)
+            if factory is None:
+                continue
+            factory.set_rank(min(factory.get_rank(), secondary_rank - 1))
+
+        log_info(
+            f"Gst: Re-prioritized decoders, preferring hardware path: {', '.join(available_hw)}"
+        )
+
+    def _discover_active_decoder(self):
+        """Return the active decoder element name if one is present in the pipeline."""
+        if not self.pipeline:
+            return None
+
+        try:
+            iterator = self.pipeline.iterate_recurse()
+            while True:
+                result, value = iterator.next()
+                if result == Gst.IteratorResult.OK:
+                    factory = value.get_factory()
+                    if factory is None:
+                        continue
+                    factory_name = factory.get_name()
+                    if "dec" in factory_name and factory_name not in {
+                        "decodebin",
+                        "uridecodebin",
+                        "decodebin3",
+                    }:
+                        return factory_name
+                elif result == Gst.IteratorResult.DONE:
+                    break
+                else:
+                    break
+        except Exception:
+            return None
+
+        return None
 
     def _preferred_sink_names(self):
         """Return sink candidates in priority order for the current environment."""
@@ -64,6 +137,7 @@ class GstDriver(VideoDriver):
             return False
 
         self.video_path = video_path
+        self._reprioritize_decoders()
         
         # Create playbin element
         self.pipeline = Gst.ElementFactory.make("playbin", "player")
@@ -125,6 +199,10 @@ class GstDriver(VideoDriver):
             return False
             
         self.state = PlayerState.PLAYING
+        time.sleep(0.1)
+        self.decoder_name = self._discover_active_decoder()
+        if self.decoder_name:
+            log_info(f"Gst: Active decoder '{self.decoder_name}'")
         return True
 
     def pause(self) -> bool:
@@ -237,4 +315,5 @@ class GstDriver(VideoDriver):
         info = super().get_info()
         info["video_sink"] = self.video_sink_name or "default"
         info["hardware_accel_preferred"] = self.hardware_accel_preferred
+        info["decoder"] = self.decoder_name or "unknown"
         return info
