@@ -49,17 +49,19 @@ def _write(level: str, message: str, component: Optional[str] = None) -> None:
     pid = os.getpid()
     if component is None:
         component = os.path.basename(sys.argv[0]) or "unknown"
-    line = f"[{timestamp}] [{level}] [{component}] (pid={pid}) {message}\n"
+    line = f"[{timestamp}] [{level}] [{component}] (pid={pid}) {message}"
+    
+    # Always print errors to console
+    if level == "ERROR":
+        print(line, file=sys.stderr)
+    elif _ENABLE_SYSTEM_LOGGING:
+        print(line)
+
     try:
         with open(SYSTEM_LOG_PATH, "a") as f:
-            f.write(line)
+            f.write(line + "\n")
     except Exception:
-        # As a last resort, print only errors
-        if level == "ERROR":
-            try:
-                print(line, end="")
-            except Exception:
-                pass
+        pass
 
 
 def log_debug(message: str, component: Optional[str] = None) -> None:

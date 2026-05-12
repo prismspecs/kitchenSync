@@ -316,6 +316,7 @@ def main():
         if args.debug:
             collaborator.config.config["KITCHENSYNC"]["debug"] = "true"
             collaborator.debug_sync_logging = True
+            enable_system_logging(True)
             print("✓ Debug mode: ENABLED (via command line)")
             print("✓ Sync debug logging: ENABLED")
 

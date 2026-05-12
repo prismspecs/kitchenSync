@@ -41,22 +41,26 @@ class VideoFileManager:
         # Step 1: Look for configured file on the specific USB mount point
         if self.usb_mount_point:
             usb_path = os.path.join(self.usb_mount_point, self.configured_file)
-            search_log.append(f"Searching specific USB path: {usb_path}")
+            search_log.append(f"1. Specific USB path: {os.path.abspath(usb_path)}")
             if os.path.exists(usb_path):
                 log_info(f"Found video at specific USB path: {usb_path}", "video")
                 return usb_path
 
         # Step 2: Look for configured file on all USB drives
-        for mount_point in self._get_usb_mount_points():
-            usb_path = os.path.join(mount_point, self.configured_file)
-            search_log.append(f"Searching all USBs for configured file: {usb_path}")
-            if os.path.exists(usb_path):
-                log_info(f"Found configured video on USB drive: {usb_path}", "video")
-                return usb_path
+        usb_mounts = self._get_usb_mount_points()
+        if usb_mounts:
+            for mount_point in usb_mounts:
+                usb_path = os.path.join(mount_point, self.configured_file)
+                search_log.append(f"2. USB drive configured file: {os.path.abspath(usb_path)}")
+                if os.path.exists(usb_path):
+                    log_info(f"Found configured video on USB drive: {usb_path}", "video")
+                    return usb_path
+        else:
+            search_log.append("2. No USB drives detected.")
 
         # Step 3: Look for configured file locally
-        local_path = self.configured_file
-        search_log.append(f"Searching for configured file locally: {local_path}")
+        local_path = os.path.join(os.getcwd(), self.configured_file)
+        search_log.append(f"3. Local path: {local_path}")
         if os.path.exists(local_path):
             log_info(f"Found configured video locally: {local_path}", "video")
             return local_path
@@ -64,7 +68,7 @@ class VideoFileManager:
         # Step 4: Check local fallback directories
         for source in self.fallback_sources:
             fallback_path = os.path.join(source, self.configured_file)
-            search_log.append(f"Searching fallback directory: {fallback_path}")
+            search_log.append(f"4. Fallback directory: {os.path.abspath(fallback_path)}")
             if os.path.exists(fallback_path):
                 log_info(
                     f"Found configured video in fallback source: {fallback_path}",
@@ -76,30 +80,34 @@ class VideoFileManager:
         if self.usb_mount_point:
             video_path = self._find_any_video_in_directory(self.usb_mount_point)
             search_log.append(
-                f"Searching for any video on specific USB: {self.usb_mount_point}"
+                f"5. Any video on specific USB: {os.path.abspath(self.usb_mount_point)}"
             )
             if video_path:
                 log_info(f"Found any video on specific USB: {video_path}", "video")
                 return video_path
 
         # Step 6: Find any video file on all USB drives
-        for mount_point in self._get_usb_mount_points():
-            video_path = self._find_any_video_in_directory(mount_point)
-            search_log.append(f"Searching for any video on all USBs: {mount_point}")
-            if video_path:
-                log_info(f"Found any video on a USB drive: {video_path}", "video")
-                return video_path
+        if usb_mounts:
+            for mount_point in usb_mounts:
+                video_path = self._find_any_video_in_directory(mount_point)
+                search_log.append(f"6. Any video on all USBs: {os.path.abspath(mount_point)}")
+                if video_path:
+                    log_info(f"Found any video on a USB drive: {video_path}", "video")
+                    return video_path
+        else:
+            search_log.append("6. No USB drives to search for 'any' video.")
 
         # Step 7: Find any video file locally
         for source in self.fallback_sources:
             video_path = self._find_any_video_in_directory(source)
-            search_log.append(f"Searching for any video in fallback source: {source}")
+            search_log.append(f"7. Any video in fallback source: {os.path.abspath(source)}")
             if video_path:
                 log_info(f"Found any video in fallback source: {video_path}", "video")
                 return video_path
 
-        log_warning("Could not find any video file.", "video")
-        log_info(f"Search log: {search_log}", "video")
+        log_error("Could not find any video file in search paths.", "video")
+        for log in search_log:
+            log_error(f"  Checked: {log}", "video")
         return None
 
     def find_all_video_files(self) -> List[str]:
