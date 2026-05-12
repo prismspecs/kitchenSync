@@ -270,6 +270,16 @@ class ConfigManager:
         return self.get("video_driver", "vlc")
 
     @property
+    def enable_midi(self) -> bool:
+        """Check if MIDI output is enabled"""
+        return self.getboolean("enable_midi", True)
+
+    @property
+    def enable_osc(self) -> bool:
+        """Check if OSC output is enabled"""
+        return self.getboolean("enable_osc", False)
+
+    @property
     def is_leader(self) -> bool:
         """Check if this instance should run as leader"""
         return self.getboolean("is_leader", False)

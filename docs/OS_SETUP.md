@@ -97,7 +97,27 @@ Restart=always
 WantedBy=multi-user.target
 ```
 
-## 7. Performance Tuning
+## 7. Running & Testing via SSH
+When you are logged in via SSH, the system doesn't automatically know which screen to use. You must provide the `DISPLAY` variable.
+
+### Start the Graphical Environment
+If the Pi is sitting at a black console screen, you can trigger the graphics system manually:
+```bash
+# This starts X11 and Openbox on the local HDMI port
+./tools/start_x.sh
+```
+
+### Run KitchenSync from SSH
+Once the graphical environment is running on the Pi's HDMI port, you can launch the app from your SSH terminal:
+```bash
+# Ensure venv is active
+source ~/ks-env/bin/activate
+
+# Run with DISPLAY=:0 to project to the HDMI screen
+DISPLAY=:0 python3 collaborator.py --debug
+```
+
+## 8. Performance Tuning
 - **GPU Memory:** For Pi 4/5, ensure `dtoverlay=vc4-kms-v3d` is in `/boot/config.txt`.
 - **Network:** Use a static IP or reserved DHCP for faster discovery.
 - **USB:** High-speed USB 3.0 drives are recommended for high-bitrate video.

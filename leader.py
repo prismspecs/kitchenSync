@@ -248,7 +248,8 @@ class LeaderPi:
             success = self.video_player.seek(seconds)
             if success:
                 log_info(f"✓ Seek successful to {seconds}s", component="leader")
-                self.midi_scheduler.reset()
+                if self.midi_scheduler:
+                    self.midi_scheduler.reset()
             else:
                 log_error("✗ Failed to seek video", component="leader")
         except ValueError:
@@ -261,7 +262,10 @@ class LeaderPi:
         if self.system_state.is_running:
             self.stop_system()
         self.video_player.cleanup()
-        self.midi_manager.cleanup()
+        
+        if self.midi_manager:
+            self.midi_manager.cleanup()
+        
         if self.html_debug:
             self.html_debug.cleanup()
         log_info("Cleanup completed", component="leader")
@@ -326,4 +330,20 @@ def main():
 
 
 if __name__ == "__main__":
+    main()
+nterface(leader_instance)
+            interface.run()
+        leader_instance.cleanup()
+    except KeyboardInterrupt:
+        print("\nExiting...")
+    except Exception as e:
+        print(f"Fatal error: {e}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()
+= "__main__":
     main()

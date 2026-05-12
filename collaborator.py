@@ -315,14 +315,15 @@ class CollaboratorPi:
         self.system_state.start_session()
         self.video_start_time = time.time()
 
-        # Start video playback first so VLC creates its window
-        if self.video_player.video_path:
+        # Start video playback first
+        if self.video_path:
             log_info("Starting video...", component="video")
-            self.video_player.start_playback()
+            self.video_player.play()
 
         # Start MIDI playback with video duration for looping
         video_duration = self.video_player.get_duration()
-        self.midi_scheduler.start_playback(self.system_state.start_time, video_duration)
+        if self.midi_scheduler:
+            self.midi_scheduler.start_playback(self.system_state.start_time, video_duration)
 
         log_info("Playback started", component="collaborator")
 
@@ -331,10 +332,11 @@ class CollaboratorPi:
         log_info("Stopping playback...", component="collaborator")
 
         # Stop video
-        self.video_player.stop_playback()
+        self.video_player.stop()
 
         # Stop MIDI
-        self.midi_scheduler.stop_playback()
+        if self.midi_scheduler:
+            self.midi_scheduler.stop_playback()
 
         # Stop system state
         self.system_state.stop_session()
@@ -726,7 +728,8 @@ class CollaboratorPi:
             self.stop_playback()
 
         self.video_player.cleanup()
-        self.midi_manager.cleanup()
+        if self.midi_manager:
+            self.midi_manager.cleanup()
         log_info("Cleanup completed", component="collaborator")
 
 
@@ -772,6 +775,22 @@ def main():
 
         # Enable debug deviation mode if specified
         if args.debug_deviation:
+            collaborator.debug_deviation_mode = True
+            print("✓ Debug deviation mode: ENABLED (prints raw deviation)")
+
+        collaborator.run()
+    except KeyboardInterrupt:
+        print("\nExiting...")
+    except Exception as e:
+        print(f"Fatal error: {e}")
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()
+name__ == "__main__":
+    main()
+    if args.debug_deviation:
             collaborator.debug_deviation_mode = True
             print("✓ Debug deviation mode: ENABLED (prints raw deviation)")
 
