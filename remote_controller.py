@@ -37,6 +37,7 @@ class ClusterState:
 cluster_state = ClusterState()
 command_manager = CommandManager()
 broadcaster = SyncBroadcaster()
+broadcaster.leader_id = "remote-leader"
 
 class RemoteHandler(BaseHTTPRequestHandler):
     def log_message(self, format, *args):
@@ -107,7 +108,16 @@ class RemoteHandler(BaseHTTPRequestHandler):
                 cluster_state.is_playing = True
                 cluster_state.master_start_time = time.time() - cluster_state.video_pos
                 broadcaster.start_broadcasting(cluster_state.master_start_time)
-                log_info("Remote taking over as Cluster Leader", component="remote")
+                
+                # Send a REAL start command to any collaborators waiting on the network
+                start_cmd = {
+                    "type": "start",
+                    "start_time": cluster_state.master_start_time,
+                    "schedule": [],
+                    "debug_mode": True
+                }
+                command_manager.send_command(start_cmd)
+                log_info("Remote taking over as Cluster Leader and sending START command", component="remote")
             
             command_manager.send_command({"type": "remote_start"})
             cluster_state.is_playing = True
@@ -468,12 +478,16 @@ def start_remote():
     log_info("Remote Controller Web UI available at http://localhost:8080", component="remote")
 
     # Start Sync Listening (to mirror the cluster state in the UI)
-    def on_sync(leader_time, received_at):
+    def on_sync(leader_time, received_at, leader_id=None):
+        # Ignore our own broadcasts
+        if leader_id == "remote-leader":
+            return
+
         # If we hear a real leader, we stop being the master to avoid collisions
         if cluster_state.is_master:
             cluster_state.is_master = False
             broadcaster.stop_broadcasting()
-            log_info("Hardware Leader detected. Remote stepping down as Master.", component="remote")
+            log_info(f"Hardware Leader ({leader_id}) detected. Remote stepping down as Master.", component="remote")
 
         cluster_state.leader_time = leader_time
         cluster_state.video_pos = leader_time

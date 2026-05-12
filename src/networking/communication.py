@@ -211,13 +211,22 @@ class SyncReceiver:
                     if msg.get("type") == "sync":
                         self.last_sync_time = time.time()
                         leader_time = msg.get("time", 0)
+                        leader_id = msg.get("leader_id", "unknown")
                         time_source = msg.get("source", "unknown")
                         duration = msg.get("duration")
 
                         if self.sync_callback:
                             try:
-                                # Pass both leader_time and receive timestamp
-                                self.sync_callback(leader_time, self.last_sync_time)
+                                # Pass leader_time, receive timestamp, and leader_id
+                                try:
+                                    self.sync_callback(leader_time, self.last_sync_time, leader_id)
+                                except TypeError:
+                                    # Fallback for callbacks expecting two or one args
+                                    try:
+                                        self.sync_callback(leader_time, self.last_sync_time)
+                                    except TypeError:
+                                        self.sync_callback(leader_time)
+                                        
                                 # Log diagnostic info if system logging is enabled
                                 try:
                                     from core.logger import log_info
