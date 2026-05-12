@@ -329,21 +329,29 @@ class CommandManager:
         self._ensure_send_socket()
         payload = json.dumps(command)
 
-        if target_pi and target_pi in self.collaborators:
-            # Send to specific Pi
-            ip = self.collaborators[target_pi]["ip"]
-            try:
-                self.control_sock.sendto(payload.encode(), (ip, self.control_port))
-            except Exception as e:
-                pass  # Ignore command send errors
+        # 1. Direct Send (to specific target or ALL registered collaborators)
+        if target_pi:
+            if target_pi in self.collaborators:
+                ip = self.collaborators[target_pi]["ip"]
+                try:
+                    self.control_sock.sendto(payload.encode(), (ip, self.control_port))
+                except Exception:
+                    pass
         else:
-            # Broadcast to all Pis
-            try:
-                self.control_sock.sendto(
-                    payload.encode(), (self.broadcast_ip, self.control_port)
-                )
-            except Exception as e:
-                pass  # Ignore broadcast errors
+            # Send to every registered IP directly for maximum reliability
+            for device_id, info in self.collaborators.items():
+                try:
+                    self.control_sock.sendto(payload.encode(), (info["ip"], self.control_port))
+                except Exception:
+                    pass
+
+        # 2. Broadcast (as fallback and for unregistered nodes)
+        try:
+            self.control_sock.sendto(
+                payload.encode(), (self.broadcast_ip, self.control_port)
+            )
+        except Exception:
+            pass
 
     def _handle_default_message(self, msg: Dict[str, Any], addr: tuple) -> None:
         """Handle default message types"""
