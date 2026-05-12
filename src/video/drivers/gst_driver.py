@@ -67,17 +67,24 @@ class GstDriver(VideoDriver):
         return ["avdec_h264", "avdec_h265"]
 
     def _reprioritize_decoders(self):
-        """Prefer hardware decoders over software decoders when both exist."""
+        """Prefer hardware decoders and sinks over software when both exist."""
         available_hw = []
         primary_rank = int(getattr(Gst.Rank, "PRIMARY", 256))
         secondary_rank = int(getattr(Gst.Rank, "SECONDARY", 128))
 
+        # 1. Prioritize Hardware Decoders
         for offset, decoder_name in enumerate(self._hardware_decoder_names()):
             factory = Gst.ElementFactory.find(decoder_name)
             if factory is None:
                 continue
             factory.set_rank(primary_rank + 64 - offset)
             available_hw.append(decoder_name)
+
+        # 2. Prioritize GL Sinks and Converters (Critical for Pi 5 DMA-bufs)
+        for element_name in ["glupload", "glcolorconvert", "glimagesink"]:
+            factory = Gst.ElementFactory.find(element_name)
+            if factory:
+                factory.set_rank(primary_rank + 10)
 
         if not available_hw:
             return
@@ -89,7 +96,7 @@ class GstDriver(VideoDriver):
             factory.set_rank(min(factory.get_rank(), secondary_rank - 1))
 
         log_info(
-            f"Gst: Re-prioritized decoders, preferring hardware path: {', '.join(available_hw)}"
+            f"Gst: Re-prioritized decoders and sinks for hardware path: {', '.join(available_hw)}"
         )
 
     def _discover_active_decoder(self):
@@ -161,12 +168,25 @@ class GstDriver(VideoDriver):
     def _preferred_sink_names(self):
         """Return sink candidates in priority order for the current environment."""
         if os.environ.get("DISPLAY"):
-            # On Pi with X11/Openbox, glimagesink or xvimagesink are the best bets
+            # On Pi 5 with X11, glimagesink is the best performer for HW decoders
             return ["glimagesink", "xvimagesink", "autovideosink"]
         return ["kmssink", "glimagesink", "autovideosink"]
 
     def _create_video_sink(self):
-        """Create the best available sink for the current runtime."""
+        """Create a hardware-optimized sink bin for the current runtime."""
+        if os.environ.get("DISPLAY"):
+            # Explicitly build a GL bin. This is MUCH more robust for Pi 5's 
+            # stateless decoder which outputs tiled DMA-bufs.
+            try:
+                # Using glupload and glcolorconvert ensures the hardware 
+                # decoder's output is correctly brought into the GL context.
+                bin_desc = "glupload ! glcolorconvert ! glimagesink name=sink"
+                sink_bin = Gst.parse_bin_from_description(bin_desc, True)
+                if sink_bin:
+                    return sink_bin, "gl-optimized-bin"
+            except Exception as e:
+                log_warning(f"Gst: Failed to create GL sink bin: {e}")
+
         for sink_name in self._preferred_sink_names():
             sink = Gst.ElementFactory.make(sink_name, "videosink")
             if sink:
@@ -201,7 +221,7 @@ class GstDriver(VideoDriver):
         self.pipeline.connect("deep-element-added", self._on_deep_element_added)
 
         self.video_sink_name = sink_name
-        self.hardware_accel_preferred = sink_name in {"kmssink", "glsinkbin(glimagesink)", "glimagesink", "xvimagesink"}
+        self.hardware_accel_preferred = sink_name in {"kmssink", "gl-optimized-bin", "glimagesink", "xvimagesink"}
         if sink_name:
             if self.hardware_accel_preferred:
                 log_info(f"Gst: Using hardware-preferred video sink '{sink_name}'")
@@ -277,8 +297,6 @@ class GstDriver(VideoDriver):
         nanos = int(seconds * Gst.SECOND)
         
         # Seek with flush for immediate response
-        # Using KEY_UNIT to seek to nearest keyframe for speed
-        # or ACCURATE for exact frame (slower)
         success = self.pipeline.seek_simple(
             Gst.Format.TIME, 
             Gst.SeekFlags.FLUSH | Gst.SeekFlags.KEY_UNIT, 
@@ -288,18 +306,16 @@ class GstDriver(VideoDriver):
 
     def set_speed(self, rate: float) -> bool:
         """
-        Adjust playback rate seamlessly without flushing buffers.
-        This is the core of KitchenSync's new 'invisible' synchronization.
+        Adjust playback rate. Attempts seamless rate change, fallbacks to 
+        flushing seek if hardware (like Pi 5 v4l2sl) rejects it.
         """
         if not self.pipeline:
             return False
             
-        if rate == self.current_rate:
+        if abs(rate - self.current_rate) < 0.001:
             return True
 
-        # INSTANT_RATE_CHANGE requires NONE/NONE seek types and no FLUSH.
-        # Using position-based seek parameters here triggers GStreamer assertions
-        # and causes all fine-grained sync corrections to fail.
+        # 1. Try INSTANT_RATE_CHANGE (seamless)
         event = Gst.Event.new_seek(
             rate,
             Gst.Format.TIME,
@@ -308,10 +324,26 @@ class GstDriver(VideoDriver):
             Gst.SeekType.NONE, -1
         )
         
-        success = self.pipeline.send_event(event)
+        if self.pipeline.send_event(event):
+            self.current_rate = rate
+            log_info(f"Gst: Playback rate adjusted to {rate:.4f} (seamless)")
+            return True
+
+        # 2. Fallback to Flushing Seek (for hardware that rejects instant changes)
+        # This is less seamless (minor flicker) but works on Pi 5.
+        pos = self.get_position()
+        success = self.pipeline.seek(
+            rate,
+            Gst.Format.TIME,
+            Gst.SeekFlags.FLUSH | Gst.SeekFlags.ACCURATE,
+            Gst.SeekType.SET, int(pos * Gst.SECOND),
+            Gst.SeekType.NONE, -1
+        )
+        
         if success:
             self.current_rate = rate
-            log_info(f"Gst: Playback rate adjusted to {rate:.4f}")
+            if self.debug_mode:
+                log_info(f"Gst: Playback rate adjusted to {rate:.4f} (flushing fallback)")
         else:
             log_warning(f"Gst: Failed to adjust rate to {rate}")
             
@@ -349,8 +381,6 @@ class GstDriver(VideoDriver):
         return self.state
 
     def set_fullscreen(self, enabled: bool) -> None:
-        # glimagesink handles its own windowing. For Openbox, 
-        # the window manager handles making the window fullscreen.
         pass
 
     def cleanup(self) -> None:
