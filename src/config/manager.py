@@ -171,10 +171,9 @@ class ConfigManager:
             "debug": "false",
             "device_id": f"pi-{int(os.urandom(2).hex(), 16):03d}",
             "video_file": video_file or "video.mp4",
+            "video_driver": "gst",
             # Logging settings - default to minimal for performance
-            "enable_vlc_logging": "false",
             "enable_system_logging": "false",
-            "vlc_log_level": "0",  # 0=errors only, 1=warnings, 2=info, 3=debug
             # Networking / sync
             "tick_interval": "0.1",  # seconds between leader sync broadcasts
             # Audio output selection
@@ -285,7 +284,7 @@ class ConfigManager:
     @property
     def video_driver(self) -> str:
         """Get selected video driver (vlc or gstreamer)"""
-        return self.get("video_driver", "vlc")
+        return self.get("video_driver", "gst")
 
     @property
     def enable_midi(self) -> bool:
@@ -323,19 +322,9 @@ class ConfigManager:
         return self._usb_mount_point
 
     @property
-    def enable_vlc_logging(self) -> bool:
-        """Check if VLC detailed logging is enabled"""
-        return self.getboolean("enable_vlc_logging", False)
-
-    @property
     def enable_system_logging(self) -> bool:
         """Check if system detailed logging is enabled"""
         return self.getboolean("enable_system_logging", False)
-
-    @property
-    def vlc_log_level(self) -> int:
-        """Get VLC logging verbosity level (0=errors, 1=warnings, 2=info, 3=debug)"""
-        return self.getint("vlc_log_level", 0)
 
     @property
     def tick_interval(self) -> float:
