@@ -265,6 +265,24 @@ class ConfigManager:
         print(f"✓ Updated {target_file}")
 
     @property
+    def content_dir(self) -> str:
+        """Get the directory where content (video/schedules) is located"""
+        if self._usb_mount_point:
+            return self._usb_mount_point
+        return os.getcwd()
+
+    @property
+    def schedule_file(self) -> str:
+        """Get the path to the schedule JSON file"""
+        # Try to find on USB first
+        usb_schedule = USBConfigLoader.find_schedule_on_usb()
+        if usb_schedule:
+            return usb_schedule
+        
+        # Fallback to config value or default
+        return self.get("schedule_file", "schedule.json")
+
+    @property
     def video_driver(self) -> str:
         """Get selected video driver (vlc or gstreamer)"""
         return self.get("video_driver", "vlc")
