@@ -319,10 +319,17 @@ class CommandManager:
         """Register a message handler"""
         self.message_handlers[message_type] = handler
 
+    def _ensure_send_socket(self) -> None:
+        """Ensure a socket is available for sending commands."""
+        if self.control_sock is None:
+            self.control_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            self.control_sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+
     def send_command(
         self, command: Dict[str, Any], target_pi: Optional[str] = None
     ) -> None:
         """Send command to collaborator Pi(s)"""
+        self._ensure_send_socket()
         payload = json.dumps(command)
 
         if target_pi and target_pi in self.collaborators:
@@ -330,7 +337,6 @@ class CommandManager:
             ip = self.collaborators[target_pi]["ip"]
             try:
                 self.control_sock.sendto(payload.encode(), (ip, self.control_port))
-                # print(f"Sent command to {target_pi}: {command['type']}")
             except Exception as e:
                 pass  # Ignore command send errors
         else:
@@ -339,7 +345,6 @@ class CommandManager:
                 self.control_sock.sendto(
                     payload.encode(), (self.broadcast_ip, self.control_port)
                 )
-                # print(f"Broadcast command: {command['type']}")
             except Exception as e:
                 pass  # Ignore broadcast errors
 

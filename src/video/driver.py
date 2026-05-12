@@ -81,6 +81,11 @@ class VideoDriver(ABC):
         """Release hardware resources."""
         pass
 
+    @property
+    def is_playing(self) -> bool:
+        """Check if the player is currently playing."""
+        return self.get_state() == PlayerState.PLAYING
+
     def get_info(self) -> Dict[str, Any]:
         """Return a standardized dictionary of player info for the debug overlay."""
         return {
