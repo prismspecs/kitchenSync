@@ -43,7 +43,6 @@ class VideoFileManager:
             usb_path = os.path.join(self.usb_mount_point, self.configured_file)
             search_log.append(f"1. Specific USB path: {os.path.abspath(usb_path)}")
             if os.path.exists(usb_path):
-                log_info(f"Found video at specific USB path: {usb_path}", "video")
                 return usb_path
 
         # Step 2: Look for configured file on all USB drives
@@ -53,7 +52,6 @@ class VideoFileManager:
                 usb_path = os.path.join(mount_point, self.configured_file)
                 search_log.append(f"2. USB drive configured file: {os.path.abspath(usb_path)}")
                 if os.path.exists(usb_path):
-                    log_info(f"Found configured video on USB drive: {usb_path}", "video")
                     return usb_path
         else:
             search_log.append("2. No USB drives detected.")
@@ -62,7 +60,6 @@ class VideoFileManager:
         local_path = os.path.join(os.getcwd(), self.configured_file)
         search_log.append(f"3. Local path: {local_path}")
         if os.path.exists(local_path):
-            log_info(f"Found configured video locally: {local_path}", "video")
             return local_path
 
         # Step 4: Check local fallback directories
@@ -70,10 +67,6 @@ class VideoFileManager:
             fallback_path = os.path.join(source, self.configured_file)
             search_log.append(f"4. Fallback directory: {os.path.abspath(fallback_path)}")
             if os.path.exists(fallback_path):
-                log_info(
-                    f"Found configured video in fallback source: {fallback_path}",
-                    "video",
-                )
                 return fallback_path
 
         # Step 5: Find any video file on the specific USB mount point
@@ -83,7 +76,6 @@ class VideoFileManager:
                 f"5. Any video on specific USB: {os.path.abspath(self.usb_mount_point)}"
             )
             if video_path:
-                log_info(f"Found any video on specific USB: {video_path}", "video")
                 return video_path
 
         # Step 6: Find any video file on all USB drives
@@ -92,7 +84,6 @@ class VideoFileManager:
                 video_path = self._find_any_video_in_directory(mount_point)
                 search_log.append(f"6. Any video on all USBs: {os.path.abspath(mount_point)}")
                 if video_path:
-                    log_info(f"Found any video on a USB drive: {video_path}", "video")
                     return video_path
         else:
             search_log.append("6. No USB drives to search for 'any' video.")
@@ -102,7 +93,6 @@ class VideoFileManager:
             video_path = self._find_any_video_in_directory(source)
             search_log.append(f"7. Any video in fallback source: {os.path.abspath(source)}")
             if video_path:
-                log_info(f"Found any video in fallback source: {video_path}", "video")
                 return video_path
 
         log_error("Could not find any video file in search paths.", "video")
