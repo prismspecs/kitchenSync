@@ -174,6 +174,12 @@ class GstDriver(VideoDriver):
                 return sink, sink_name
         return None, None
 
+    def _create_explicit_hevc_sink(self):
+        sink = Gst.ElementFactory.make("autovideosink", "videosink")
+        if sink:
+            return sink, "autovideosink"
+        return self._create_video_sink()
+
     def _create_video_converter(self):
         for converter_name in ["v4l2convert", "videoconvert"]:
             converter = Gst.ElementFactory.make(converter_name, converter_name)
@@ -240,7 +246,7 @@ class GstDriver(VideoDriver):
         filesrc = Gst.ElementFactory.make("filesrc", "filesrc")
         parsebin = Gst.ElementFactory.make("parsebin", "parsebin")
         decoder = Gst.ElementFactory.make("v4l2slh265dec", "videodecoder")
-        sink, sink_name = self._create_video_sink()
+        sink, sink_name = self._create_explicit_hevc_sink()
 
         elements = [filesrc, parsebin, decoder, sink]
         if not pipeline or any(element is None for element in elements):

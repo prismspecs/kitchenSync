@@ -130,6 +130,13 @@ def _create_video_sink():
     return None, None
 
 
+def _create_explicit_hevc_sink():
+    sink = Gst.ElementFactory.make("autovideosink", "videosink")
+    if sink:
+        return sink, "autovideosink"
+    return _create_video_sink()
+
+
 def _create_video_converter():
     for converter_name in ["v4l2convert", "videoconvert"]:
         converter = Gst.ElementFactory.make(converter_name, converter_name)
@@ -152,7 +159,7 @@ def _build_explicit_hevc_pipeline(video_path: Path, report: dict):
     filesrc = Gst.ElementFactory.make("filesrc", "filesrc")
     parsebin = Gst.ElementFactory.make("parsebin", "parsebin")
     decoder = Gst.ElementFactory.make("v4l2slh265dec", "videodecoder")
-    sink, sink_name = _create_video_sink()
+    sink, sink_name = _create_explicit_hevc_sink()
 
     elements = [filesrc, parsebin, decoder, sink]
     if not pipeline or any(element is None for element in elements):
