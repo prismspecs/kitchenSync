@@ -34,7 +34,8 @@ config = ConfigManager("leader_config.ini")
 cluster_state.current_video = config.video_file
 
 command_manager = CommandManager()
-sync_broadcaster = SyncBroadcaster(leader_id="remote-leader")
+sync_broadcaster = SyncBroadcaster()
+sync_broadcaster.leader_id = "remote-leader"
 
 class RemoteHandler(BaseHTTPRequestHandler):
     def do_GET(self):
