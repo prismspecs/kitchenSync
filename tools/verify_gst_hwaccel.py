@@ -92,6 +92,27 @@ def _reprioritize_decoders():
 
 
 def _discover_active_decoder(pipeline):
+    def has_video_output(element):
+        try:
+            pad_iterator = element.iterate_src_pads()
+            while True:
+                pad_result, pad = pad_iterator.next()
+                if pad_result == Gst.IteratorResult.OK:
+                    caps = pad.get_current_caps() or pad.query_caps(None)
+                    if not caps:
+                        continue
+                    for index in range(caps.get_size()):
+                        structure = caps.get_structure(index)
+                        if structure and structure.get_name().startswith("video/"):
+                            return True
+                elif pad_result == Gst.IteratorResult.DONE:
+                    break
+                else:
+                    break
+        except Exception:
+            return False
+        return False
+
     try:
         iterator = pipeline.iterate_recurse()
         while True:
@@ -105,7 +126,7 @@ def _discover_active_decoder(pipeline):
                     "decodebin",
                     "uridecodebin",
                     "decodebin3",
-                }:
+                } and has_video_output(value):
                     return factory_name
             elif result == Gst.IteratorResult.DONE:
                 break
