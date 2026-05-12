@@ -146,7 +146,7 @@ class GstDriver(VideoDriver):
         if factory is None:
             return False
 
-        klass = factory.get_klass() or ""
+        klass = factory.get_metadata(Gst.ELEMENT_METADATA_KLASS) or ""
         return "Decoder" in klass and "Video" in klass
 
     def _on_deep_element_added(self, _bin, _sub_bin, element):
@@ -161,29 +161,13 @@ class GstDriver(VideoDriver):
     def _preferred_sink_names(self):
         """Return sink candidates in priority order for the current environment."""
         if os.environ.get("DISPLAY"):
-            # On Pi with X11/Openbox, glimagesink is often more reliable than kmssink
-            return ["glsinkbin(glimagesink)", "glimagesink", "xvimagesink", "autovideosink"]
+            # On Pi with X11/Openbox, xvimagesink is generally more stable than gl
+            return ["xvimagesink", "glimagesink", "autovideosink"]
         return ["kmssink", "glimagesink", "autovideosink"]
-
-    def _create_gl_sinkbin(self):
-        sink_bin = Gst.ElementFactory.make("glsinkbin", "videosink")
-        inner_sink = Gst.ElementFactory.make("glimagesink", "glimagesink")
-        if not sink_bin or not inner_sink:
-            return None, None
-
-        sink_bin.set_property("sink", inner_sink)
-        return sink_bin, "glsinkbin(glimagesink)"
 
     def _create_video_sink(self):
         """Create the best available sink for the current runtime."""
-        if os.environ.get("DISPLAY"):
-            sink, sink_name = self._create_gl_sinkbin()
-            if sink:
-                return sink, sink_name
-
         for sink_name in self._preferred_sink_names():
-            if sink_name == "glsinkbin(glimagesink)":
-                continue
             sink = Gst.ElementFactory.make(sink_name, "videosink")
             if sink:
                 return sink, sink_name
