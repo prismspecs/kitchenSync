@@ -462,9 +462,22 @@ def start_remote():
     
     # Master Clock Thread (only active when is_master is True)
     def master_clock():
+        last_broadcast = 0
         while True:
             if cluster_state.is_master and cluster_state.is_playing:
                 cluster_state.video_pos = time.time() - cluster_state.master_start_time
+                
+                # Periodically re-send start command to collaborators (like leader.py)
+                if time.time() - last_broadcast > 2.0:
+                    start_cmd = {
+                        "type": "start",
+                        "start_time": cluster_state.master_start_time,
+                        "schedule": [],
+                        "debug_mode": True
+                    }
+                    command_manager.send_command(start_cmd)
+                    last_broadcast = time.time()
+                    
             time.sleep(0.05)
     
     threading.Thread(target=master_clock, daemon=True).start()
