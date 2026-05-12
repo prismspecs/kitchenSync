@@ -282,6 +282,8 @@ class CommandManager:
                     msg_type = msg.get("type")
                     if msg_type in self.message_handlers:
                         self.message_handlers[msg_type](msg, addr)
+                    elif "__all__" in self.message_handlers:
+                        self.message_handlers["__all__"](msg, addr)
                     else:
                         self._handle_default_message(msg, addr)
 
@@ -395,6 +397,8 @@ class CommandListener:
                     msg_type = msg.get("type")
                     if msg_type in self.message_handlers:
                         self.message_handlers[msg_type](msg, addr)
+                    elif "__all__" in self.message_handlers:
+                        self.message_handlers["__all__"](msg, addr)
 
                 except json.JSONDecodeError:
                     continue
@@ -418,6 +422,10 @@ class CommandListener:
     def register_handler(self, message_type: str, handler: Callable) -> None:
         """Register a message handler"""
         self.message_handlers[message_type] = handler
+
+    def register_callback(self, callback: Callable) -> None:
+        """Register a catch-all callback for any message"""
+        self.message_handlers["__all__"] = callback
 
     def send_registration(self, device_id: str, video_file: str) -> None:
         """Send registration to leader"""
