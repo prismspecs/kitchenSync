@@ -133,6 +133,9 @@ def run_collaborator(driver_name):
         player.cleanup()
 
 def main():
+    # Enable system logging to see driver errors in console
+    enable_system_logging(True)
+    
     parser = argparse.ArgumentParser(description="KitchenSync Simulator")
     parser.add_argument("--mode", choices=["leader", "collaborator", "standalone"], required=True)
     parser.add_argument("--driver", default="mock", choices=["mock", "vlc", "gst"])

@@ -5,7 +5,7 @@ Simulates video playback timing for testing logic without hardware.
 """
 
 import time
-from src.video.driver import VideoDriver, PlayerState
+from video.driver import VideoDriver, PlayerState
 
 
 class MockVideoDriver(VideoDriver):
