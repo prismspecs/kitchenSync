@@ -18,33 +18,31 @@ class NetworkError(Exception):
 
 
 def _get_broadcast_address():
-    """Get appropriate broadcast address, falling back for offline scenarios"""
+    """Get appropriate broadcast address, prioritizing local subnet broadcast"""
     try:
-        # Try standard broadcast first
+        # Get local IP to determine network
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        # Doesn't need to connect, just needs to pick an interface
+        s.connect(("8.8.8.8", 80))
+        local_ip = s.getsockname()[0]
+        s.close()
+
+        # Calculate broadcast for common /24 network
+        ip_parts = local_ip.split(".")
+        if len(ip_parts) == 4:
+            broadcast = f"{ip_parts[0]}.{ip_parts[1]}.{ip_parts[2]}.255"
+            return broadcast
+    except Exception:
+        pass
+
+    # Fallback: Try standard broadcast
+    try:
         test_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         test_sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-        # Test if we can create a broadcast socket (doesn't actually send)
         test_sock.close()
         return "255.255.255.255"
     except Exception:
-        # Fallback: try to detect local network broadcast
-        try:
-            # Get local IP to determine network
-            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            s.connect(("1.1.1.1", 80))  # Dummy connection to get local IP
-            local_ip = s.getsockname()[0]
-            s.close()
-
-            # Calculate broadcast for common /24 network
-            ip_parts = local_ip.split(".")
-            if len(ip_parts) == 4:
-                broadcast = f"{ip_parts[0]}.{ip_parts[1]}.{ip_parts[2]}.255"
-                return broadcast
-        except Exception:
-            pass
-
-        # Final fallback for common local networks
-        return "192.168.1.255"
+        return "192.168.1.255" # Final sane default
 
 
 class SyncBroadcaster:

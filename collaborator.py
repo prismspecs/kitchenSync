@@ -66,7 +66,6 @@ class CollaboratorPi:
             sync_port=self.config.getint("sync_port", 5005),
             sync_callback=self._handle_sync,
         )
-        self.command_manager = CommandManager()
 
         # Register callbacks
         self.command_listener.register_callback(self._handle_command)
@@ -82,17 +81,9 @@ class CollaboratorPi:
         self.max_samples = 10
         self.video_path = None
 
-        # Auto-registration
-        self._register_with_leader()
-
     def _register_with_leader(self):
-        """Send registration packet to leader"""
-        registration = {
-            "type": "register",
-            "id": self.config.device_id,
-            "role": "collaborator",
-        }
-        self.command_manager.send_command(registration)
+        """DEPRECATED: Registration is now handled by command_listener.send_registration"""
+        pass
 
     def _handle_sync(self, leader_time: float, received_at: float) -> None:
         """Handle incoming sync packets from leader"""
@@ -284,15 +275,20 @@ class CollaboratorPi:
     def run(self) -> None:
         """Main execution loop"""
         log_info(f" Collaborator {self.config.device_id} started successfully!", component="collaborator")
-        print("Collaborator ready. Waiting for time sync from leader...")
+        print(f"Collaborator '{self.config.device_id}' ready. Waiting for leader...")
         print("Press Ctrl+C to exit")
 
         self.command_listener.start_listening()
         self.sync_receiver.start_listening()
 
+        # Send an initial registration immediately
+        self.command_listener.send_registration(self.config.device_id, self.config.video_file)
+
         try:
             while True:
-                time.sleep(1)
+                # Send periodic heartbeat to keep registration alive
+                self.command_listener.send_heartbeat(self.config.device_id)
+                time.sleep(5)
         except KeyboardInterrupt:
             self.cleanup()
 
