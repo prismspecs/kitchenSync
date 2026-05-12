@@ -97,10 +97,9 @@ class LeaderPi:
         # Wire command listener for registration handled internally by CommandManager
         # but we can add an extra callback if we want custom logging
         def on_command(msg, addr):
-            if msg.get("type") == "register":
-                log_info(f"Collaborator registered: {msg.get('device_id', 'unknown')} at {addr[0]}", component="network")
+            log_info(f"Collaborator registered: {msg.get('device_id', 'unknown')} at {addr[0]}", component="network")
 
-        self.command_manager.register_callback(on_command)
+        self.command_manager.register_handler("register", on_command)
 
     def start_system(self) -> None:
         """Start the synchronized playback system"""
