@@ -335,6 +335,7 @@ class CommandManager:
                 ip = self.collaborators[target_pi]["ip"]
                 try:
                     self.control_sock.sendto(payload.encode(), (ip, self.control_port))
+                    print(f"[NET] Sent {command['type']} directly to {target_pi} ({ip})")
                 except Exception:
                     pass
         else:
@@ -342,6 +343,7 @@ class CommandManager:
             for device_id, info in self.collaborators.items():
                 try:
                     self.control_sock.sendto(payload.encode(), (info["ip"], self.control_port))
+                    print(f"[NET] Sent {command['type']} directly to {device_id} ({info['ip']})")
                 except Exception:
                     pass
 
@@ -350,6 +352,7 @@ class CommandManager:
             self.control_sock.sendto(
                 payload.encode(), (self.broadcast_ip, self.control_port)
             )
+            print(f"[NET] Broadcasted {command['type']} to {self.broadcast_ip}")
         except Exception:
             pass
 

@@ -274,6 +274,17 @@ class CollaboratorPi:
 
     def run(self) -> None:
         """Main execution loop"""
+        # Check for X server
+        import os
+        import subprocess
+        x_running = False
+        try:
+            # Simple check if xset can query the display
+            subprocess.run(["xset", "q"], check=True, capture_output=True, env={"DISPLAY": os.environ.get("DISPLAY", ":0")})
+            x_running = True
+        except Exception:
+            log_warning("X Server not detected on DISPLAY " + os.environ.get("DISPLAY", ":0") + ". Video will not be visible!", component="collaborator")
+
         log_info(f" Collaborator {self.config.device_id} started successfully!", component="collaborator")
         print(f"Collaborator '{self.config.device_id}' ready. Waiting for leader...")
         print("Press Ctrl+C to exit")
