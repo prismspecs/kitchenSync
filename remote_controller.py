@@ -30,8 +30,11 @@ class ClusterState:
 # Global state
 cluster_state = ClusterState()
 config = ConfigManager("leader_config.ini")
-# Use config value as initial default
-cluster_state.current_video = config.video_file
+
+# Use config value as initial default, but normalize to just the filename if it's in a path
+initial_video = config.video_file
+if initial_video:
+    cluster_state.current_video = os.path.basename(initial_video)
 
 command_manager = CommandManager()
 sync_broadcaster = SyncBroadcaster()
@@ -131,7 +134,7 @@ class RemoteHandler(BaseHTTPRequestHandler):
             """
             self.wfile.write(html.encode())
             
-        elif self.path == "/state":
+        elif self.path in ["/state", "/json"]:
             self.send_response(200)
             self.send_header("Content-type", "application/json")
             self.end_headers()
@@ -149,7 +152,8 @@ class RemoteHandler(BaseHTTPRequestHandler):
                 "status": current_status,
                 "collaborators": command_manager.get_collaborators(),
                 "is_playing": cluster_state.is_playing,
-                "is_master": cluster_state.is_master
+                "is_master": cluster_state.is_master,
+                "current_video": cluster_state.current_video
             }
             self.wfile.write(json.dumps(state_data).encode())
             
