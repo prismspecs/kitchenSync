@@ -34,32 +34,113 @@ class SimulatorState:
 sim_state = SimulatorState()
 
 class StatusHandler(BaseHTTPRequestHandler):
+    def log_message(self, format, *args):
+        return  # Quiet logs
+
     def do_GET(self):
         if self.path == "/":
             self.send_response(200)
             self.send_header("Content-type", "text/html")
             self.end_headers()
-            html = f"""
+            html = """
+            <!DOCTYPE html>
             <html>
             <head>
-                <title>KitchenSync Simulator - {sim_state.role.upper()}</title>
-                <meta http-equiv="refresh" content="1">
+                <title>KitchenSync Simulator</title>
                 <style>
-                    body {{ font-family: sans-serif; background: #222; color: #eee; text-align: center; padding-top: 50px; }}
-                    .card {{ background: #333; padding: 20px; border-radius: 10px; display: inline-block; min-width: 300px; }}
-                    .stat {{ font-size: 2em; color: #0f0; margin: 10px 0; }}
-                    .label {{ color: #888; text-transform: uppercase; font-size: 0.8em; }}
+                    body { 
+                        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+                        background: #121212; 
+                        color: #e0e0e0; 
+                        display: flex;
+                        justify-content: center;
+                        align-items: center;
+                        height: 100vh;
+                        margin: 0;
+                        overflow: hidden;
+                    }
+                    .container {
+                        background: #1e1e1e;
+                        padding: 3rem;
+                        border-radius: 1.5rem;
+                        box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+                        text-align: center;
+                        min-width: 400px;
+                        border: 1px solid #333;
+                    }
+                    h1 { color: #bb86fc; margin-bottom: 2rem; font-weight: 300; letter-spacing: 2px; }
+                    .stat-group { margin-bottom: 2rem; }
+                    .stat-value { font-size: 3.5rem; font-weight: bold; color: #03dac6; font-variant-numeric: tabular-nums; }
+                    .stat-label { color: #888; text-transform: uppercase; font-size: 0.8rem; letter-spacing: 1px; margin-top: 0.5rem; }
+                    .role-badge {
+                        display: inline-block;
+                        padding: 0.4rem 1rem;
+                        border-radius: 2rem;
+                        background: #3700b3;
+                        color: #fff;
+                        font-size: 0.9rem;
+                        margin-bottom: 2rem;
+                        text-transform: uppercase;
+                    }
+                    .drift-indicator {
+                        font-size: 1.2rem;
+                        margin-top: 1rem;
+                        transition: color 0.3s;
+                    }
+                    .status-dot {
+                        height: 10px;
+                        width: 10px;
+                        background-color: #03dac6;
+                        border-radius: 50%;
+                        display: inline-block;
+                        margin-right: 8px;
+                        box-shadow: 0 0 10px #03dac6;
+                    }
                 </style>
             </head>
             <body>
-                <div class="card">
-                    <h1>KitchenSync Simulator</h1>
-                    <div class="label">Role</div><div>{sim_state.role.upper()}</div>
-                    <div class="label">Status</div><div>{sim_state.status}</div>
-                    <div class="label">Video Position</div><div class="stat">{sim_state.video_pos:.2f}s</div>
-                    <div class="label">Drift</div><div class="stat" style="color: {'#f00' if abs(sim_state.drift) > 0.1 else '#0f0'}">{sim_state.drift:.3f}s</div>
-                    <div class="label">Leader Time</div><div>{sim_state.leader_time:.2f}s</div>
+                <div class="container">
+                    <div id="role" class="role-badge">IDLE</div>
+                    <h1>KitchenSync</h1>
+                    
+                    <div class="stat-group">
+                        <div id="video_pos" class="stat-value">0.00</div>
+                        <div class="stat-label">Video Position (Seconds)</div>
+                    </div>
+
+                    <div class="stat-group">
+                        <div id="drift" class="drift-indicator">Drift: 0.000s</div>
+                    </div>
+
+                    <div style="margin-top: 2rem; color: #666; font-size: 0.9rem;">
+                        <span class="status-dot"></span> <span id="status">INITIALIZING</span>
+                    </div>
                 </div>
+
+                <script>
+                    async function update() {
+                        try {
+                            const response = await fetch('/json');
+                            const data = await response.json();
+                            
+                            document.getElementById('role').innerText = data.role.toUpperCase();
+                            document.getElementById('video_pos').innerText = data.video_pos.toFixed(2);
+                            document.getElementById('status').innerText = data.status.toUpperCase();
+                            
+                            const driftEl = document.getElementById('drift');
+                            driftEl.innerText = `Drift: ${data.drift.toFixed(3)}s`;
+                            
+                            if (Math.abs(data.drift) > 0.1) {
+                                driftEl.style.color = '#cf6679';
+                            } else {
+                                driftEl.style.color = '#03dac6';
+                            }
+                        } catch (e) {
+                            console.error("Failed to fetch state", e);
+                        }
+                    }
+                    setInterval(update, 100);
+                </script>
             </body>
             </html>
             """

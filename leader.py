@@ -1,86 +1,78 @@
 #!/usr/bin/env python3
 """
-Refactored KitchenSync Leader Pi
-Clean, modular implementation using the new architecture
+KitchenSync Leader - Main entry point for the Leader role.
+Coordinates playback, broadcasts time sync, and manages collaborators.
 """
 
-import argparse
 import sys
 import threading
 import time
+import argparse
 import signal
-from pathlib import Path
-import os
 import subprocess
 
-# Add src to path
-sys.path.insert(0, str(Path(__file__).parent / "src"))
-
-from config import ConfigManager
-from video import VideoFileManager, get_video_driver
-from networking import SyncBroadcaster, CommandManager
-from protocols.midi_handler import MidiScheduler, MidiManager
-from core import Schedule, ScheduleEditor, SystemState, CollaboratorRegistry
-from ui import CommandInterface, StatusDisplay
+from config.manager import ConfigManager
+from video import get_video_driver
+from video.file_manager import VideoFileManager
+from networking.communication import SyncBroadcaster, CommandManager
+from core.schedule import Schedule
+from core.system_state import SystemState
+from core.logger import log_info, log_error, log_warning, enable_system_logging
+from ui.interface import create_command_interface, StatusDisplay
+from protocols.midi_handler import MidiManager, MidiScheduler
 from debug.html_overlay import HTMLDebugManager
-from core.logger import (
-    log_info,
-    log_warning,
-    log_error,
-    snapshot_env,
-    log_file_paths,
-    enable_system_logging,
-)
 
 
 class LeaderPi:
-    """Refactored Leader Pi with clean separation of concerns"""
+    def __init__(self, config_file=None):
+        # Load configuration
+        self.config = ConfigManager(config_file)
+        enable_system_logging(self.config.debug_mode)
 
-    def __init__(self):
-        # Initialize configuration
-        self.config = ConfigManager("leader_config.ini")
+        log_info("Starting KitchenSync Leader...", component="leader")
 
-        # Configure logging based on config settings (must be AFTER config loaded)
-        enable_system_logging(self.config.enable_system_logging)
-
-        # Initialize core components
+        # Core Components
         self.system_state = SystemState()
-        self.collaborators = CollaboratorRegistry()
-        self.schedule = Schedule()
+        self.video_manager = VideoFileManager(self.config.content_dir)
+        self.schedule = Schedule(self.config.schedule_file)
 
-        # Initialize video components
-        self.video_manager = VideoFileManager(
-            self.config.video_file, self.config.usb_mount_point
-        )
-        self.video_player = get_video_driver(
-            self.config.video_driver,
-            debug_mode=self.config.debug_mode
-        )
+        # Video Driver
+        driver_name = self.config.video_driver
+        self.video_player = get_video_driver(driver_name, debug_mode=self.config.debug_mode)
 
         if not self.video_player:
             log_error("Failed to initialize video driver", component="leader")
             sys.exit(1)
 
-        # Initialize networking (wire tick_interval from config)
+        # Initialize Networking
         self.sync_broadcaster = SyncBroadcaster(
             sync_port=self.config.getint("sync_port", 5005),
             tick_interval=0.1,
         )
         self.command_manager = CommandManager()
 
-        # Initialize MIDI (for local MIDI if needed)
-        self.midi_manager = MidiManager(
-            use_mock=False, use_serial=True, serial_port=None
-        )
-        self.midi_scheduler = MidiScheduler(self.midi_manager)
+        # Initialize Protocols (MIDI/OSC)
+        self.midi_manager = None
+        self.midi_scheduler = None
+        self.osc_handler = None
+
+        if self.config.enable_midi:
+            self.midi_manager = MidiManager(
+                use_mock=False, use_serial=True, serial_port=None
+            )
+            self.midi_scheduler = MidiScheduler(self.midi_manager)
+            log_info("MIDI: Initialized", component="leader")
+        
+        if self.config.enable_osc:
+            from protocols.osc_handler import OscHandler
+            self.osc_handler = OscHandler()
+            log_info("OSC: Initialized", component="leader")
 
         # Find video file before creating debug overlay
         self.video_path = self.video_manager.find_video_file()
         if self.video_path:
             self.video_player.load(self.video_path)
             log_info(f"Video file loaded: {self.video_path}", component="leader")
-        else:
-            log_warning("No video file found at startup.", component="leader")
 
         # Create HTML debug overlay only if debug mode is enabled
         self.html_debug = None
@@ -92,33 +84,20 @@ class LeaderPi:
             )
             self.html_debug.start()
             log_info("HTML overlay started successfully", component="leader")
-        else:
-            log_info("Debug mode disabled - no overlay created", component="leader")
 
-        # Setup command handlers
-        self._setup_command_handlers()
+        # Collaboration State
+        from networking.communication import CollaboratorRegistry
+        self.collaborators = CollaboratorRegistry()
 
-    def _setup_command_handlers(self) -> None:
-        """Setup networking command handlers"""
-        self.command_manager.register_handler("register", self._handle_registration)
-        self.command_manager.register_handler("heartbeat", self._handle_heartbeat)
+        # Wire command listener for registration
+        def on_command(msg, addr):
+            if msg.get("type") == "register":
+                self.collaborators.register(msg.get("id"), addr[0])
+                log_info(f"Collaborator registered: {msg.get('id')} at {addr[0]}", component="network")
+            elif msg.get("type") == "status":
+                self.collaborators.update_status(msg.get("id"), msg)
 
-    def _handle_registration(self, msg: dict, addr: tuple) -> None:
-        """Handle collaborator registration"""
-        device_id = msg.get("device_id")
-        if device_id:
-            self.collaborators.register_collaborator(
-                device_id,
-                addr[0],
-                msg.get("status", "ready"),
-                msg.get("video_file", ""),
-            )
-
-    def _handle_heartbeat(self, msg: dict, addr: tuple) -> None:
-        """Handle collaborator heartbeat"""
-        device_id = msg.get("device_id")
-        if device_id:
-            self.collaborators.update_heartbeat(device_id, msg.get("status", "ready"))
+        self.command_manager.register_callback(on_command)
 
     def start_system(self) -> None:
         """Start the synchronized playback system"""
@@ -126,27 +105,37 @@ class LeaderPi:
             log_warning("System is already running", component="leader")
             return
 
-        log_info("Starting KitchenSync system...", component="leader")
+        log_info("Launching KitchenSync system...", component="leader")
+
+        # Log system environment
+        def snapshot_env():
+            log_info("--- SYSTEM ENVIRONMENT SNAPSHOT ---", component="leader")
+            try:
+                import os
+                log_info(f"DISPLAY: {os.environ.get('DISPLAY')}", component="leader")
+                log_info(f"XAUTHORITY: {os.environ.get('XAUTHORITY')}", component="leader")
+            except Exception:
+                pass
         snapshot_env()
 
         # Start system state
         self.system_state.start_session()
 
-        # Load schedule for MIDI scheduler
-        self.midi_scheduler.load_schedule(self.schedule.get_cues())
+        # Load schedule for protocol schedulers
+        if self.midi_scheduler:
+            self.midi_scheduler.load_schedule(self.schedule.get_cues())
 
         # Start video playback
         if self.video_path:
             log_info("Starting video playback...", component="video")
             try:
-                result = self.video_player.play()
-                if not result:
-                    log_error("Video playback failed to start", component="leader")
-                else:
-                    # Position video window (debug mode & VLC only)
-                    if self.config.debug_mode and self.config.video_driver == "vlc":
-                        def position_vlc_window():
-                            time.sleep(1)
+                self.video_player.play()
+                
+                # If using VLC driver, we might need a hack to force it to top or fullscreen
+                if self.config.video_driver == "vlc":
+                    def position_vlc_window():
+                        time.sleep(2)  # Wait for VLC to spawn
+                        if sys.platform.startswith("linux"):
                             try:
                                 subprocess.run(
                                     ["wmctrl", "-r", "VLC media player", "-e", "0,0,0,1280,1080"],
@@ -172,7 +161,8 @@ class LeaderPi:
 
         # Start MIDI playback
         video_duration = self.video_player.get_duration()
-        self.midi_scheduler.start_playback(0.0, video_duration)
+        if self.midi_scheduler:
+            self.midi_scheduler.start_playback(0.0, video_duration)
 
         # Send start command to collaborators
         start_command = {
@@ -185,7 +175,7 @@ class LeaderPi:
 
         # MIDI SCHEDULER CUE PROCESSING LOOP
         def midi_cue_loop():
-            while self.system_state.is_running:
+            while self.system_state.is_running and self.midi_scheduler:
                 current_time = None
                 try:
                     current_time = self.video_player.get_position()
@@ -196,7 +186,9 @@ class LeaderPi:
                     self.midi_scheduler.process_cues(current_time)
                 time.sleep(0.02)
 
-        threading.Thread(target=midi_cue_loop, daemon=True).start()
+        if self.midi_scheduler:
+            threading.Thread(target=midi_cue_loop, daemon=True).start()
+        
         log_info("System started successfully!", component="leader")
 
     def stop_system(self) -> None:
@@ -209,7 +201,8 @@ class LeaderPi:
         self.video_player.stop()
         self.sync_broadcaster.stop_broadcasting()
         self.command_manager.stop_listening()
-        self.midi_scheduler.stop_playback()
+        if self.midi_scheduler:
+            self.midi_scheduler.stop_playback()
         self.system_state.stop_session()
         self.command_manager.send_command({"type": "stop"})
         log_info("System stopped", component="leader")
@@ -271,31 +264,20 @@ class LeaderPi:
         log_info("Cleanup completed", component="leader")
 
 
-def create_command_interface(leader: LeaderPi) -> CommandInterface:
-    """Create command interface for leader"""
-    interface = CommandInterface("KitchenSync Leader")
-    interface.register_command("start", leader.start_system, "Start synchronized playback")
-    interface.register_command("stop", leader.stop_system, "Stop playback")
-    interface.register_command("status", leader.show_status, "Show system status")
-    interface.register_command("schedule", leader.edit_schedule, "Edit schedule")
-    interface.register_command("seek", leader.seek_video, "Seek video to a specific time")
-    interface.register_command("fullscreen", leader.force_fullscreen, "Force fullscreen mode")
-    return interface
-
-
 def main():
-    """Main entry point"""
-    parser = argparse.ArgumentParser(description="KitchenSync Leader Pi")
-    parser.add_argument("--auto", action="store_true", help="Start automatically")
-    parser.add_argument("--debug", action="store_true", help="Enable debug mode")
+    parser = argparse.ArgumentParser(description="KitchenSync Leader Node")
+    parser.add_argument("--config", dest="config_file", help="Path to config file")
+    parser.add_argument(
+        "--debug", action="store_true", help="Enable debug mode (HTML overlay)"
+    )
+    parser.add_argument(
+        "--auto", action="store_true", help="Start playback automatically"
+    )
     args = parser.parse_args()
 
-    global leader_instance
-    leader_instance = None
-
-    def signal_handler(signum, frame):
-        print(f"\n🛑 Received signal {signum}, shutting down gracefully...")
-        if leader_instance:
+    def signal_handler(sig, frame):
+        log_info("Signal received, shutting down...", component="leader")
+        if "leader_instance" in locals():
             leader_instance.cleanup()
         sys.exit(0)
 
@@ -303,7 +285,7 @@ def main():
     signal.signal(signal.SIGINT, signal_handler)
 
     try:
-        leader_instance = LeaderPi()
+        leader_instance = LeaderPi(args.config_file)
         if args.debug:
             leader_instance.config.config["KITCHENSYNC"]["debug"] = "true"
             log_info("Debug mode enabled", component="autostart")
@@ -330,20 +312,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
-nterface(leader_instance)
-            interface.run()
-        leader_instance.cleanup()
-    except KeyboardInterrupt:
-        print("\nExiting...")
-    except Exception as e:
-        print(f"Fatal error: {e}")
-        import traceback
-        traceback.print_exc()
-        sys.exit(1)
-
-
-if __name__ == "__main__":
-    main()
-= "__main__":
     main()
