@@ -390,6 +390,12 @@ def build_report(video_path: Path, sample_seconds: float) -> dict:
         loop_thread = __import__("threading").Thread(target=loop.run, daemon=True)
         loop_thread.start()
 
+        if report.get("pipeline_kind") == "explicit-hevc":
+            ret = pipeline.set_state(Gst.State.PAUSED)
+            if ret == Gst.StateChangeReturn.FAILURE:
+                raise RuntimeError("Failed to preroll explicit HEVC pipeline")
+            pipeline.get_state(Gst.SECOND * 5)
+
         ret = pipeline.set_state(Gst.State.PLAYING)
         if ret == Gst.StateChangeReturn.FAILURE:
             raise RuntimeError("Failed to start GStreamer playback")

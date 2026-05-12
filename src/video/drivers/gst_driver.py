@@ -350,8 +350,17 @@ class GstDriver(VideoDriver):
     def play(self) -> bool:
         if not self.pipeline:
             return False
-        
-        ret = self.pipeline.set_state(Gst.State.PLAYING)
+
+        target_state = Gst.State.PLAYING
+        if self.pipeline_kind == "explicit-hevc":
+            ret = self.pipeline.set_state(Gst.State.PAUSED)
+            if ret == Gst.StateChangeReturn.FAILURE:
+                log_error("Gst: Failed to preroll explicit HEVC pipeline")
+                self.state = PlayerState.ERROR
+                return False
+            self.pipeline.get_state(Gst.SECOND * 5)
+
+        ret = self.pipeline.set_state(target_state)
         if ret == Gst.StateChangeReturn.FAILURE:
             log_error("Gst: Failed to set pipeline to PLAYING")
             self.state = PlayerState.ERROR
