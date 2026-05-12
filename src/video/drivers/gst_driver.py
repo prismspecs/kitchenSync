@@ -5,6 +5,7 @@ Provides high-performance, rate-based synchronization for Raspberry Pi.
 """
 
 import os
+import subprocess
 import threading
 import time
 from typing import Optional, Dict, Any
@@ -41,6 +42,7 @@ class GstDriver(VideoDriver):
         self.hardware_accel_preferred = False
         self.decoder_name = None
         self.decoder_candidates = []
+        self.pipeline_kind = "playbin"
         
         # MainLoop for GStreamer bus messages
         self.loop = None
@@ -160,9 +162,8 @@ class GstDriver(VideoDriver):
         """Return sink candidates in priority order for the current environment."""
         if os.environ.get("DISPLAY"):
             # On Pi with X11/Openbox, glimagesink is often more reliable than kmssink
-            return ["glimagesink", "xvimagesink", "autovideosink"]
+            return ["glsinkbin(glimagesink)", "glimagesink", "xvimagesink", "autovideosink"]
         return ["kmssink", "glimagesink", "autovideosink"]
-
 
     def _create_gl_sinkbin(self):
         sink_bin = Gst.ElementFactory.make("glsinkbin", "videosink")
@@ -188,6 +189,98 @@ class GstDriver(VideoDriver):
                 return sink, sink_name
         return None, None
 
+    def _probe_video_stream(self, video_path: str) -> Dict[str, Any]:
+        try:
+            result = subprocess.run(
+                [
+                    "ffprobe",
+                    "-v",
+                    "error",
+                    "-select_streams",
+                    "v:0",
+                    "-show_entries",
+                    "stream=codec_name,profile,pix_fmt,width,height",
+                    "-of",
+                    "json",
+                    video_path,
+                ],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                check=False,
+            )
+        except FileNotFoundError:
+            return {"probe_ok": False, "probe_error": "ffprobe not installed"}
+
+        if result.returncode != 0:
+            return {"probe_ok": False, "probe_error": result.stderr.strip() or "ffprobe failed"}
+
+        try:
+            payload = __import__("json").loads(result.stdout)
+        except Exception:
+            return {"probe_ok": False, "probe_error": "ffprobe returned invalid JSON"}
+
+        streams = payload.get("streams") or []
+        if not streams:
+            return {"probe_ok": False, "probe_error": "No video stream found"}
+
+        stream = streams[0]
+        return {
+            "probe_ok": True,
+            "codec_name": stream.get("codec_name", "unknown"),
+            "profile": stream.get("profile", "unknown"),
+            "pix_fmt": stream.get("pix_fmt", "unknown"),
+            "width": stream.get("width", 0),
+            "height": stream.get("height", 0),
+        }
+
+    def _should_use_explicit_hevc_pipeline(self, video_path: str) -> bool:
+        video_stream = self._probe_video_stream(video_path)
+        if video_stream.get("codec_name") != "hevc":
+            return False
+        return all(
+            Gst.ElementFactory.find(name) is not None
+            for name in ["qtdemux", "h265parse", "v4l2slh265dec", "videoconvert"]
+        )
+
+    def _build_explicit_hevc_pipeline(self, video_path: str):
+        pipeline = Gst.Pipeline.new("player")
+        filesrc = Gst.ElementFactory.make("filesrc", "filesrc")
+        demux = Gst.ElementFactory.make("qtdemux", "demux")
+        queue = Gst.ElementFactory.make("queue", "videoqueue")
+        parser = Gst.ElementFactory.make("h265parse", "videoparse")
+        decoder = Gst.ElementFactory.make("v4l2slh265dec", "videodecoder")
+        convert = Gst.ElementFactory.make("videoconvert", "videoconvert")
+        sink, sink_name = self._create_video_sink()
+
+        elements = [filesrc, demux, queue, parser, decoder, convert, sink]
+        if not pipeline or any(element is None for element in elements):
+            return None, None
+
+        filesrc.set_property("location", os.path.abspath(video_path))
+
+        for element in elements:
+            pipeline.add(element)
+
+        if not filesrc.link(demux):
+            return None, None
+        if not queue.link(parser):
+            return None, None
+        if not parser.link(decoder):
+            return None, None
+        if not decoder.link(convert):
+            return None, None
+        if not convert.link(sink):
+            return None, None
+
+        def on_pad_added(_demux, pad):
+            sink_pad = queue.get_static_pad("sink")
+            if sink_pad and not sink_pad.is_linked():
+                pad.link(sink_pad)
+
+        demux.connect("pad-added", on_pad_added)
+        return pipeline, sink_name
+
     def load(self, video_path: str) -> bool:
         if not os.path.exists(video_path):
             log_error(f"Gst: Video file not found: {video_path}")
@@ -195,28 +288,34 @@ class GstDriver(VideoDriver):
 
         self.video_path = video_path
         self._reprioritize_decoders()
-        
-        # Create playbin element
-        self.pipeline = Gst.ElementFactory.make("playbin", "player")
-        if not self.pipeline:
-            log_error("Gst: Failed to create playbin element")
-            return False
+
+        if self._should_use_explicit_hevc_pipeline(video_path):
+            self.pipeline, sink_name = self._build_explicit_hevc_pipeline(video_path)
+            self.pipeline_kind = "explicit-hevc"
+            if not self.pipeline:
+                log_error("Gst: Failed to create explicit HEVC pipeline")
+                return False
+        else:
+            self.pipeline = Gst.ElementFactory.make("playbin", "player")
+            self.pipeline_kind = "playbin"
+            if not self.pipeline:
+                log_error("Gst: Failed to create playbin element")
+                return False
+
+            uri = "file://" + os.path.abspath(video_path)
+            self.pipeline.set_property("uri", uri)
+
+            sink, sink_name = self._create_video_sink()
+            if sink:
+                self.pipeline.set_property("video-sink", sink)
 
         self.decoder_candidates = []
         self.decoder_name = None
         self.pipeline.connect("deep-element-added", self._on_deep_element_added)
 
-        # Set the URI
-        uri = "file://" + os.path.abspath(video_path)
-        self.pipeline.set_property("uri", uri)
-
-        # Prefer a hardware-oriented sink and only fall back to autovideosink
-        # when no explicit accelerated path is available.
-        sink, sink_name = self._create_video_sink()
-        if sink:
-            self.pipeline.set_property("video-sink", sink)
-            self.video_sink_name = sink_name
-            self.hardware_accel_preferred = sink_name in {"kmssink", "glsinkbin(glimagesink)", "glimagesink", "xvimagesink"}
+        self.video_sink_name = sink_name
+        self.hardware_accel_preferred = sink_name in {"kmssink", "glsinkbin(glimagesink)", "glimagesink", "xvimagesink"}
+        if sink_name:
             if self.hardware_accel_preferred:
                 log_info(f"Gst: Using hardware-preferred video sink '{sink_name}'")
             else:
@@ -224,7 +323,7 @@ class GstDriver(VideoDriver):
                     f"Gst: Using fallback video sink '{sink_name}'; hardware acceleration is not confirmed"
                 )
         else:
-            log_warning("Gst: autovideosink unavailable; using default sink")
+            log_warning("Gst: No explicit video sink available; using default sink")
 
         # Set up the bus to watch for messages
         bus = self.pipeline.get_bus()
@@ -236,7 +335,7 @@ class GstDriver(VideoDriver):
         self.loop_thread = threading.Thread(target=self.loop.run, daemon=True)
         self.loop_thread.start()
 
-        log_info(f"Gst: Loaded {video_path}")
+        log_info(f"Gst: Loaded {video_path} with pipeline '{self.pipeline_kind}'")
         return True
 
     def _on_bus_message(self, bus, message):
@@ -380,4 +479,5 @@ class GstDriver(VideoDriver):
         info["video_sink"] = self.video_sink_name or "default"
         info["hardware_accel_preferred"] = self.hardware_accel_preferred
         info["decoder"] = self.decoder_name or "unknown"
+        info["pipeline_kind"] = self.pipeline_kind
         return info

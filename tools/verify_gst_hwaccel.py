@@ -38,24 +38,30 @@ KNOWN_DECODERS = [
 
 
 def _probe_video_stream(video_path: Path) -> dict:
-    result = subprocess.run(
-        [
-            "ffprobe",
-            "-v",
-            "error",
-            "-select_streams",
-            "v:0",
-            "-show_entries",
-            "stream=codec_name,profile,pix_fmt,width,height",
-            "-of",
-            "json",
-            str(video_path),
-        ],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        check=False,
-    )
+    try:
+        result = subprocess.run(
+            [
+                "ffprobe",
+                "-v",
+                "error",
+                "-select_streams",
+                "v:0",
+                "-show_entries",
+                "stream=codec_name,profile,pix_fmt,width,height",
+                "-of",
+                "json",
+                str(video_path),
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=False,
+        )
+    except FileNotFoundError:
+        return {
+            "probe_ok": False,
+            "probe_error": "ffprobe not installed",
+        }
 
     if result.returncode != 0:
         return {
@@ -122,6 +128,55 @@ def _create_video_sink():
         if sink:
             return sink, sink_name
     return None, None
+
+
+def _should_use_explicit_hevc_pipeline(video_stream: dict) -> bool:
+    if video_stream.get("codec_name") != "hevc":
+        return False
+    return all(
+        Gst.ElementFactory.find(name) is not None
+        for name in ["qtdemux", "h265parse", "v4l2slh265dec", "videoconvert"]
+    )
+
+
+def _build_explicit_hevc_pipeline(video_path: Path, report: dict):
+    pipeline = Gst.Pipeline.new("verifier")
+    filesrc = Gst.ElementFactory.make("filesrc", "filesrc")
+    demux = Gst.ElementFactory.make("qtdemux", "demux")
+    queue = Gst.ElementFactory.make("queue", "videoqueue")
+    parser = Gst.ElementFactory.make("h265parse", "videoparse")
+    decoder = Gst.ElementFactory.make("v4l2slh265dec", "videodecoder")
+    convert = Gst.ElementFactory.make("videoconvert", "videoconvert")
+    sink, sink_name = _create_video_sink()
+
+    elements = [filesrc, demux, queue, parser, decoder, convert, sink]
+    if not pipeline or any(element is None for element in elements):
+        raise RuntimeError("Failed to create explicit HEVC pipeline elements")
+
+    filesrc.set_property("location", str(video_path.resolve()))
+
+    for element in elements:
+        pipeline.add(element)
+
+    if not filesrc.link(demux):
+        raise RuntimeError("Failed to link filesrc to qtdemux")
+    if not queue.link(parser):
+        raise RuntimeError("Failed to link queue to h265parse")
+    if not parser.link(decoder):
+        raise RuntimeError("Failed to link h265parse to v4l2slh265dec")
+    if not decoder.link(convert):
+        raise RuntimeError("Failed to link v4l2slh265dec to videoconvert")
+    if not convert.link(sink):
+        raise RuntimeError("Failed to link videoconvert to video sink")
+
+    def on_pad_added(_demux, pad):
+        sink_pad = queue.get_static_pad("sink")
+        if sink_pad and not sink_pad.is_linked():
+            pad.link(sink_pad)
+
+    demux.connect("pad-added", on_pad_added)
+    report["pipeline_kind"] = "explicit-hevc"
+    return pipeline, sink_name
 
 
 def _ensure_display_session_ready():
@@ -277,19 +332,24 @@ def build_report(video_path: Path, sample_seconds: float) -> dict:
 
     report["reprioritized_hardware_decoders"] = _reprioritize_decoders()
 
-    pipeline = Gst.ElementFactory.make("playbin", "verifier")
-    if not pipeline:
-        raise RuntimeError("Failed to create GStreamer playbin")
+    if _should_use_explicit_hevc_pipeline(report["video_stream"]):
+        pipeline, sink_name = _build_explicit_hevc_pipeline(video_path, report)
+    else:
+        pipeline = Gst.ElementFactory.make("playbin", "verifier")
+        if not pipeline:
+            raise RuntimeError("Failed to create GStreamer playbin")
+
+        report["pipeline_kind"] = "playbin"
+
+        sink, sink_name = _create_video_sink()
+        if sink is not None:
+            pipeline.set_property("video-sink", sink)
+        pipeline.set_property("uri", video_path.resolve().as_uri())
 
     _attach_decoder_probe(pipeline, report)
-
-    sink, sink_name = _create_video_sink()
-    if sink is not None:
-        pipeline.set_property("video-sink", sink)
     report["selected_sink"] = sink_name or "default"
     report["hardware_preferred_sink"] = sink_name in {"kmssink", "glsinkbin(glimagesink)", "glimagesink", "xvimagesink"}
 
-    pipeline.set_property("uri", video_path.resolve().as_uri())
     loop = GLib.MainLoop()
     loop_thread = None
 
