@@ -39,17 +39,37 @@ Testing between your Desktop and the Raspberry Pi (gSync).
 
 ### Scenario A: Pi as Collaborator, Desktop as Leader
 1. **On Desktop:** `python3 tools/simulator.py --mode leader`
-2. **On Pi:** `DISPLAY=:0 python3 collaborator.py --config collaborator_config.ini --debug`
-3. **Verify:** The Pi should report receiving sync from your Desktop IP.
+2. **On Pi:** start X first with `./tools/start_x.sh` if no local session is already running.
+3. **On Pi:** `DISPLAY=:0 python3 collaborator.py --config collaborator_config.ini --debug`
+4. **Verify:** The Pi should report receiving sync from your Desktop IP.
 
 ### Scenario B: Pi as Leader, Desktop as Collaborator
-1. **On Pi:** `DISPLAY=:0 python3 leader.py --config leader_config.ini --debug`
-2. **On Desktop:** `python3 tools/simulator.py --mode collaborator`
-3. **Verify:** Open `http://DESKTOP_IP:8080` to see real-time drift analysis of your Desktop relative to the Pi.
+1. **On Pi:** start X first with `./tools/start_x.sh` if no local session is already running.
+2. **On Pi:** `DISPLAY=:0 python3 leader.py --config leader_config.ini --debug`
+3. **On Desktop:** `python3 tools/simulator.py --mode collaborator`
+4. **Verify:** Open `http://DESKTOP_IP:8080` to see real-time drift analysis of your Desktop relative to the Pi.
 
 ## 4. Hardware Acceleration Check
 
-On the Pi, start leader or collaborator in debug mode and verify the GStreamer sink log:
+On the Pi, start X first if needed:
+
+```bash
+./tools/start_x.sh
+```
+
+Then run the verifier:
+
+```bash
+DISPLAY=:0 XDG_SESSION_TYPE=x11 python3 tools/verify_gst_hwaccel.py --video videos/test265.mp4 --json
+```
+
+For Pi 5 HEVC decode, the verification target is:
+
+```text
+"active_decoder": "v4l2slh265dec"
+```
+
+For runtime playback, start leader or collaborator in debug mode and verify the GStreamer sink log:
 
 ```text
 Gst: Using hardware-preferred video sink 'glimagesink'

@@ -28,6 +28,12 @@ sudo reboot
 
 After reboot, the system service launches `kitchensync.py`, which detects USB configuration and execs either `leader.py` or `collaborator.py`.
 
+If you are testing from SSH on a text console, start the local X session before any `DISPLAY=:0` command:
+
+```bash
+./tools/start_x.sh
+```
+
 ## USB Layout
 
 Leader USB:
@@ -81,6 +87,20 @@ What can be verified from the repo:
 What still requires runtime verification on the actual Pi:
 - Which sink GStreamer actually instantiated on that machine
 - Whether the active sink is using GPU/display hardware exactly as intended
+- Whether HEVC playback is using the Pi 5 stateless hardware decoder `v4l2slh265dec`
+
+For Pi 5 HEVC verification, the intended sequence is:
+
+```bash
+sudo apt update && sudo apt full-upgrade -y
+sudo rpi-eeprom-update -a
+sudo reboot
+cd ~/kitchenSync
+./tools/start_x.sh
+DISPLAY=:0 XDG_SESSION_TYPE=x11 python3 tools/verify_gst_hwaccel.py --video videos/test265.mp4 --json
+```
+
+The successful HEVC decode signal is `"active_decoder": "v4l2slh265dec"`.
 
 At runtime, check the logs for a line like:
 

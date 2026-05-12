@@ -4,6 +4,7 @@
 import argparse
 import json
 import os
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -52,6 +53,24 @@ def _create_video_sink():
         if sink:
             return sink, sink_name
     return None, None
+
+
+def _ensure_display_session_ready():
+    display = os.environ.get("DISPLAY")
+    if not display:
+        return
+
+    result = subprocess.run(
+        ["xset", "q"],
+        env=os.environ,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(
+            "DISPLAY is set but no X11 session is responding. Start the local X session first with ./tools/start_x.sh, then rerun the verifier."
+        )
 
 
 def _reprioritize_decoders():
@@ -144,6 +163,7 @@ def build_report(video_path: Path, sample_seconds: float) -> dict:
         raise RuntimeError("GStreamer Python bindings are not available")
 
     Gst.init(None)
+    _ensure_display_session_ready()
 
     if not video_path.exists():
         raise FileNotFoundError(f"Video file not found: {video_path}")
