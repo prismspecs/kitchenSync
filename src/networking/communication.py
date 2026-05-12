@@ -262,6 +262,7 @@ class CommandManager:
         """Initialize command socket"""
         try:
             self.control_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            self.control_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             self.control_sock.bind(("", self.control_port))
             self.control_sock.settimeout(1.0)
         except Exception as e:
@@ -278,7 +279,9 @@ class CommandManager:
             while self.is_running:
                 try:
                     data, addr = self.control_sock.recvfrom(1024)
-                    msg = json.loads(data.decode())
+                    msg_text = data.decode()
+                    print(f"\n[NET] Received from {addr}: {msg_text}")
+                    msg = json.loads(msg_text)
                     
                     msg_type = msg.get("type")
                     if msg_type in self.message_handlers:

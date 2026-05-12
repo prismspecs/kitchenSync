@@ -97,27 +97,6 @@ class LeaderPi:
 
         # Wire command listener for registration handled internally by CommandManager
         # but we can add an extra callback if we want custom logging
-        def on_command(msg, addr):
-            log_info(f"Collaborator registered: {msg.get('device_id', 'unknown')} at {addr[0]}", component="network")
-
-        self.command_manager.register_handler("register", on_command)
-        
-        # --- DIAGNOSTIC SLEDGEHAMMER ---
-        def raw_sniffer():
-            sniff_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            sniff_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            try:
-                sniff_sock.bind(('', 5006))
-                log_info("DEBUG: Raw sniffer listening on 5006", component="debug")
-                while True:
-                    data, addr = sniff_sock.recvfrom(1024)
-                    print(f"\n[RAW_PACKET] From {addr}: {data.decode()}")
-            except Exception as e:
-                log_error(f"DEBUG: Sniffer failed: {e}")
-        
-        threading.Thread(target=raw_sniffer, daemon=True).start()
-        # ------------------------------
-
         self.command_manager.start_listening()
 
     def start_system(self) -> None:
