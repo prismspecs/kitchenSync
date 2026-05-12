@@ -360,8 +360,12 @@ class CommandManager:
 
         elif msg_type == "heartbeat":
             device_id = msg.get("device_id")
-            if device_id in self.collaborators:
-                self.collaborators[device_id]["last_seen"] = time.time()
+            if device_id:
+                self.collaborators[device_id] = {
+                    "ip": addr[0],
+                    "last_seen": time.time(),
+                    "status": msg.get("status", "ready"),
+                }
 
     def get_collaborators(self) -> Dict[str, Dict]:
         """Get current collaborator status"""
