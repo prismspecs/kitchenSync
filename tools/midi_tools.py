@@ -28,7 +28,7 @@ def convert_to_json(input_file: str, output_file: str = None):
         schedule.schedule_file = Path(output_file)
         schedule.save_schedule()
 
-        print(f"✅ Converted {input_file} to {output_file}")
+        print(f" Converted {input_file} to {output_file}")
         print(f"   Found {schedule.get_cue_count()} events")
 
     except ScheduleError as e:
@@ -50,7 +50,7 @@ def convert_to_midi(input_file: str, output_file: str = None):
         # Export as MIDI
         schedule.export_to_midi(str(output_file))
 
-        print(f"✅ Converted {input_file} to {output_file}")
+        print(f" Converted {input_file} to {output_file}")
         print(f"   Exported {schedule.get_cue_count()} events")
 
     except ScheduleError as e:
@@ -93,7 +93,7 @@ def create_test_schedule():
     schedule.add_relay_off(12.0, 4)  # Relay 4 OFF at 12s
 
     schedule.save_schedule()
-    print(f"✅ Created test schedule: {schedule.schedule_file}")
+    print(f" Created test schedule: {schedule.schedule_file}")
     print("📋 Test schedule contents:")
     schedule.print_schedule()
 

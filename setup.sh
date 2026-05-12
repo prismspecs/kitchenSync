@@ -151,11 +151,11 @@ sudo systemctl enable kitchensync.service
 
 # Verify the service is properly enabled
 if sudo systemctl is-enabled kitchensync.service >/dev/null 2>&1; then
-    echo "✅ Auto-start SYSTEM service enabled successfully"
-    echo "🔄 Service will start automatically on boot with proper display access"
+    echo " Auto-start SYSTEM service enabled successfully"
+    echo " Service will start automatically on boot with proper display access"
 else
     echo "❌ Failed to enable auto-start system service"
-    echo "⚠️  Manual intervention may be required"
+    echo "️  Manual intervention may be required"
 fi
 
 # Note: No need for loginctl enable-linger with system services
@@ -170,13 +170,13 @@ sys.path.insert(0, str(Path.cwd() / 'src'))
 
 try:
     from networking import SyncBroadcaster, CommandManager
-    print('✅ Leader networking imports OK')
+    print(' Leader networking imports OK')
 except Exception as e:
     print(f'❌ Leader networking imports failed: {e}')
 
 try:
     from networking import SyncReceiver, CommandListener  
-    print('✅ Collaborator networking imports OK')
+    print(' Collaborator networking imports OK')
 except Exception as e:
     print(f'❌ Collaborator networking imports failed: {e}')
 "
@@ -186,9 +186,9 @@ echo "=== Setup Complete! ==="
 echo ""
 echo "Video player: VLC"
 echo "Python packages installed system-wide"
-echo "🔄 Auto-start service: ENABLED"
+echo " Auto-start service: ENABLED"
 echo ""
-echo "🚀 PLUG-AND-PLAY OPERATION:"
+echo " PLUG-AND-PLAY OPERATION:"
 echo "1. Create kitchensync.ini on your USB drive with:"
 echo "   - is_leader = true/false (designates leader or collaborator)"
 echo "   - pi_id = unique ID for each Pi" 
@@ -211,7 +211,7 @@ echo "- System configured for X11 mode (Wayland disabled)"
 echo "- This ensures reliable window positioning"
 echo "- Reboot required for display changes to take effect"
 echo ""
-echo "🎵 MIDI Setup:"
+echo " MIDI Setup:"
 echo "1. Connect USB MIDI interface to collaborator Pis"
 echo "2. Test connection: aconnect -l or amidi -l"
 echo ""

@@ -19,7 +19,7 @@ except ImportError:
     import os
 
     if not os.environ.get("KITCHENSYNC_MIDO_WARNED"):
-        print("⚠️ mido not available - MIDI file support disabled")
+        print("️ mido not available - MIDI file support disabled")
         os.environ["KITCHENSYNC_MIDO_WARNED"] = "1"
 
 
@@ -49,7 +49,7 @@ class Schedule:
             if self.schedule_file.exists():
                 with open(self.schedule_file, "r") as f:
                     self.cues = json.load(f)
-                print(f"✓ Loaded local schedule with {len(self.cues)} cues")
+                print(f" Loaded local schedule with {len(self.cues)} cues")
             else:
                 print("📋 No schedule file found, using empty schedule")
                 self.cues = []
@@ -81,7 +81,7 @@ class Schedule:
                 print("   Install with: pip install mido")
 
         except Exception as e:
-            print(f"⚠️ Error loading schedule from USB: {e}")
+            print(f"️ Error loading schedule from USB: {e}")
         return False
 
     def _load_json_schedule(self, schedule_path: str) -> bool:
@@ -95,7 +95,7 @@ class Schedule:
             )
             return True
         except Exception as e:
-            print(f"⚠️ Error loading JSON schedule: {e}")
+            print(f"️ Error loading JSON schedule: {e}")
             return False
 
     def _load_midi_schedule(self, midi_path: str) -> bool:
@@ -114,10 +114,10 @@ class Schedule:
                 )
                 return True
             else:
-                print(f"⚠️ No usable MIDI events found in {midi_path}")
+                print(f"️ No usable MIDI events found in {midi_path}")
                 return False
         except Exception as e:
-            print(f"⚠️ Error loading MIDI file: {e}")
+            print(f"️ Error loading MIDI file: {e}")
             return False
 
     def _parse_midi_file(self, midi_path: str) -> List[Dict[str, Any]]:
@@ -209,7 +209,7 @@ class Schedule:
             with open(schedule_path, "r") as f:
                 self.cues = json.load(f)
             print(
-                f"✓ Loaded JSON schedule with {len(self.cues)} cues from {schedule_path}"
+                f" Loaded JSON schedule with {len(self.cues)} cues from {schedule_path}"
             )
         except json.JSONDecodeError as e:
             raise ScheduleError(f"Invalid JSON in schedule file: {e}")
@@ -227,7 +227,7 @@ class Schedule:
             midi_cues = self._parse_midi_file(midi_path)
             if midi_cues:
                 self.cues = midi_cues
-                print(f"✓ Loaded MIDI file with {len(self.cues)} cues from {midi_path}")
+                print(f" Loaded MIDI file with {len(self.cues)} cues from {midi_path}")
             else:
                 raise ScheduleError(f"No usable MIDI events found in {midi_path}")
         except Exception as e:
@@ -287,7 +287,7 @@ class Schedule:
                 last_time = cue_time
 
             mid.save(output_path)
-            print(f"✅ Exported schedule to MIDI file: {output_path}")
+            print(f" Exported schedule to MIDI file: {output_path}")
 
         except Exception as e:
             raise ScheduleError(f"Error exporting to MIDI file: {e}")
@@ -297,7 +297,7 @@ class Schedule:
         try:
             with open(self.schedule_file, "w") as f:
                 json.dump(self.cues, f, indent=2)
-            print(f"✅ Schedule saved ({len(self.cues)} cues)")
+            print(f" Schedule saved ({len(self.cues)} cues)")
         except Exception as e:
             raise ScheduleError(f"Error saving schedule: {e}")
 
@@ -437,7 +437,7 @@ class Schedule:
             channel: MIDI channel (1-16, ignored by hardware)
         """
         if duration > 5.0:
-            print("⚠️ Warning: Duration > 5s, hardware will auto-timeout at 5s")
+            print("️ Warning: Duration > 5s, hardware will auto-timeout at 5s")
 
         return [
             Schedule.create_relay_on_cue(time, relay_output, velocity, channel),

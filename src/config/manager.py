@@ -262,7 +262,7 @@ class ConfigManager:
         with open(target_file, "w") as f:
             local_config.write(f)
 
-        print(f"✓ Updated {target_file}")
+        print(f" Updated {target_file}")
 
     @property
     def content_dir(self) -> str:

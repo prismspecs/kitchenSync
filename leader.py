@@ -232,7 +232,7 @@ class LeaderPi:
             log_warning("No video player available", component="leader")
             return
         self.video_player.set_fullscreen(True)
-        log_info("✓ Fullscreen mode requested", component="leader")
+        log_info(" Fullscreen mode requested", component="leader")
 
     def seek_video(self, time_str: str) -> None:
         """Seek the video to a specific time."""
@@ -244,7 +244,7 @@ class LeaderPi:
             log_info(f"Seeking video to {seconds} seconds...", component="leader")
             success = self.video_player.seek(seconds)
             if success:
-                log_info(f"✓ Seek successful to {seconds}s", component="leader")
+                log_info(f" Seek successful to {seconds}s", component="leader")
                 if self.midi_scheduler:
                     self.midi_scheduler.reset()
             else:
@@ -295,7 +295,7 @@ def main():
             log_info("Debug mode enabled", component="autostart")
 
         if args.auto:
-            print("🎯 Leader Pi starting in automatic mode...")
+            print(" Leader Pi starting in automatic mode...")
             leader_instance.start_system()
             try:
                 while True:

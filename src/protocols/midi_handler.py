@@ -70,13 +70,13 @@ class SerialMidiOut:
         acm_ports = glob.glob("/dev/ttyACM*")
         usb_ports = glob.glob("/dev/ttyUSB*")
         if acm_ports:
-            print(f"✓ Auto-detected Arduino port: {acm_ports[0]}")
+            print(f" Auto-detected Arduino port: {acm_ports[0]}")
             return acm_ports[0]
         elif usb_ports:
-            print(f"✓ Auto-detected Arduino port: {usb_ports[0]}")
+            print(f" Auto-detected Arduino port: {usb_ports[0]}")
             return usb_ports[0]
         else:
-            print("⚠️ No Arduino serial port detected, using default /dev/ttyACM0")
+            print("️ No Arduino serial port detected, using default /dev/ttyACM0")
             return "/dev/ttyACM0"
 
     def open_port(self, port: int = 0):
@@ -87,9 +87,9 @@ class SerialMidiOut:
         try:
             self.ser = serial.Serial(self.port, self.baud, timeout=self.timeout)
             time.sleep(2)  # Wait for Arduino to reset
-            print(f"✓ Serial MIDI output initialized on {self.port} @ {self.baud}")
+            print(f" Serial MIDI output initialized on {self.port} @ {self.baud}")
         except Exception as e:
-            print(f"⚠️ Serial MIDI setup failed: {e}")
+            print(f"️ Serial MIDI setup failed: {e}")
             self.ser = None
 
     def send_message(self, message: List[int]):
@@ -186,9 +186,9 @@ class MidiManager:
             else:
                 self.midi_out = rtmidi.MidiOut()
                 self.midi_out.open_port(self.port)
-                print(f"✓ MIDI output initialized on port {self.port}")
+                print(f" MIDI output initialized on port {self.port}")
         except Exception as e:
-            print(f"⚠️ MIDI/Serial setup failed: {e}")
+            print(f"️ MIDI/Serial setup failed: {e}")
             print("Falling back to simulation mode")
             self.midi_out = MockMidiOut()
             self.midi_out.open_port(self.port)
@@ -205,7 +205,7 @@ class MidiManager:
                 velocity = max(0, min(127, velocity))
                 message = [0x90 | channel, note, velocity]
                 self.midi_out.send_message(message)
-                print(f"🎵 MIDI Note ON: Ch{channel+1} Note{note} Vel{velocity}")
+                print(f" MIDI Note ON: Ch{channel+1} Note{note} Vel{velocity}")
         except Exception as e:
             print(f"Error sending note on: {e}")
 
@@ -219,7 +219,7 @@ class MidiManager:
                 note = max(0, min(127, note))
                 message = [0x80 | channel, note, 0]
                 self.midi_out.send_message(message)
-                print(f"🎵 MIDI Note OFF: Ch{channel+1} Note{note}")
+                print(f" MIDI Note OFF: Ch{channel+1} Note{note}")
         except Exception as e:
             print(f"Error sending note off: {e}")
 
@@ -261,14 +261,14 @@ class MidiManager:
                 cue.get("channel", 1), cue.get("control", 0), cue.get("value", 0)
             )
         else:
-            print(f"⚠️ Unknown MIDI cue type: {cue_type}")
+            print(f"️ Unknown MIDI cue type: {cue_type}")
 
     def cleanup(self) -> None:
         """Clean up MIDI resources"""
         try:
             if self.midi_out:
                 self.midi_out.close_port()
-                print("🛑 MIDI output closed")
+                print(" MIDI output closed")
         except Exception as e:
             print(f"Error closing MIDI: {e}")
 
@@ -301,7 +301,7 @@ class MidiScheduler:
             and hasattr(self.midi_manager.midi_out, "flush_buffers")
         ):
 
-            print("🔄 Resetting Arduino state for loop...")
+            print(" Resetting Arduino state for loop...")
             self.midi_manager.midi_out.flush_buffers()
             # self.midi_manager.midi_out.send_reset_command()
 
@@ -326,14 +326,14 @@ class MidiScheduler:
         self.previous_playback_time = None
         self.last_effective_time = None
         self.reset()
-        print("🎵 Started MIDI playback")
+        print(" Started MIDI playback")
 
     def stop_playback(self) -> None:
         """Stop MIDI playback"""
         self.is_running = False
         self.start_time = None
         self.previous_playback_time = None  # Reset to prevent comparison issues
-        print("🛑 Stopped MIDI playback")
+        print(" Stopped MIDI playback")
 
     def process_cues(self, current_time: float) -> None:
         """Process MIDI cues for current time with robust single loop detection"""

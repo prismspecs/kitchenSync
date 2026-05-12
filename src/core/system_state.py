@@ -33,7 +33,7 @@ class SystemState:
         self.start_time = time.time()
         self.is_running = True
         self.stats["sessions_started"] += 1
-        print(f"🚀 Session started at {time.strftime('%H:%M:%S')}")
+        print(f" Session started at {time.strftime('%H:%M:%S')}")
 
     def stop_session(self) -> None:
         """Stop the current session"""
@@ -41,7 +41,7 @@ class SystemState:
             session_duration = time.time() - self.start_time
             self.stats["total_runtime"] += session_duration
             self.stats["last_session_duration"] = session_duration
-            print(f"🛑 Session ended (duration: {session_duration:.1f}s)")
+            print(f" Session ended (duration: {session_duration:.1f}s)")
 
         self.is_running = False
         self.start_time = None
@@ -87,7 +87,7 @@ class CollaboratorRegistry:
             "last_seen": time.time(),
             "registered_at": time.time(),
         }
-        print(f"✓ Registered collaborator: {device_id} at {ip}")
+        print(f" Registered collaborator: {device_id} at {ip}")
 
     def update_heartbeat(self, device_id: str, status: str = "ready") -> None:
         """Update collaborator heartbeat"""

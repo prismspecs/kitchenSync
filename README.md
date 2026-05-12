@@ -2,7 +2,7 @@
 
 A modern, plug-and-play system for synchronized video playbook and MIDI output across multiple Raspberry Pis. Features automatic USB drive detection, VLC-based video playback with drift correction, and Arduino-based MIDI relay control with JSON schedule support.
 
-## 🚀 Quick Start
+##  Quick Start
 
 ### 1. Install on All Pis (Identical Setup)
 ```bash
@@ -38,8 +38,8 @@ sudo reboot
 - **🎬 Synchronized Video Playback**: Multiple Pis play videos in perfect sync using VLC with advanced drift correction
 - **🎹 Precise MIDI Output**: Timecoded MIDI events via Arduino serial with sub-50ms accuracy
 - **🔌 Plug-and-Play USB**: Automatic USB drive detection, mounting, and video file selection
-- **🎯 Automatic Role Detection**: USB-based configuration determines leader vs collaborator roles
-- **🚀 Auto-Start System**: Systemd service for boot-time initialization and hands-free operation
+- ** Automatic Role Detection**: USB-based configuration determines leader vs collaborator roles
+- ** Auto-Start System**: Systemd service for boot-time initialization and hands-free operation
 - **📡 Network Synchronization**: UDP broadcast for real-time time sync across all devices
 
 ## How It Works
@@ -198,7 +198,7 @@ python3 kitchensync.py
 - **Discovery**: Automatic Pi detection via broadcast
 - **Precision**: ~10-30ms accuracy on typical LAN
 
-## 🚀 Deployment Commands
+##  Deployment Commands
 
 ```bash
 # Enable auto-start on all Pis

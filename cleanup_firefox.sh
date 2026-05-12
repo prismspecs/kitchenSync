@@ -22,10 +22,10 @@ fi
 
 # Check if cleanup was successful
 if pgrep -f firefox >/dev/null; then
-    echo "⚠️  Some Firefox processes are still running. You may need to force kill them:"
+    echo "️  Some Firefox processes are still running. You may need to force kill them:"
     echo "   sudo pkill -9 -f firefox"
 else
-    echo "✅ Firefox cleanup completed successfully"
+    echo " Firefox cleanup completed successfully"
 fi
 
 echo "Cleanup script finished"

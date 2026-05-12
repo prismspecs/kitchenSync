@@ -225,7 +225,7 @@ class ErrorDisplay:
     @staticmethod
     def show_warning(message: str) -> None:
         """Display warning message"""
-        print(f"⚠️  WARNING: {message}")
+        print(f"️  WARNING: {message}")
 
     @staticmethod
     def show_info(message: str) -> None:
@@ -235,7 +235,7 @@ class ErrorDisplay:
     @staticmethod
     def show_success(message: str) -> None:
         """Display success message"""
-        print(f"✅ SUCCESS: {message}")
+        print(f" SUCCESS: {message}")
 
 
 class MenuInterface:

@@ -28,9 +28,9 @@ archive_log() {
         # Remove current log to start fresh
         rm "$current_log"
         local archived_lines=$(wc -l < "$archive_log" 2>/dev/null || echo "0")
-        echo "✅ Archived $archived_lines lines to $archive_log"
+        echo " Archived $archived_lines lines to $archive_log"
     else
-        echo "⚠️  $current_log not found, skipping"
+        echo "️  $current_log not found, skipping"
     fi
 }
 
@@ -39,7 +39,7 @@ echo "📊 Current log file sizes:"
 ls -lah /tmp/kitchensync*.log 2>/dev/null || echo "No current log files found"
 
 echo ""
-echo "🔄 Archiving logs..."
+echo " Archiving logs..."
 
 # Archive each log type (system, VLC, debug, stderr/stdout)
 archive_log "/tmp/kitchensync_system.log" "/tmp/kitchensync_system_archive.log"

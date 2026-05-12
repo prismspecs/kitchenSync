@@ -14,7 +14,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 try:
     from protocols.midi_handler import MidiManager
 
-    print("✓ KitchenSync MIDI manager available")
+    print(" KitchenSync MIDI manager available")
 except ImportError as e:
     print("❌ KitchenSync MIDI manager not available")
     print(f"Import error: {e}")
@@ -46,14 +46,14 @@ except ImportError as e:
                 subprocess.run(
                     ["amidi", "-p", port, "--send-hex", f"90 {note_hex} 7F"], check=True
                 )
-                print(f"  ✓ Output {output} ON")
+                print(f"   Output {output} ON")
                 time.sleep(1.5)
 
                 # Turn OFF
                 subprocess.run(
                     ["amidi", "-p", port, "--send-hex", f"80 {note_hex} 00"], check=True
                 )
-                print(f"  ✓ Output {output} OFF")
+                print(f"   Output {output} OFF")
                 time.sleep(0.5)
 
             except subprocess.CalledProcessError as e:
@@ -62,7 +62,7 @@ except ImportError as e:
                 print("  ❌ amidi command not found. Install alsa-utils package.")
                 return
 
-        print("\n✅ Basic testing completed!")
+        print("\n Basic testing completed!")
 
         # Offer manual testing
         print("\nManual testing:")
@@ -94,7 +94,7 @@ except ImportError as e:
                                 ],
                                 check=True,
                             )
-                            print(f"✓ Output {output} ON")
+                            print(f" Output {output} ON")
                         elif action == "off":
                             subprocess.run(
                                 [
@@ -106,7 +106,7 @@ except ImportError as e:
                                 ],
                                 check=True,
                             )
-                            print(f"✓ Output {output} OFF")
+                            print(f" Output {output} OFF")
                         else:
                             print("Use 'on' or 'off'")
                     else:
@@ -129,7 +129,7 @@ class MidiBoxTester:
     def __init__(self, midi_port: int = 0):
         try:
             self.midi = MidiManager(port=midi_port, use_mock=False)
-            print(f"✓ Connected to MIDI port {midi_port}")
+            print(f" Connected to MIDI port {midi_port}")
         except Exception as e:
             print(f"❌ Failed to connect to MIDI port {midi_port}: {e}")
             print("💡 Try checking 'amidi -l' for available ports")
@@ -149,24 +149,24 @@ class MidiBoxTester:
 
         # Turn ON
         self.midi.send_note_on(channel=1, note=note, velocity=velocity)
-        print(f"  ✓ Sent Note ON: Output {output_num}")
+        print(f"   Sent Note ON: Output {output_num}")
 
         # Wait
         time.sleep(duration)
 
         # Turn OFF
         self.midi.send_note_off(channel=1, note=note)
-        print(f"  ✓ Sent Note OFF: Output {output_num}")
+        print(f"   Sent Note OFF: Output {output_num}")
 
     def test_all_outputs(self, duration: float = 1.0):
         """Test all 12 outputs sequentially"""
-        print(f"🎯 Testing all outputs sequentially ({duration}s each)")
+        print(f" Testing all outputs sequentially ({duration}s each)")
 
         for output in range(1, 13):
             self.test_output(output, velocity=127, duration=duration)
             time.sleep(0.5)  # Brief pause between outputs
 
-        print("✅ All outputs tested")
+        print(" All outputs tested")
 
     def test_power_levels(self, output_num: int = 1):
         """Test different power levels on one output"""
@@ -182,7 +182,7 @@ class MidiBoxTester:
 
         # Turn off
         self.midi.send_note_off(channel=1, note=note)
-        print("  ✓ Output turned OFF")
+        print("   Output turned OFF")
 
     def test_multiple_outputs(self):
         """Test multiple outputs simultaneously"""
@@ -194,7 +194,7 @@ class MidiBoxTester:
         for output in outputs:
             note = 59 + output
             self.midi.send_note_on(channel=1, note=note, velocity=127)
-            print(f"  ✓ Output {output} ON")
+            print(f"   Output {output} ON")
 
         print("  ⏳ Waiting 3 seconds...")
         time.sleep(3.0)
@@ -203,7 +203,7 @@ class MidiBoxTester:
         for output in outputs:
             note = 59 + output
             self.midi.send_note_off(channel=1, note=note)
-            print(f"  ✓ Output {output} OFF")
+            print(f"   Output {output} OFF")
 
     def test_timeout_behavior(self, output_num: int = 1):
         """Test the 5-second auto-timeout behavior"""
@@ -218,7 +218,7 @@ class MidiBoxTester:
             print(f"    {i+1}s...")
             time.sleep(1.0)
 
-        print("  ✓ If timeout works, output should now be OFF")
+        print("   If timeout works, output should now be OFF")
         print("  💡 Send a Note OFF to be sure:")
         self.midi.send_note_off(channel=1, note=note)
 
@@ -240,7 +240,7 @@ class MidiBoxTester:
         print("  ⏳ Waiting 2 more seconds, then turning OFF...")
         time.sleep(2.0)
         self.midi.send_note_off(channel=1, note=note)
-        print("  ✓ Long event completed (14 seconds total)")
+        print("   Long event completed (14 seconds total)")
 
     def interactive_test(self):
         """Interactive testing menu"""
@@ -300,10 +300,10 @@ class MidiBoxTester:
 
                             if action == "on":
                                 self.midi.send_note_on(1, note, velocity)
-                                print(f"✓ Output {output} ON (velocity {velocity})")
+                                print(f" Output {output} ON (velocity {velocity})")
                             elif action == "off":
                                 self.midi.send_note_off(1, note)
-                                print(f"✓ Output {output} OFF")
+                                print(f" Output {output} OFF")
                     except:
                         print("Format: 'on 1 127' or 'off 1'")
 
@@ -338,7 +338,7 @@ def main():
 
     if mode == "1":
         tester.test_all_outputs(duration=1.5)
-        print("\n✅ Quick test completed!")
+        print("\n Quick test completed!")
     else:
         tester.interactive_test()
 

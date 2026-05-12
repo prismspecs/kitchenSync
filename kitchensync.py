@@ -121,8 +121,8 @@ try:
     sys.path.insert(0, str(src_path))
 
     with open("/tmp/kitchensync_startup.log", "a") as f:
-        f.write(f"✓ Script dir: {script_dir}\n")
-        f.write(f"✓ Added src to path: {src_path}\n")
+        f.write(f" Script dir: {script_dir}\n")
+        f.write(f" Added src to path: {src_path}\n")
 except Exception as e:
     with open("/tmp/kitchensync_startup.log", "a") as f:
         f.write(f"✗ Failed to add src to path: {e}\n")
@@ -141,7 +141,7 @@ try:
     )
 
     with open("/tmp/kitchensync_startup.log", "a") as f:
-        f.write("✓ All imports successful\n")
+        f.write(" All imports successful\n")
 
 except Exception as e:
     with open("/tmp/kitchensync_startup.log", "a") as f:
@@ -159,7 +159,7 @@ class KitchenSyncAutoStart:
 
     def _handle_no_config_found(self) -> bool:
         """Handle the case where no USB configuration is found."""
-        print("⚠️  No USB config found. Defaulting to COLLABORATOR mode.")
+        print("️  No USB config found. Defaulting to COLLABORATOR mode.")
         log_warning(
             "No USB config found, defaulting to collaborator", component="autostart"
         )
@@ -218,7 +218,7 @@ class KitchenSyncAutoStart:
         self.config.usb_config_path = usb_config_path
         self.config.load_configuration()
 
-        print(f"✓ Found config: {usb_config_path}")
+        print(f" Found config: {usb_config_path}")
         return True
 
     def _validate_video(self) -> bool:
@@ -229,7 +229,7 @@ class KitchenSyncAutoStart:
 
         video_path = self.video_manager.find_video_file()
         if video_path:
-            print(f"✅ Video file: {video_path}")
+            print(f" Video file: {video_path}")
             log_info(f"Video candidate: {video_path}", component="autostart")
             return True
 
@@ -261,13 +261,13 @@ class KitchenSyncAutoStart:
                 for cmd in commands:
                     try:
                         subprocess.run(cmd, check=True, capture_output=True)
-                        print(f"✅ Set desktop background: {background_path}")
+                        print(f" Set desktop background: {background_path}")
                         break
                     except (subprocess.CalledProcessError, FileNotFoundError):
                         continue
 
             except Exception as e:
-                print(f"⚠️ Could not set desktop background: {e}")
+                print(f"️ Could not set desktop background: {e}")
 
     def _check_usb_schedule(self) -> None:
         """Check for and report USB schedule files"""
@@ -277,7 +277,7 @@ class KitchenSyncAutoStart:
         try:
             usb_schedule_path = USBConfigLoader.find_schedule_on_usb()
             if usb_schedule_path:
-                print(f"🎵 Found MIDI schedule: {usb_schedule_path}")
+                print(f" Found MIDI schedule: {usb_schedule_path}")
                 log_info(
                     f"USB MIDI schedule: {usb_schedule_path}", component="autostart"
                 )
@@ -293,7 +293,7 @@ class KitchenSyncAutoStart:
                 log_info(f"USB MIDI file: {usb_midi_path}", component="autostart")
 
         except Exception as e:
-            print(f"⚠️ Error checking USB schedule: {e}")
+            print(f"️ Error checking USB schedule: {e}")
 
     def _update_local_configs(self) -> None:
         """Update local configuration files"""
@@ -338,15 +338,15 @@ class KitchenSyncAutoStart:
 
         try:
             if self.config.is_leader:
-                print("🎯 Starting as LEADER...")
+                print(" Starting as LEADER...")
                 cmd = (
                     [sys.executable, "leader.py", "--auto"] + debug_flag + sys.argv[1:]
                 )
             else:
-                print("🎵 Starting as COLLABORATOR...")
+                print(" Starting as COLLABORATOR...")
                 cmd = [sys.executable, "collaborator.py"] + debug_flag + sys.argv[1:]
 
-            print(f"🚀 Executing: {' '.join(cmd)}")
+            print(f" Executing: {' '.join(cmd)}")
             log_info(f"Exec: {' '.join(cmd)}", component="autostart")
             os.execv(sys.executable, cmd)
 

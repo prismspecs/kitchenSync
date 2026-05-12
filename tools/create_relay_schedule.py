@@ -84,7 +84,7 @@ def create_custom_schedule():
                 time = float(input("Time (seconds): "))
                 channel = int(input("Relay channel (1-16): "))
                 schedule.add_relay_on(time, channel)
-                print(f"✓ Added relay {channel} ON at {time}s")
+                print(f" Added relay {channel} ON at {time}s")
             except ValueError:
                 print("❌ Invalid input")
 
@@ -93,7 +93,7 @@ def create_custom_schedule():
                 time = float(input("Time (seconds): "))
                 channel = int(input("Relay channel (1-16): "))
                 schedule.add_relay_off(time, channel)
-                print(f"✓ Added relay {channel} OFF at {time}s")
+                print(f" Added relay {channel} OFF at {time}s")
             except ValueError:
                 print("❌ Invalid input")
 
@@ -103,7 +103,7 @@ def create_custom_schedule():
                 channel = int(input("Relay channel (1-16): "))
                 duration = float(input("Pulse duration (seconds): "))
                 schedule.add_relay_pulse(time, channel, duration)
-                print(f"✓ Added relay {channel} pulse at {time}s for {duration}s")
+                print(f" Added relay {channel} pulse at {time}s for {duration}s")
             except ValueError:
                 print("❌ Invalid input")
 

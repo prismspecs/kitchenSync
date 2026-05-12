@@ -28,7 +28,7 @@ run_check() {
     echo -e "${YELLOW}=== $description ===${NC}"
     
     if eval "$command" 2>&1; then
-        echo -e "${GREEN}✅ SUCCESS${NC}"
+        echo -e "${GREEN} SUCCESS${NC}"
     else
         echo -e "${RED}❌ FAILED (exit code: $?)${NC}"
     fi
@@ -252,7 +252,7 @@ sys.path.insert(0, './src')
 try:
     from config import ConfigManager
     cm = ConfigManager()
-    print(f'✅ Configuration loaded successfully')
+    print(f' Configuration loaded successfully')
     print(f'Device ID: {cm.device_id}')
     print(f'Video file: {cm.video_file}')
     print(f'USB mount: {getattr(cm, \"usb_mount_point\", \"Not set\")}')
@@ -329,11 +329,11 @@ if [[ ! $(find /media/ -name "*.mp4" -o -name "*.mov" -o -name "*.mkv" 2>/dev/nu
 fi
 
 if [[ ! $(find /media/ -name "kitchensync.ini" 2>/dev/null) ]]; then
-    issues+=("⚠️  No kitchensync.ini found on USB drives")
+    issues+=("️  No kitchensync.ini found on USB drives")
 fi
 
 if [[ ${#issues[@]} -eq 0 ]]; then
-    echo -e "${GREEN}✅ No obvious issues detected${NC}"
+    echo -e "${GREEN} No obvious issues detected${NC}"
     echo "If the system still isn't working, check the detailed logs above for specific errors."
 else
     echo -e "${RED}Issues detected:${NC}"

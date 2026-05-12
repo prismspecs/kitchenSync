@@ -176,7 +176,7 @@ def run_leader(driver_name, target_ip=None):
     
     log(f"Leader simulation started with '{driver_name}' driver.")
     if target_ip:
-        log(f"🎯 Target IP: {target_ip} (Unicast Mode)")
+        log(f" Target IP: {target_ip} (Unicast Mode)")
     
     start_time = time.time()
     broadcaster.start_broadcasting(start_time)

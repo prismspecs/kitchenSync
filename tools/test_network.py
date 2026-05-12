@@ -10,7 +10,7 @@ import time
 import argparse
 
 def run_sender(ip, port):
-    print(f"🚀 Sending test packets to {ip}:{port}...")
+    print(f" Sending test packets to {ip}:{port}...")
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     if ip.endswith(".255") or ip == "255.255.255.255":
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
