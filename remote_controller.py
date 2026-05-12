@@ -82,8 +82,14 @@ class RemoteHandler(BaseHTTPRequestHandler):
             self.send_header("Content-Length", str(video_path.stat().st_size))
             self.send_header("Accept-Ranges", "bytes")
             self.end_headers()
-            with open(video_path, "rb") as f:
-                shutil.copyfileobj(f, self.wfile)
+            try:
+                with open(video_path, "rb") as f:
+                    shutil.copyfileobj(f, self.wfile)
+            except (ConnectionResetError, BrokenPipeError):
+                # This is normal when the user refreshes the page or closes the tab
+                pass
+            except Exception as e:
+                log_info(f"Stream error: {e}", component="remote")
         else:
             self.send_error(404)
 
