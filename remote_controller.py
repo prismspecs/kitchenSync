@@ -101,30 +101,34 @@ class RemoteHandler(BaseHTTPRequestHandler):
                     </div>
 
                     <script>
-                    function playCluster() {
-                        fetch('/play', {method: 'POST'})
-                        .then(() => {
+                    function playCluster() {{
+                        fetch('/play', {{method: 'POST'}})
+                        .then(() => {{
                             document.getElementById('preview').play();
-                        });
-                    }
+                        }});
+                    }}
 
-                    function stopCluster() {
-                        fetch('/stop', {method: 'POST'})
-                        .then(() => {
+                    function stopCluster() {{
+                        fetch('/stop', {{method: 'POST'}})
+                        .then(() => {{
                             const vid = document.getElementById('preview');
                             vid.pause();
                             vid.currentTime = 0;
-                        });
-                    }
+                        }});
+                    }}
 
-                    function changeVideo(filename) {
-                        fetch('/set_video?file=' + encodeURIComponent(filename), {method: 'POST'})
-                        .then(() => {
+                    function changeVideo(filename) {{
+                        fetch('/set_video?file=' + encodeURIComponent(filename), {{method: 'POST'}})
+                        .then(() => {{
                             const vid = document.getElementById('preview');
                             vid.src = '/video_file?t=' + Date.now();
                             vid.load();
-                        });
-                    }
+                        }});
+                    }}
+
+                    function post(path) {{
+                        fetch(path, {{method: 'POST'}});
+                    }}
 
 
                     function update() {{
