@@ -270,6 +270,9 @@ def build_report(video_path: Path, sample_seconds: float) -> dict:
         report["display_path_verified"] = bool(
             report["hardware_preferred_sink"] and report["playback_progress_ok"]
         )
+        report["decode_path_verified"] = report["active_decoder"] in set(
+            report["reprioritized_hardware_decoders"]
+        )
         report["decode_path_note"] = (
             "Hardware decode is only confirmed when the active decoder is a hardware decoder element, "
             "not avdec_h264/avdec_h265."
@@ -314,7 +317,9 @@ def main() -> int:
             print(f"Verification failed: {exc}")
         return 1
 
-    report["ok"] = bool(report.get("display_path_verified"))
+    report["ok"] = bool(
+        report.get("display_path_verified") and report.get("decode_path_verified")
+    )
 
     if args.json:
         print(json.dumps(report, indent=2, sort_keys=True))
@@ -331,13 +336,17 @@ def main() -> int:
     print(f"Duration: {report.get('duration', 0.0):.3f}s")
     print(f"Hardware-preferred sink: {report.get('hardware_preferred_sink', False)}")
     print(f"Playback progressed: {report.get('playback_progress_ok', False)}")
+    print(f"Hardware decode verified: {report.get('decode_path_verified', False)}")
     print("Available decoders:")
     for name, available in report["available_decoders"].items():
         print(f"  {name}: {'yes' if available else 'no'}")
     print(report["decode_path_note"])
     if report["ok"]:
-        print("Result: hardware-preferred display path verified")
+        print("Result: hardware display and hardware decode verified")
         return 0
+    if report.get("display_path_verified"):
+        print("Result: hardware display verified, but hardware decode is not yet verified")
+        return 2
     print("Result: hardware acceleration not fully verified")
     return 2
 
