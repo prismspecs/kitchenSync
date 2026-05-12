@@ -62,13 +62,17 @@ For Pi 5 HEVC hardware decode, use this exact order:
 sudo reboot
 cd ~/kitchenSync
 ./tools/start_x.sh
+ffprobe -v error -select_streams v:0 -show_entries stream=codec_name,profile,pix_fmt,width,height -of json videos/test265.mp4
 DISPLAY=:0 XDG_SESSION_TYPE=x11 python3 tools/verify_gst_hwaccel.py --video videos/test265.mp4 --json
 ```
 
 Expected success indicators:
+- `video_stream.codec_name` is `hevc`
 - `selected_sink` is `glimagesink` or another hardware-preferred sink
 - `playback_progress_ok` is `true`
 - `active_decoder` is `v4l2slh265dec`
+
+If `video_stream.codec_name` is not `hevc`, the file on the Pi is not the HEVC sample you intended to test, regardless of its filename.
 
 Expected runtime log examples:
 

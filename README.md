@@ -97,10 +97,12 @@ sudo rpi-eeprom-update -a
 sudo reboot
 cd ~/kitchenSync
 ./tools/start_x.sh
+ffprobe -v error -select_streams v:0 -show_entries stream=codec_name,profile,pix_fmt,width,height -of json videos/test265.mp4
 DISPLAY=:0 XDG_SESSION_TYPE=x11 python3 tools/verify_gst_hwaccel.py --video videos/test265.mp4 --json
 ```
 
 The successful HEVC decode signal is `"active_decoder": "v4l2slh265dec"`.
+The file sanity-check signal is `"video_stream": {"codec_name": "hevc", ...}`.
 
 At runtime, check the logs for a line like:
 

@@ -37,6 +37,58 @@ KNOWN_DECODERS = [
 ]
 
 
+def _probe_video_stream(video_path: Path) -> dict:
+    result = subprocess.run(
+        [
+            "ffprobe",
+            "-v",
+            "error",
+            "-select_streams",
+            "v:0",
+            "-show_entries",
+            "stream=codec_name,profile,pix_fmt,width,height",
+            "-of",
+            "json",
+            str(video_path),
+        ],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        check=False,
+    )
+
+    if result.returncode != 0:
+        return {
+            "probe_ok": False,
+            "probe_error": result.stderr.strip() or "ffprobe failed",
+        }
+
+    try:
+        payload = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        return {
+            "probe_ok": False,
+            "probe_error": "ffprobe returned invalid JSON",
+        }
+
+    streams = payload.get("streams") or []
+    if not streams:
+        return {
+            "probe_ok": False,
+            "probe_error": "No video stream found",
+        }
+
+    stream = streams[0]
+    return {
+        "probe_ok": True,
+        "codec_name": stream.get("codec_name", "unknown"),
+        "profile": stream.get("profile", "unknown"),
+        "pix_fmt": stream.get("pix_fmt", "unknown"),
+        "width": stream.get("width", 0),
+        "height": stream.get("height", 0),
+    }
+
+
 def _element_available(name: str) -> bool:
     return Gst.ElementFactory.find(name) is not None
 
@@ -162,7 +214,7 @@ def _is_video_decoder_factory(factory) -> bool:
     if factory is None:
         return False
 
-    klass = factory.get_klass() or ""
+    klass = factory.get_metadata(Gst.ELEMENT_METADATA_KLASS) or ""
     return "Decoder" in klass and "Video" in klass
 
 
@@ -195,6 +247,7 @@ def build_report(video_path: Path, sample_seconds: float) -> dict:
         "video": str(video_path),
         "display": os.environ.get("DISPLAY", ""),
         "session_type": os.environ.get("XDG_SESSION_TYPE", ""),
+        "video_stream": _probe_video_stream(video_path),
         "preferred_sinks": _preferred_sink_names(),
         "available_sinks": {
             name: _element_available(name)
@@ -277,6 +330,16 @@ def build_report(video_path: Path, sample_seconds: float) -> dict:
             "Hardware decode is only confirmed when the active decoder is a hardware decoder element, "
             "not avdec_h264/avdec_h265."
         )
+        if report["video_stream"].get("probe_ok"):
+            source_codec = report["video_stream"].get("codec_name")
+            if source_codec == "h264" and report["active_decoder"] == "avdec_h264":
+                report["decode_path_note"] += (
+                    " The sampled file itself is H.264 on this machine, so this run does not test HEVC decode."
+                )
+            elif source_codec == "hevc" and report["active_decoder"] == "avdec_h264":
+                report["decode_path_note"] += (
+                    " The sampled file probes as HEVC, but playback instantiated avdec_h264, so verify the file path and GStreamer stream selection on this Pi."
+                )
     finally:
         pipeline.set_state(Gst.State.NULL)
         if loop.is_running():
@@ -332,6 +395,9 @@ def main() -> int:
     print(f"Preferred sinks: {', '.join(report['preferred_sinks'])}")
     print(f"Selected sink: {report.get('selected_sink', 'unknown')}")
     print(f"Playback state: {report.get('state', 'unknown')}")
+    print(f"Source codec: {report.get('video_stream', {}).get('codec_name', 'unknown')}")
+    print(f"Source profile: {report.get('video_stream', {}).get('profile', 'unknown')}")
+    print(f"Source pixel format: {report.get('video_stream', {}).get('pix_fmt', 'unknown')}")
     print(f"Position after sample: {report.get('position_after_sample', 0.0):.3f}s")
     print(f"Duration: {report.get('duration', 0.0):.3f}s")
     print(f"Hardware-preferred sink: {report.get('hardware_preferred_sink', False)}")
