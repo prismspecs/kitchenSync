@@ -5,10 +5,47 @@ Supports both X11 (wmctrl) and Wayland (wlrctl)
 """
 
 import os
+import shutil
 import subprocess
 import time
 from typing import Optional, List, Tuple
 from core.logger import log_info, log_warning, log_error
+
+
+_cursor_hider_started = False
+
+
+def hide_mouse_cursor() -> bool:
+    """Hide the mouse cursor on X11 displays using unclutter."""
+    global _cursor_hider_started
+
+    if _cursor_hider_started:
+        return True
+
+    if not os.environ.get("DISPLAY"):
+        return False
+
+    if os.environ.get("WAYLAND_DISPLAY") or os.environ.get("XDG_SESSION_TYPE") == "wayland":
+        return False
+
+    unclutter_path = shutil.which("unclutter")
+    if not unclutter_path:
+        log_warning("Cursor hiding requested but 'unclutter' is not installed")
+        return False
+
+    try:
+        subprocess.Popen(
+            [unclutter_path, "-idle", "0", "-root"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+        _cursor_hider_started = True
+        log_info("Mouse cursor hidden for X11 display", component="ui")
+        return True
+    except Exception as exc:
+        log_warning(f"Failed to start cursor hider: {exc}")
+        return False
 
 
 class WindowManager:

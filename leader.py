@@ -24,6 +24,7 @@ from core.schedule import Schedule
 from core.system_state import SystemState
 from core.logger import log_info, log_error, log_warning, enable_system_logging
 from ui.interface import CommandInterface, StatusDisplay
+from ui.window_manager import hide_mouse_cursor
 from protocols.midi_handler import MidiManager, MidiScheduler
 from debug.html_overlay import HTMLDebugManager
 
@@ -106,6 +107,8 @@ class LeaderPi:
             return
 
         log_info("Launching KitchenSync system...", component="leader")
+
+        hide_mouse_cursor()
 
         # Log system environment
         def snapshot_env():

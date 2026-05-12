@@ -22,6 +22,7 @@ from networking.communication import CommandListener, SyncReceiver, CommandManag
 from core.system_state import SystemState
 from core.logger import log_info, log_error, log_warning, enable_system_logging
 from protocols.midi_handler import MidiManager, MidiScheduler
+from ui.window_manager import hide_mouse_cursor
 
 
 class CollaboratorPi:
@@ -290,6 +291,7 @@ class CollaboratorPi:
             # Simple check if xset can query the display
             subprocess.run(["xset", "q"], check=True, capture_output=True, env={"DISPLAY": os.environ.get("DISPLAY", ":0")})
             x_running = True
+            hide_mouse_cursor()
         except Exception:
             log_warning("X Server not detected on DISPLAY " + os.environ.get("DISPLAY", ":0") + ". Video will not be visible!", component="collaborator")
 

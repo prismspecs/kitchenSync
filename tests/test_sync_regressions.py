@@ -2,11 +2,12 @@
 """Regression tests for sync stability behavior."""
 
 import importlib
+import os
 import sys
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 
 ROOT = Path(__file__).parent.parent
@@ -21,6 +22,7 @@ sys.modules.setdefault("gi.repository", MagicMock())
 
 import collaborator
 from video.drivers import gst_driver
+from ui import window_manager
 
 
 class TestGstDriverSetSpeed(unittest.TestCase):
@@ -97,6 +99,32 @@ class TestCollaboratorDuplicateStart(unittest.TestCase):
         collaborator.CollaboratorPi._handle_start_command(dummy, {"type": "start"})
 
         dummy.video_player.seek.assert_called_once_with(12.0)
+
+
+class TestCursorHiding(unittest.TestCase):
+    def test_hide_mouse_cursor_starts_unclutter_on_x11(self):
+        original_started = window_manager._cursor_hider_started
+        try:
+            window_manager._cursor_hider_started = False
+
+            with patch.dict(
+                os.environ,
+                {"DISPLAY": ":0", "XDG_SESSION_TYPE": "x11", "WAYLAND_DISPLAY": ""},
+                clear=False,
+            ):
+                with patch("ui.window_manager.shutil.which", return_value="/usr/bin/unclutter"):
+                    with patch("ui.window_manager.subprocess.Popen") as popen:
+                        success = window_manager.hide_mouse_cursor()
+
+            self.assertTrue(success)
+            popen.assert_called_once_with(
+                ["/usr/bin/unclutter", "-idle", "0", "-root"],
+                stdout=window_manager.subprocess.DEVNULL,
+                stderr=window_manager.subprocess.DEVNULL,
+                start_new_session=True,
+            )
+        finally:
+            window_manager._cursor_hider_started = original_started
 
 
 if __name__ == "__main__":
