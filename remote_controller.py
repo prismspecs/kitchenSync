@@ -11,8 +11,9 @@ import time
 import threading
 import json
 import socket
+import shutil
 from pathlib import Path
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import HTTPServer, BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 
 # Add src to path
@@ -67,9 +68,10 @@ class RemoteHandler(BaseHTTPRequestHandler):
             self.send_response(200)
             self.send_header("Content-type", "video/mp4")
             self.send_header("Content-Length", str(video_path.stat().st_size))
+            self.send_header("Accept-Ranges", "bytes")
             self.end_headers()
             with open(video_path, "rb") as f:
-                self.wfile.write(f.read())
+                shutil.copyfileobj(f, self.wfile)
         else:
             self.send_error(404)
 
@@ -419,7 +421,7 @@ def start_remote():
     
     # Start web server
     web_thread = threading.Thread(
-        target=lambda: HTTPServer(("0.0.0.0", 8080), RemoteHandler).serve_forever(),
+        target=lambda: ThreadingHTTPServer(("0.0.0.0", 8080), RemoteHandler).serve_forever(),
         daemon=True
     )
     web_thread.start()

@@ -183,6 +183,14 @@ class SyncReceiver:
         """Initialize sync receive socket"""
         try:
             self.sync_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            self.sync_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            
+            if hasattr(socket, "SO_REUSEPORT"):
+                try:
+                    self.sync_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+                except Exception:
+                    pass
+                    
             self.sync_sock.bind(("", self.sync_port))
         except Exception as e:
             raise NetworkError(f"Failed to setup sync receive socket: {e}")
@@ -266,6 +274,15 @@ class CommandManager:
         try:
             self.control_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             self.control_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            
+            # Use SO_REUSEPORT if available (Linux/macOS) to allow multiple 
+            # listeners on the same machine to share the port.
+            if hasattr(socket, "SO_REUSEPORT"):
+                try:
+                    self.control_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+                except Exception:
+                    pass # Ignore if OS doesn't support it in practice
+                    
             self.control_sock.bind(("", self.control_port))
             self.control_sock.settimeout(1.0)
         except Exception as e:
