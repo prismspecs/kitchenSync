@@ -83,6 +83,9 @@ class SyncBroadcaster:
         if not self.sync_sock:
             self.setup_socket()
 
+        from core.logger import log_info
+        log_info(f"Sync: Starting broadcast on {self.broadcast_ip}:{self.sync_port}", component="network")
+
         def broadcast_loop():
             while self.is_running:
                 if self.start_time:
