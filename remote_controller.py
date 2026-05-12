@@ -19,21 +19,24 @@ from urllib.parse import urlparse, parse_qs
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 
-from networking.communication import SyncReceiver, CommandManager
+from networking.communication import SyncReceiver, CommandManager, SyncBroadcaster
 from core.logger import log_info, enable_system_logging
 
 class ClusterState:
     def __init__(self):
         self.video_pos = 0.0
-        self.duration = 0.0
+        self.duration = 100.0 # Default until known
         self.leader_time = 0.0
         self.status = "Disconnected"
         self.collaborators = {}
         self.last_sync = 0
         self.is_playing = False
+        self.is_master = False
+        self.master_start_time = 0
 
 cluster_state = ClusterState()
 command_manager = CommandManager()
+broadcaster = SyncBroadcaster()
 
 class RemoteHandler(BaseHTTPRequestHandler):
     def log_message(self, format, *args):
@@ -50,12 +53,20 @@ class RemoteHandler(BaseHTTPRequestHandler):
             self.send_header("Content-type", "application/json")
             self.end_headers()
             
+            # Auto-disconnect if sync lost
+            current_status = cluster_state.status
+            if not cluster_state.is_master and time.time() - cluster_state.last_sync > 5:
+                current_status = "Disconnected"
+            elif cluster_state.is_master:
+                current_status = "Leading"
+
             state_data = {
                 "video_pos": cluster_state.video_pos,
                 "duration": cluster_state.duration,
-                "status": "Connected" if time.time() - cluster_state.last_sync < 5 else "Disconnected",
+                "status": current_status,
                 "collaborators": command_manager.get_collaborators(),
-                "is_playing": cluster_state.is_playing
+                "is_playing": cluster_state.is_playing,
+                "is_master": cluster_state.is_master
             }
             self.wfile.write(json.dumps(state_data).encode())
         elif self.path == "/video_file":
@@ -90,12 +101,30 @@ class RemoteHandler(BaseHTTPRequestHandler):
         log_info(f"Remote command: {action} (value={value})", component="remote")
         
         if action == "play":
+            # If we haven't heard from a leader in a while, we become the leader
+            if time.time() - cluster_state.last_sync > 2.0:
+                cluster_state.is_master = True
+                cluster_state.is_playing = True
+                cluster_state.master_start_time = time.time() - cluster_state.video_pos
+                broadcaster.start_broadcasting(cluster_state.master_start_time)
+                log_info("Remote taking over as Cluster Leader", component="remote")
+            
             command_manager.send_command({"type": "remote_start"})
             cluster_state.is_playing = True
+            
         elif action == "pause":
+            if cluster_state.is_master:
+                cluster_state.is_playing = False
+                broadcaster.stop_broadcasting()
+                
             command_manager.send_command({"type": "remote_stop"})
             cluster_state.is_playing = False
+            
         elif action == "seek" and value is not None:
+            if cluster_state.is_master:
+                cluster_state.video_pos = value
+                cluster_state.master_start_time = time.time() - value
+                
             command_manager.send_command({"type": "remote_seek", "value": value})
             
         self.send_response(200)
@@ -198,6 +227,7 @@ class RemoteHandler(BaseHTTPRequestHandler):
                     color: var(--text-muted);
                 }}
                 .status-connected {{ background: rgba(0, 245, 212, 0.1); color: var(--primary); }}
+                .status-master {{ background: var(--secondary); color: #fff; }}
 
                 .main-controls {{
                     display: flex;
@@ -355,7 +385,8 @@ class RemoteHandler(BaseHTTPRequestHandler):
                         duration = data.duration || video.duration || 0;
                         
                         document.getElementById('connectionStatus').innerText = data.status;
-                        document.getElementById('connectionStatus').className = "status-badge " + (data.status === 'Connected' ? 'status-connected' : '');
+                        document.getElementById('connectionStatus').className = "status-badge " + 
+                            (data.is_master ? 'status-master' : (data.status === 'Connected' ? 'status-connected' : ''));
                         
                         document.getElementById('video_pos').innerText = systemTime.toFixed(2);
                         
@@ -419,6 +450,15 @@ def start_remote():
     """Start the remote controller services"""
     enable_system_logging(True)
     
+    # Master Clock Thread (only active when is_master is True)
+    def master_clock():
+        while True:
+            if cluster_state.is_master and cluster_state.is_playing:
+                cluster_state.video_pos = time.time() - cluster_state.master_start_time
+            time.sleep(0.05)
+    
+    threading.Thread(target=master_clock, daemon=True).start()
+    
     # Start web server
     web_thread = threading.Thread(
         target=lambda: ThreadingHTTPServer(("0.0.0.0", 8080), RemoteHandler).serve_forever(),
@@ -429,13 +469,23 @@ def start_remote():
 
     # Start Sync Listening (to mirror the cluster state in the UI)
     def on_sync(leader_time, received_at):
+        # If we hear a real leader, we stop being the master to avoid collisions
+        if cluster_state.is_master:
+            cluster_state.is_master = False
+            broadcaster.stop_broadcasting()
+            log_info("Hardware Leader detected. Remote stepping down as Master.", component="remote")
+
         cluster_state.leader_time = leader_time
         cluster_state.video_pos = leader_time
         cluster_state.last_sync = time.time()
+        cluster_state.status = "Connected"
         cluster_state.is_playing = True
         
     sync_receiver = SyncReceiver(sync_port=5005, sync_callback=on_sync)
     sync_receiver.start_listening()
+    
+    # Configure broadcaster
+    broadcaster.set_time_provider(lambda: cluster_state.video_pos)
     
     # Start Command Listening (to track Pi registrations)
     command_manager.start_listening()
