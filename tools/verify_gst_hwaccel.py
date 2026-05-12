@@ -169,19 +169,14 @@ def _build_explicit_hevc_pipeline(video_path: Path, report: dict):
         sink_elem = "autovideosink"
         sink_name = "autovideosink"
 
-    # Fully explicit pipeline - no dynamic-bin pad-linking uncertainty.
-    # qtdemux: unwrap MP4 container, video pad only gets linked (audio pad
-    #          returns NOT_LINKED which qtdemux handles gracefully).
-    # h265parse: reframe into byte-stream / alignment=au as required by
-    #            the stateless V4L2 kernel driver.
-    # videoconvert: accepts NV12 DMA-buf from v4l2slh265dec and converts to
-    #               a format the display sink can render directly.
+    # glimagesink accepts NV12 DMA-buf natively via EGL.
+    # videoconvert would break the DMA-buf caps chain (it only advertises
+    # system-memory formats), causing v4l2slh265dec to see "format UNKNOWN".
     pipeline = Gst.parse_launch(
         "filesrc name=filesrc"
         " ! qtdemux name=demux"
         " demux. ! h265parse"
         " ! v4l2slh265dec"
-        " ! videoconvert"
         f" ! {sink_elem} name=videosink"
     )
     if not pipeline:
