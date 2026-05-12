@@ -33,7 +33,7 @@ config = ConfigManager("leader_config.ini")
 # Use config value as initial default
 cluster_state.current_video = config.video_file
 
-command_manager = CommandManager(is_leader=True)
+command_manager = CommandManager()
 sync_broadcaster = SyncBroadcaster(leader_id="remote-leader")
 
 class RemoteHandler(BaseHTTPRequestHandler):
