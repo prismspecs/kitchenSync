@@ -256,8 +256,16 @@ class GstDriver(VideoDriver):
             sink_elem = "autovideosink"
             sink_name = "autovideosink"
 
+        # v4l2slh265dec is a stateless V4L2 decoder that requires exactly one
+        # access unit per buffer in Annex-B byte-stream format (alignment=au).
+        # Without the caps filter, parsebin may emit alignment=nal (individual
+        # NAL units) which the kernel driver silently rejects -> no valid frames.
         pipeline = Gst.parse_launch(
-            f"filesrc name=filesrc ! parsebin ! v4l2slh265dec ! {sink_elem} name=videosink"
+            "filesrc name=filesrc"
+            " ! parsebin"
+            " ! video/x-h265,stream-format=byte-stream,alignment=au"
+            " ! v4l2slh265dec"
+            f" ! {sink_elem} name=videosink"
         )
         if not pipeline:
             return None, None
