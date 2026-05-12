@@ -252,7 +252,7 @@ class StatusHandler(BaseHTTPRequestHandler):
                             if (!isUserSeeking) {{
                                 if (Math.abs(drift) > 0.1) {{
                                     video.currentTime = systemTime;
-                                }
+                                }}
                                 
                                 if (data.status === 'Broadcasting' || data.status === 'Synced') {{
                                     if (video.paused) video.play().catch(e => {{}});
@@ -265,7 +265,7 @@ class StatusHandler(BaseHTTPRequestHandler):
                             
                             timeDisplay.innerText = `${{formatTime(systemTime)}} / ${{formatTime(duration)}}`;
                             
-                        } catch (e) {{
+                        }} catch (e) {{
                             console.error("Failed to fetch state", e);
                         }}
                     }}
