@@ -13,6 +13,67 @@ from typing import Optional, Dict, Any
 from core.logger import log_info, log_warning, log_error
 
 
+CONFIG_ROLE_SECTIONS = {
+    "leader": {
+        "KITCHENSYNC": {"is_leader", "device_id", "debug", "enable_system_logging"},
+        "DEFAULT": {"video_file", "video_driver", "sync_port", "tick_interval"},
+    },
+    "collaborator": {
+        "KITCHENSYNC": {"debug", "enable_system_logging"},
+        "DEFAULT": {"device_id", "video_file", "video_driver", "midi_port", "sync_port"},
+    },
+}
+
+EDITABLE_CONFIG_FIELDS = {
+    "leader": [
+        {
+            "key": "video_file",
+            "section": "DEFAULT",
+            "type": "string",
+            "label": "Video file",
+        },
+        {
+            "key": "debug",
+            "section": "KITCHENSYNC",
+            "type": "bool",
+            "label": "Debug",
+        },
+        {
+            "key": "enable_system_logging",
+            "section": "KITCHENSYNC",
+            "type": "bool",
+            "label": "Verbose logging",
+        },
+    ],
+    "collaborator": [
+        {
+            "key": "video_file",
+            "section": "DEFAULT",
+            "type": "string",
+            "label": "Video file",
+        },
+        {
+            "key": "midi_port",
+            "section": "DEFAULT",
+            "type": "int",
+            "label": "MIDI port",
+        },
+        {
+            "key": "debug",
+            "section": "KITCHENSYNC",
+            "type": "bool",
+            "label": "Debug",
+        },
+        {
+            "key": "enable_system_logging",
+            "section": "KITCHENSYNC",
+            "type": "bool",
+            "label": "Verbose logging",
+        },
+    ],
+}
+
+
 class ConfigurationError(Exception):
     """Raised when configuration loading fails"""
 
@@ -262,6 +323,102 @@ class ConfigManager:
             local_config.write(f)
 
         print(f" Updated {target_file}")
+
+    def role_name(self) -> str:
+        """Return the runtime role associated with this config."""
+        return "leader" if self.is_leader else "collaborator"
+
+    def get_config_path(self) -> Optional[str]:
+        """Return the active writable config path."""
+        if self.config_file:
+            return self.config_file
+        return self.usb_config_path
+
+    def get_editable_fields(self, role: Optional[str] = None) -> list[Dict[str, Any]]:
+        """Return metadata for fields exposed in the remote controller."""
+        return list(EDITABLE_CONFIG_FIELDS[self._normalize_role(role)])
+
+    def get_editable_values(self, role: Optional[str] = None) -> Dict[str, Any]:
+        """Return editable config values using native Python types."""
+        values: Dict[str, Any] = {}
+        for field in self.get_editable_fields(role):
+            key = field["key"]
+            section = field["section"]
+            field_type = field["type"]
+            if field_type == "int":
+                values[key] = self.getint(key, 0, section=section)
+            elif field_type == "float":
+                values[key] = self.getfloat(key, 0.0, section=section)
+            elif field_type == "bool":
+                values[key] = self.getboolean(key, False, section=section)
+            else:
+                values[key] = self.get(key, "", section=section)
+        return values
+
+    def clean_and_save_config(
+        self,
+        target_file: str,
+        updates: Dict[str, Any],
+        role: Optional[str] = None,
+    ) -> None:
+        """Rewrite a config file to the supported surface for the given role."""
+        role_name = self._normalize_role(role)
+        existing = configparser.ConfigParser()
+        if os.path.exists(target_file):
+            existing.read(target_file)
+
+        cleaned = configparser.ConfigParser()
+        cleaned["KITCHENSYNC"] = {}
+        cleaned["DEFAULT"] = {}
+
+        for section_name, keys in CONFIG_ROLE_SECTIONS[role_name].items():
+            for key in sorted(keys):
+                value = self._resolve_config_value(existing, updates, section_name, key)
+                if value is None:
+                    continue
+                cleaned[section_name][key] = self._stringify_config_value(value)
+
+        with open(target_file, "w") as handle:
+            cleaned.write(handle)
+
+        if self.get_config_path() == target_file:
+            self.config = cleaned
+
+    def _normalize_role(self, role: Optional[str]) -> str:
+        resolved = role or self.role_name()
+        if resolved not in CONFIG_ROLE_SECTIONS:
+            raise ConfigurationError(f"Unsupported config role: {resolved}")
+        return resolved
+
+    def _resolve_config_value(
+        self,
+        parser: configparser.ConfigParser,
+        updates: Dict[str, Any],
+        section: str,
+        key: str,
+    ) -> Any:
+        if key in updates:
+            return updates[key]
+
+        if section != "DEFAULT" and section in parser and key in parser[section]:
+            return parser[section][key]
+
+        if key in parser.defaults():
+            return parser.defaults()[key]
+
+        if section != "DEFAULT" and section in self.config and key in self.config[section]:
+            return self.config[section][key]
+
+        if key in self.config.defaults():
+            return self.config.defaults()[key]
+
+        return None
+
+    @staticmethod
+    def _stringify_config_value(value: Any) -> str:
+        if isinstance(value, bool):
+            return str(value).lower()
+        return str(value)
 
     @property
     def content_dir(self) -> str:

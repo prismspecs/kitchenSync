@@ -396,6 +396,7 @@ class CommandManager:
                     "ip": addr[0],
                     "last_seen": time.time(),
                     "status": msg.get("status", "unknown"),
+                    "video_file": msg.get("video_file", ""),
                 }
                 # print(f"Registered Pi: {device_id} at {addr[0]}")
 
@@ -406,6 +407,10 @@ class CommandManager:
                     "ip": addr[0],
                     "last_seen": time.time(),
                     "status": msg.get("status", "ready"),
+                    "video_file": msg.get(
+                        "video_file",
+                        self.collaborators.get(device_id, {}).get("video_file", ""),
+                    ),
                 }
 
     def get_collaborators(self) -> Dict[str, Dict]:
@@ -489,30 +494,24 @@ class CommandListener:
             "video_file": video_file,
         }
 
+        self.send_message(registration)
+
+    def send_message(self, message: Dict[str, Any], host: Optional[str] = None) -> None:
+        """Send a control message directly or via broadcast."""
         try:
-            broadcast_addr = _get_broadcast_address()
+            destination_host = host or _get_broadcast_address()
             sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+            if host is None:
+                sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
             sock.sendto(
-                json.dumps(registration).encode(),
-                (broadcast_addr, self.control_port),
+                json.dumps(message).encode(),
+                (destination_host, self.control_port),
             )
             sock.close()
-            # print(f"Registered with leader as '{device_id}'")
-        except Exception as e:
-            pass  # Ignore registration errors
+        except Exception:
+            pass
 
     def send_heartbeat(self, device_id: str, status: str = "ready") -> None:
         """Send heartbeat to leader"""
         heartbeat = {"type": "heartbeat", "device_id": device_id, "status": status}
-
-        try:
-            broadcast_addr = _get_broadcast_address()
-            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-            sock.sendto(
-                json.dumps(heartbeat).encode(), (broadcast_addr, self.control_port)
-            )
-            sock.close()
-        except Exception as e:
-            pass  # Ignore heartbeat errors
+        self.send_message(heartbeat)

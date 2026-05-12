@@ -29,7 +29,9 @@ class CollaboratorPi:
     def __init__(self, config_file=None):
         # Load configuration
         self.config = ConfigManager(config_file)
-        enable_system_logging(self.config.debug_mode)
+        enable_system_logging(
+            self.config.enable_system_logging or self.config.debug_mode
+        )
 
         log_info(f"Starting KitchenSync Collaborator '{self.config.device_id}'", component="collaborator")
 
@@ -155,6 +157,75 @@ class CollaboratorPi:
             self._handle_stop_command()
         elif cmd_type == "schedule_update":
             self._handle_schedule_update(msg, addr)
+        elif cmd_type == "config_request":
+            self._handle_config_request(msg, addr)
+        elif cmd_type == "config_update":
+            self._handle_config_update(msg, addr)
+
+    def _message_targets_this_device(self, msg: dict) -> bool:
+        """Return True if a control message is addressed to this device."""
+        target_device_id = msg.get("target_device_id")
+        return not target_device_id or target_device_id == self.config.device_id
+
+    def _handle_config_request(self, msg: dict, addr: tuple) -> None:
+        """Reply with the editable collaborator config state."""
+        if not self._message_targets_this_device(msg):
+            return
+
+        response = {
+            "type": "config_state",
+            "device_id": self.config.device_id,
+            "role": "collaborator",
+            "config_path": self.config.get_config_path() or "collaborator_config.ini",
+            "fields": self.config.get_editable_fields("collaborator"),
+            "values": self.config.get_editable_values("collaborator"),
+        }
+        self.command_listener.send_message(response, host=addr[0])
+
+    def _handle_config_update(self, msg: dict, addr: tuple) -> None:
+        """Persist collaborator config updates and report the result."""
+        if not self._message_targets_this_device(msg):
+            return
+
+        editable_keys = {
+            field["key"] for field in self.config.get_editable_fields("collaborator")
+        }
+        updates = {
+            key: value
+            for key, value in msg.get("updates", {}).items()
+            if key in editable_keys
+        }
+
+        response = {
+            "type": "config_update_result",
+            "device_id": self.config.device_id,
+            "role": "collaborator",
+            "config_path": self.config.get_config_path() or "collaborator_config.ini",
+        }
+
+        try:
+            config_path = self.config.get_config_path() or "collaborator_config.ini"
+            self.config.clean_and_save_config(config_path, updates, role="collaborator")
+            enable_system_logging(
+                self.config.enable_system_logging or self.config.debug_mode
+            )
+            self.video_manager = VideoFileManager(
+                self.config.video_file,
+                self.config.usb_mount_point,
+            )
+            response.update(
+                {
+                    "status": "ok",
+                    "requires_restart": any(
+                        key in updates for key in {"video_file", "midi_port"}
+                    ),
+                    "values": self.config.get_editable_values("collaborator"),
+                }
+            )
+        except Exception as exc:
+            response.update({"status": "error", "error": str(exc)})
+
+        self.command_listener.send_message(response, host=addr[0])
 
     def _handle_start_command(self, msg: dict) -> None:
         """Initialize playback session from leader start command"""
@@ -196,6 +267,9 @@ class CollaboratorPi:
         if leader_debug_mode and not self.config.debug_mode:
             self.config.config["KITCHENSYNC"]["debug"] = "true"
             self.debug_sync_logging = True
+            enable_system_logging(
+                self.config.enable_system_logging or self.config.debug_mode
+            )
 
         # Find and load video
         self.video_path = incoming_video

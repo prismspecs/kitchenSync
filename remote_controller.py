@@ -6,17 +6,17 @@ import sys
 import threading
 import time
 from dataclasses import dataclass
-from http.server import HTTPServer, BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import urlparse, parse_qs
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from typing import Any, Dict
+from urllib.parse import parse_qs, urlparse
 
-# Add 'src' to path so internal absolute imports like 'from core.logger' work
-sys.path.append(os.path.join(os.path.dirname(__file__), 'src'))
+sys.path.append(os.path.join(os.path.dirname(__file__), "src"))
 
-# KitchenSync Imports
-from src.networking.communication import CommandManager, SyncBroadcaster
-from src.core.logger import log_info, enable_system_logging
 from src.config.manager import ConfigManager
+from src.core.logger import enable_system_logging, log_info
+from src.networking.communication import CommandManager, SyncBroadcaster
+
 
 @dataclass
 class ClusterState:
@@ -27,283 +27,595 @@ class ClusterState:
     is_master: bool = False
     current_video: str = "test_video.mp4"
 
-# Global state
+
+LOCAL_LEADER_ID = "remote-leader"
+
 cluster_state = ClusterState()
 config = ConfigManager("leader_config.ini")
-
-# Use config value as initial default, but normalize to just the filename if it's in a path
-initial_video = config.video_file
-if initial_video:
-    cluster_state.current_video = os.path.basename(initial_video)
-
 command_manager = CommandManager()
 sync_broadcaster = SyncBroadcaster()
-sync_broadcaster.leader_id = "remote-leader"
+sync_broadcaster.leader_id = LOCAL_LEADER_ID
+
+config_snapshots: Dict[str, Dict[str, Any]] = {}
+config_messages: Dict[str, Dict[str, Any]] = {}
+
+
+def list_available_videos() -> list[str]:
+    video_dir = Path("videos")
+    if not video_dir.exists():
+        return []
+    return sorted(
+        file.name
+        for file in video_dir.glob("*")
+        if file.suffix.lower() in [".mp4", ".mov", ".mkv", ".hevc"]
+    )
+
+
+def update_runtime_from_config() -> None:
+    enable_system_logging(config.enable_system_logging or config.debug_mode)
+    if config.video_file:
+        cluster_state.current_video = os.path.basename(config.video_file)
+
+
+def build_config_snapshot(device_id: str, role: str, manager: ConfigManager) -> Dict[str, Any]:
+    return {
+        "device_id": device_id,
+        "role": role,
+        "config_path": manager.get_config_path() or f"{role}_config.ini",
+        "fields": manager.get_editable_fields(role),
+        "values": manager.get_editable_values(role),
+        "updated_at": time.time(),
+    }
+
+
+def refresh_local_snapshot() -> Dict[str, Any]:
+    snapshot = build_config_snapshot(LOCAL_LEADER_ID, "leader", config)
+    config_snapshots[LOCAL_LEADER_ID] = snapshot
+    return snapshot
+
+
+def store_config_message(payload: Dict[str, Any]) -> None:
+    device_id = payload.get("device_id")
+    if not device_id:
+        return
+
+    existing_snapshot = config_snapshots.get(device_id, {})
+    config_snapshots[device_id] = {**existing_snapshot, **payload, "updated_at": time.time()}
+    config_messages[device_id] = {
+        "status": payload.get("status", "ok"),
+        "error": payload.get("error"),
+        "requires_restart": payload.get("requires_restart", False),
+        "updated_at": time.time(),
+    }
+
+
+def build_ui_state() -> Dict[str, Any]:
+    refresh_local_snapshot()
+    collaborators = command_manager.get_collaborators()
+
+    if not cluster_state.is_playing:
+        current_status = "Stopped"
+    elif not cluster_state.is_master:
+        current_status = "Disconnected"
+    else:
+        current_status = "Leading"
+
+    devices = [
+        {
+            "device_id": LOCAL_LEADER_ID,
+            "label": "Simulated leader",
+            "role": "leader",
+            "ip": "localhost",
+            "status": "leading" if cluster_state.is_master else "ready",
+            "online": True,
+            "config": config_snapshots.get(LOCAL_LEADER_ID),
+            "message": config_messages.get(LOCAL_LEADER_ID),
+        }
+    ]
+
+    for device_id, info in collaborators.items():
+        devices.append(
+            {
+                "device_id": device_id,
+                "label": device_id,
+                "role": "collaborator",
+                "ip": info.get("ip", "unknown"),
+                "status": info.get("status", "unknown"),
+                "online": info.get("online", False),
+                "video_file": info.get("video_file", ""),
+                "config": config_snapshots.get(device_id),
+                "message": config_messages.get(device_id),
+            }
+        )
+
+    return {
+        "video_pos": cluster_state.video_pos,
+        "duration": cluster_state.duration,
+        "status": current_status,
+        "is_playing": cluster_state.is_playing,
+        "is_master": cluster_state.is_master,
+        "current_video": cluster_state.current_video,
+        "available_videos": list_available_videos(),
+        "devices": devices,
+    }
+
 
 class RemoteHandler(BaseHTTPRequestHandler):
+    def _send_json(self, payload: Dict[str, Any], status: int = 200) -> None:
+        self.send_response(status)
+        self.send_header("Content-type", "application/json")
+        self.end_headers()
+        self.wfile.write(json.dumps(payload).encode())
+
+    def _read_json_body(self) -> Dict[str, Any]:
+        length = int(self.headers.get("Content-Length", "0"))
+        if length <= 0:
+            return {}
+        try:
+            return json.loads(self.rfile.read(length).decode())
+        except json.JSONDecodeError:
+            return {}
+
     def do_GET(self):
         if self.path == "/":
             self.send_response(200)
             self.send_header("Content-type", "text/html")
             self.end_headers()
-            
-            # Find available videos
-            video_dir = Path("videos")
-            available_videos = []
-            if video_dir.exists():
-                available_videos = [f.name for f in video_dir.glob("*") if f.suffix.lower() in [".mp4", ".mov", ".mkv", ".hevc"]]
-            
-            video_options = "".join([f'<option value="{v}" {"selected" if v == cluster_state.current_video else ""}>{v}</option>' for v in available_videos])
 
-            html = f"""
+            html = """
             <!DOCTYPE html>
             <html>
             <head>
                 <title>KitchenSync Remote</title>
                 <meta name="viewport" content="width=device-width, initial-scale=1">
                 <style>
-                    body {{ font-family: sans-serif; background: #1a1a1a; color: white; display: flex; flex-direction: column; align-items: center; padding: 20px; }}
-                    .card {{ background: #2a2a2a; padding: 20px; border-radius: 8px; width: 100%; max-width: 600px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); margin-bottom: 20px; }}
-                    .controls {{ display: flex; gap: 10px; margin-top: 20px; }}
-                    button {{ padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 16px; }}
-                    .play {{ background: #2ecc71; color: white; }}
-                    .stop {{ background: #e74c3c; color: white; }}
-                    .status {{ margin-top: 10px; font-family: monospace; color: #aaa; }}
-                    .collab-list {{ margin-top: 20px; border-top: 1px solid #444; padding-top: 10px; }}
-                    .collab-item {{ display: flex; justify-content: space-between; padding: 5px 0; font-family: monospace; }}
-                    .online {{ color: #2ecc71; }}
-                    .video-select {{ background: #333; color: white; padding: 10px; border: 1px solid #444; border-radius: 4px; width: 100%; margin-top: 10px; }}
-                    #preview {{ width: 100%; border-radius: 4px; background: black; margin-top: 15px; }}
+                    body {
+                        font-family: sans-serif;
+                        font-size: 14px;
+                        margin: 16px;
+                        color: #111;
+                        background: #fff;
+                    }
+                    h1, h2 {
+                        margin: 0 0 12px 0;
+                    }
+                    .section {
+                        border: 1px solid #999;
+                        padding: 12px;
+                        margin-bottom: 16px;
+                    }
+                    .row {
+                        margin-bottom: 8px;
+                    }
+                    label {
+                        display: inline-block;
+                        min-width: 140px;
+                        vertical-align: top;
+                    }
+                    input[type=\"text\"], input[type=\"number\"], select {
+                        min-width: 280px;
+                        padding: 4px;
+                    }
+                    button {
+                        padding: 4px 10px;
+                        margin-right: 8px;
+                    }
+                    table {
+                        border-collapse: collapse;
+                        width: 100%;
+                    }
+                    th, td {
+                        border: 1px solid #999;
+                        padding: 6px;
+                        text-align: left;
+                        vertical-align: top;
+                    }
+                    .status {
+                        font-family: monospace;
+                        margin-top: 8px;
+                    }
+                    .message {
+                        color: #444;
+                        font-size: 12px;
+                        margin-top: 8px;
+                    }
+                    .error {
+                        color: #900;
+                    }
+                    .ok {
+                        color: #060;
+                    }
+                    video {
+                        width: 100%;
+                        max-width: 640px;
+                        background: #000;
+                        display: block;
+                        margin-top: 12px;
+                    }
                 </style>
             </head>
             <body>
-                <div class="card">
+                <h1>KitchenSync Remote</h1>
+
+                <div class="section">
                     <h2>Cluster Control</h2>
-                    
-                    <label>Video File:</label>
-                    <select class="video-select" id="videoSelector" onchange="changeVideo(this.value)">
-                        {video_options}
-                    </select>
-
+                    <div class="row">
+                        <label for="videoSelector">Video file</label>
+                        <select id="videoSelector"></select>
+                    </div>
+                    <div class="row">
+                        <button onclick="playCluster()">Play cluster</button>
+                        <button onclick="stopCluster()">Stop all</button>
+                    </div>
+                    <div class="status" id="clusterStatus">Loading...</div>
                     <video id="preview" controls muted playsinline src="/video_file"></video>
+                </div>
 
-                    <div class="controls">
-                        <button class="play" onclick="playCluster()">PLAY CLUSTER</button>
-                        <button class="stop" onclick="stopCluster()">STOP ALL</button>
-                    </div>
+                <div class="section">
+                    <h2>Device Config</h2>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Device</th>
+                                <th>Role</th>
+                                <th>Network</th>
+                                <th>Status</th>
+                                <th>Config</th>
+                            </tr>
+                        </thead>
+                        <tbody id="deviceRows"></tbody>
+                    </table>
+                </div>
 
-                    <div class="status" id="state">Status: Initializing...</div>
-                    </div>
+                <datalist id="videoSuggestions"></datalist>
 
-                    <div class="card">
-                    <h3>Collaborators</h3>
-                    <div id="collabs" class="collab-list"></div>
-                    </div>
+                <script>
+                    const requestedConfigs = new Set();
 
-                    <script>
-                    function playCluster() {{
-                        fetch('/play', {{method: 'POST'}})
-                        .then(() => {{
-                            document.getElementById('preview').play();
-                        }});
-                    }}
+                    async function postJson(path, payload) {
+                        const response = await fetch(path, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(payload || {}),
+                        });
+                        if (response.status === 204) {
+                            return null;
+                        }
+                        return response.json();
+                    }
 
-                    function stopCluster() {{
-                        fetch('/stop', {{method: 'POST'}})
-                        .then(() => {{
-                            const vid = document.getElementById('preview');
-                            vid.pause();
-                            vid.currentTime = 0;
-                        }});
-                    }}
+                    async function playCluster() {
+                        await fetch('/api/play', { method: 'POST' });
+                        document.getElementById('preview').play().catch(() => {});
+                    }
 
-                    function changeVideo(filename) {{
-                        fetch('/set_video?file=' + encodeURIComponent(filename), {{method: 'POST'}})
-                        .then(() => {{
-                            const vid = document.getElementById('preview');
-                            vid.src = '/video_file?t=' + Date.now();
-                            vid.load();
-                        }});
-                    }}
+                    async function stopCluster() {
+                        await fetch('/api/stop', { method: 'POST' });
+                        const preview = document.getElementById('preview');
+                        preview.pause();
+                        preview.currentTime = 0;
+                    }
 
-                    function post(path) {{
-                        fetch(path, {{method: 'POST'}});
-                    }}
+                    async function changeVideo(filename) {
+                        await fetch('/api/video?file=' + encodeURIComponent(filename), { method: 'POST' });
+                        const preview = document.getElementById('preview');
+                        preview.src = '/video_file?t=' + Date.now();
+                        preview.load();
+                    }
 
+                    async function requestConfig(deviceId) {
+                        requestedConfigs.add(deviceId);
+                        await postJson('/api/config/request', { device_id: deviceId });
+                    }
 
-                    function update() {{
-                        fetch('/state').then(r => r.json()).then(data => {{
-                            document.getElementById('state').innerHTML = 
-                                `Status: ${{data.status}}<br>Time: ${{data.video_pos.toFixed(2)}}s / ${{data.duration.toFixed(2)}}s`;
-                            
-                            const list = document.getElementById('collabs');
-                            list.innerHTML = '';
-                            Object.entries(data.collaborators).forEach(([id, info]) => {{
-                                list.innerHTML += `<div class="collab-item">
-                                    <span>${{id}} (${{info.ip}})</span>
-                                    <span class="online">${{info.status}}</span>
-                                </div>`;
-                            }});
-                        }});
-                    }}
-                    setInterval(update, 1000);
+                    function renderField(deviceId, field, value, videoOptions) {
+                        const fieldId = `${deviceId}-${field.key}`;
+                        if (field.type === 'bool') {
+                            return `
+                                <div class="row">
+                                    <label for="${fieldId}">${field.label}</label>
+                                    <input id="${fieldId}" data-key="${field.key}" type="checkbox" ${value ? 'checked' : ''}>
+                                </div>
+                            `;
+                        }
+
+                        const type = field.type === 'int' || field.type === 'float' ? 'number' : 'text';
+                        const list = field.key === 'video_file' && videoOptions.length ? 'list="videoSuggestions"' : '';
+                        return `
+                            <div class="row">
+                                <label for="${fieldId}">${field.label}</label>
+                                <input id="${fieldId}" data-key="${field.key}" type="${type}" value="${value ?? ''}" ${list}>
+                            </div>
+                        `;
+                    }
+
+                    function renderMessage(message) {
+                        if (!message) {
+                            return '';
+                        }
+                        if (message.error) {
+                            return `<div class="message error">${message.error}</div>`;
+                        }
+                        if (message.requires_restart) {
+                            return '<div class="message ok">Saved. Restart may be required for video or MIDI changes.</div>';
+                        }
+                        return '<div class="message ok">Saved.</div>';
+                    }
+
+                    function renderConfigCell(device, videoOptions) {
+                        const config = device.config;
+                        if (!config) {
+                            if (device.role === 'collaborator' && !requestedConfigs.has(device.device_id)) {
+                                requestConfig(device.device_id);
+                            }
+                            return `
+                                <button onclick="requestConfig('${device.device_id}')">Load config</button>
+                                ${renderMessage(device.message)}
+                            `;
+                        }
+
+                        const fields = config.fields.map((field) => renderField(device.device_id, field, config.values?.[field.key], videoOptions)).join('');
+                        return `
+                            <form onsubmit="saveConfig(event, '${device.device_id}', '${config.role}')">
+                                ${fields}
+                                <div class="row">
+                                    <button type="submit">Save</button>
+                                    ${device.role === 'collaborator' ? `<button type="button" onclick="requestConfig('${device.device_id}')">Refresh</button>` : ''}
+                                </div>
+                                ${renderMessage(device.message)}
+                            </form>
+                        `;
+                    }
+
+                    function renderState(state) {
+                        const selector = document.getElementById('videoSelector');
+                        selector.innerHTML = (state.available_videos || []).map((video) => `
+                            <option value="${video}" ${video === state.current_video ? 'selected' : ''}>${video}</option>
+                        `).join('');
+                        selector.onchange = () => changeVideo(selector.value);
+
+                        document.getElementById('videoSuggestions').innerHTML = (state.available_videos || []).map((video) => `
+                            <option value="${video}"></option>
+                        `).join('');
+
+                        document.getElementById('clusterStatus').textContent =
+                            `Status: ${state.status} | Time: ${state.video_pos.toFixed(2)}s | Duration: ${state.duration.toFixed(2)}s | Video: ${state.current_video}`;
+
+                        const rows = document.getElementById('deviceRows');
+                        rows.innerHTML = state.devices.map((device) => `
+                            <tr>
+                                <td>${device.label}</td>
+                                <td>${device.role}</td>
+                                <td>${device.ip}</td>
+                                <td>${device.status}</td>
+                                <td>${renderConfigCell(device, state.available_videos || [])}</td>
+                            </tr>
+                        `).join('');
+                    }
+
+                    async function saveConfig(event, deviceId, role) {
+                        event.preventDefault();
+                        const form = event.currentTarget;
+                        const updates = {};
+                        form.querySelectorAll('[data-key]').forEach((input) => {
+                            if (input.type === 'checkbox') {
+                                updates[input.dataset.key] = input.checked;
+                            } else if (input.type === 'number') {
+                                updates[input.dataset.key] = input.value === '' ? '' : Number(input.value);
+                            } else {
+                                updates[input.dataset.key] = input.value;
+                            }
+                        });
+                        await postJson('/api/config/save', { device_id: deviceId, role, updates });
+                        await refresh();
+                    }
+
+                    async function refresh() {
+                        const response = await fetch('/api/state');
+                        const state = await response.json();
+                        renderState(state);
+                    }
+
+                    refresh();
+                    setInterval(refresh, 1500);
                 </script>
             </body>
             </html>
             """
             self.wfile.write(html.encode())
-            
-        elif self.path in ["/state", "/json"]:
-            self.send_response(200)
-            self.send_header("Content-type", "application/json")
-            self.end_headers()
-            
-            if not cluster_state.is_playing:
-                current_status = "Stopped"
-            elif not cluster_state.is_master:
-                current_status = "Disconnected"
-            elif cluster_state.is_master:
-                current_status = "Leading"
+            return
 
-            state_data = {
-                "video_pos": cluster_state.video_pos,
-                "duration": cluster_state.duration,
-                "status": current_status,
-                "collaborators": command_manager.get_collaborators(),
-                "is_playing": cluster_state.is_playing,
-                "is_master": cluster_state.is_master,
-                "current_video": cluster_state.current_video
-            }
-            self.wfile.write(json.dumps(state_data).encode())
-            
-        elif self.path.startswith("/video_file"):
-            # Serve the currently selected video file
+        if self.path in ["/state", "/json", "/api/state"]:
+            self._send_json(build_ui_state())
+            return
+
+        if self.path.startswith("/video_file"):
             video_path = Path("videos") / cluster_state.current_video
             if not video_path.exists():
                 self.send_error(404, "Video file not found")
                 return
-            
+
             self.send_response(200)
             self.send_header("Content-type", "video/mp4")
             self.send_header("Content-Length", str(video_path.stat().st_size))
             self.send_header("Accept-Ranges", "bytes")
             self.end_headers()
             try:
-                with open(video_path, "rb") as f:
-                    shutil.copyfileobj(f, self.wfile)
+                with open(video_path, "rb") as file_handle:
+                    shutil.copyfileobj(file_handle, self.wfile)
             except (ConnectionResetError, BrokenPipeError):
                 pass
-            except Exception as e:
-                log_info(f"Stream error: {e}", component="remote")
-        else:
-            self.send_error(404)
+            except Exception as exc:
+                log_info(f"Stream error: {exc}", component="remote")
+            return
+
+        self.send_error(404)
 
     def do_POST(self):
         parsed_path = urlparse(self.path)
         action = parsed_path.path.strip("/")
         query = parse_qs(parsed_path.query)
-        
-        if action == "play":
+        payload = self._read_json_body()
+
+        if action in {"play", "api/play"}:
             cluster_state.is_playing = True
             cluster_state.is_master = True
             cluster_state.master_start_time = time.time()
-            
-            # Send immediate start command with the SELECTED file
+
             start_cmd = {
                 "type": "start",
                 "video_file": cluster_state.current_video,
                 "start_time": cluster_state.master_start_time,
                 "schedule": [],
-                "debug_mode": True
+                "debug_mode": config.debug_mode,
             }
             command_manager.send_command(start_cmd)
             log_info(f"Cluster PLAY: {cluster_state.current_video}", component="remote")
-            
-        elif action == "stop":
+            self.send_response(204)
+            self.end_headers()
+            return
+
+        if action in {"stop", "api/stop"}:
             cluster_state.is_playing = False
             cluster_state.is_master = False
             command_manager.send_command({"type": "stop"})
             log_info("Cluster STOP", component="remote")
+            self.send_response(204)
+            self.end_headers()
+            return
 
-        elif action == "set_video":
+        if action in {"set_video", "api/video"}:
             new_file = query.get("file", [None])[0]
             if new_file:
                 cluster_state.current_video = new_file
                 log_info(f"Video changed to: {new_file}", component="remote")
-                # If currently playing, we should probably stop the old one
                 if cluster_state.is_playing:
                     command_manager.send_command({"type": "stop"})
                     cluster_state.is_playing = False
-            
-        self.send_response(204)
-        self.end_headers()
+            self.send_response(204)
+            self.end_headers()
+            return
+
+        if action == "api/config/request":
+            device_id = payload.get("device_id")
+            if not device_id:
+                self._send_json({"status": "error", "error": "device_id is required"}, status=400)
+                return
+
+            if device_id == LOCAL_LEADER_ID:
+                self._send_json({"status": "ok", "config": refresh_local_snapshot()})
+                return
+
+            command_manager.send_command(
+                {"type": "config_request", "target_device_id": device_id},
+                target_pi=device_id,
+            )
+            self._send_json({"status": "requested"}, status=202)
+            return
+
+        if action == "api/config/save":
+            device_id = payload.get("device_id")
+            updates = payload.get("updates", {})
+            if not device_id:
+                self._send_json({"status": "error", "error": "device_id is required"}, status=400)
+                return
+
+            if device_id == LOCAL_LEADER_ID:
+                editable_keys = {
+                    field["key"] for field in config.get_editable_fields("leader")
+                }
+                filtered_updates = {
+                    key: value for key, value in updates.items() if key in editable_keys
+                }
+                config.clean_and_save_config("leader_config.ini", filtered_updates, role="leader")
+                update_runtime_from_config()
+                refresh_local_snapshot()
+                config_messages[LOCAL_LEADER_ID] = {
+                    "status": "ok",
+                    "requires_restart": False,
+                    "updated_at": time.time(),
+                }
+                self._send_json({"status": "ok"})
+                return
+
+            command_manager.send_command(
+                {
+                    "type": "config_update",
+                    "target_device_id": device_id,
+                    "updates": updates,
+                },
+                target_pi=device_id,
+            )
+            self._send_json({"status": "requested"}, status=202)
+            return
+
+        self.send_error(404)
+
 
 class RobustRemoteServer(ThreadingHTTPServer):
     def handle_error(self, request, client_address):
-        import sys
-        exctype, value = sys.exc_info()[:2]
+        exctype, _value = sys.exc_info()[:2]
         if exctype in (ConnectionResetError, BrokenPipeError):
             return
         super().handle_error(request, client_address)
 
+
 def start_remote():
-    """Start the remote controller services"""
-    enable_system_logging(True)
-    
-    # Initialize the sync socket for the master clock
+    """Start the remote controller services."""
+    update_runtime_from_config()
+
+    command_manager.register_handler("config_state", lambda msg, addr: store_config_message(msg))
+    command_manager.register_handler(
+        "config_update_result", lambda msg, addr: store_config_message(msg)
+    )
+
     sync_broadcaster.setup_socket()
-    
-    # Master Clock Thread (only active when is_master is True)
+
     def master_clock():
-        last_broadcast = 0
+        last_broadcast = 0.0
         while True:
             if cluster_state.is_master and cluster_state.is_playing:
                 cluster_state.video_pos = time.time() - cluster_state.master_start_time
-                
-                # Periodically re-send start command
+
                 if time.time() - last_broadcast > 2.0:
                     start_cmd = {
                         "type": "start",
                         "video_file": cluster_state.current_video,
                         "start_time": cluster_state.master_start_time,
                         "schedule": [],
-                        "debug_mode": True
+                        "debug_mode": config.debug_mode,
                     }
                     command_manager.send_command(start_cmd)
                     last_broadcast = time.time()
-                
-                # The browser/master clock logic handles the "sync" by virtue 
-                # of the collaborators following the master_start_time and current time.
-                # However, we should still broadcast the sync packets for the legacy 
-                # SyncReceiver logic in collaborator.py.
-                
-                # We need to manually send the sync packet because we aren't using 
-                # sync_broadcaster.start_broadcasting() (which expects a media provider).
-                sync_packet = json.dumps({
-                    "type": "sync",
-                    "time": cluster_state.video_pos,
-                    "leader_id": sync_broadcaster.leader_id,
-                    "source": "wall"
-                })
-                sync_broadcaster.sync_sock.sendto(
-                    sync_packet.encode(), (sync_broadcaster.broadcast_ip, sync_broadcaster.sync_port)
+
+                sync_packet = json.dumps(
+                    {
+                        "type": "sync",
+                        "time": cluster_state.video_pos,
+                        "leader_id": sync_broadcaster.leader_id,
+                        "source": "wall",
+                    }
                 )
-                    
+                sync_broadcaster.sync_sock.sendto(
+                    sync_packet.encode(),
+                    (sync_broadcaster.broadcast_ip, sync_broadcaster.sync_port),
+                )
+
             time.sleep(0.05)
-    
+
     threading.Thread(target=master_clock, daemon=True).start()
-    
-    # Start networking
+
     command_manager.start_listening()
-    
-    # Start web server
+
     web_thread = threading.Thread(
         target=lambda: RobustRemoteServer(("0.0.0.0", 8080), RemoteHandler).serve_forever(),
-        daemon=True
+        daemon=True,
     )
     web_thread.start()
+
     log_info("Remote Controller Web UI available at http://localhost:8080", component="remote")
     log_info(f"Default video from config: {cluster_state.current_video}", component="remote")
+
 
 if __name__ == "__main__":
     try:
