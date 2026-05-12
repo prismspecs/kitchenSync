@@ -1,0 +1,348 @@
+#!/usr/bin/env python3
+"""
+KitchenSync Collaborator - Main entry point for the Collaborator role.
+Receives time sync from the Leader and adjusts local playback.
+"""
+
+import sys
+import time
+import argparse
+import signal
+import statistics
+import threading
+from pathlib import Path
+
+# Add src to path
+sys.path.insert(0, str(Path(__file__).parent / "src"))
+
+from config.manager import ConfigManager
+from video import get_video_driver
+from video.file_manager import VideoFileManager
+from networking.communication import CommandListener, SyncReceiver, CommandManager
+from core.system_state import SystemState
+from core.logger import log_info, log_error, log_warning, enable_system_logging
+from protocols.midi_handler import MidiManager, MidiScheduler
+
+
+class CollaboratorPi:
+    def __init__(self, config_file=None):
+        # Load configuration
+        self.config = ConfigManager(config_file)
+        enable_system_logging(self.config.debug_mode)
+
+        log_info(f"Starting KitchenSync Collaborator '{self.config.device_id}'", component="collaborator")
+
+        # Core Components
+        self.system_state = SystemState()
+        self.video_manager = VideoFileManager(self.config.video_file, self.config.usb_mount_point)
+
+        # Video Driver
+        driver_name = self.config.video_driver
+        self.video_player = get_video_driver(driver_name, debug_mode=self.config.debug_mode)
+
+        if not self.video_player:
+            log_error("Failed to initialize video driver", component="collaborator")
+            sys.exit(1)
+
+        # Initialize Protocols (MIDI/OSC)
+        self.midi_manager = None
+        self.midi_scheduler = None
+        self.osc_handler = None
+
+        if self.config.enable_midi:
+            midi_port = self.config.getint("midi_port", 0)
+            self.midi_manager = MidiManager(midi_port)
+            self.midi_scheduler = MidiScheduler(self.midi_manager)
+            log_info("MIDI: Initialized", component="collaborator")
+
+        if self.config.enable_osc:
+            from protocols.osc_handler import OscHandler
+            self.osc_handler = OscHandler()
+            log_info("OSC: Initialized", component="collaborator")
+
+        # Initialize networking
+        self.command_listener = CommandListener()
+        self.sync_receiver = SyncReceiver(
+            sync_port=self.config.getint("sync_port", 5005),
+            sync_callback=self._handle_sync,
+        )
+        self.command_manager = CommandManager()
+
+        # Register callbacks
+        self.command_listener.register_callback(self._handle_command)
+
+        # Sync state
+        self.last_sync_at = 0
+        self.video_start_time = None
+        self.debug_sync_logging = self.config.debug_mode
+        self.critical_window_logging = False
+        self.in_critical_window = False
+        self.debug_deviation_mode = False
+        self.deviation_samples = []
+        self.max_samples = 10
+        self.video_path = None
+
+        # Auto-registration
+        self._register_with_leader()
+
+    def _register_with_leader(self):
+        """Send registration packet to leader"""
+        registration = {
+            "type": "register",
+            "id": self.config.device_id,
+            "role": "collaborator",
+        }
+        self.command_manager.send_command(registration)
+
+    def _handle_sync(self, leader_time: float, received_at: float) -> None:
+        """Handle incoming sync packets from leader"""
+        self.last_sync_at = received_at
+
+        if not self.system_state.is_running:
+            if self.debug_sync_logging:
+                log_info(f"Received sync while idle: {leader_time:.3f}s", component="sync")
+            return
+
+        # Update system time and maintain sync
+        self.system_state.current_time = leader_time
+
+        # Process MIDI cues (safe no-op if no schedule)
+        if self.midi_scheduler:
+            self.midi_scheduler.process_cues(leader_time)
+
+        # Check for critical sync window (only if enabled via --debug_loop)
+        if self.critical_window_logging:
+            self._update_critical_window_status(leader_time)
+
+        # Maintain video sync
+        self._maintain_video_sync(leader_time)
+
+    def _maintain_video_sync(self, leader_time: float) -> None:
+        """Calculate drift and adjust playback speed"""
+        if not self.video_player.is_playing:
+            return
+
+        video_pos = self.video_player.get_position()
+        if video_pos is None:
+            return
+
+        deviation = video_pos - leader_time
+        
+        if self.debug_deviation_mode:
+            print(f"DEVIATION: {deviation:+.4f}s (V:{video_pos:.3f} L:{leader_time:.3f})")
+
+        # Sync logic (P-controller)
+        self.deviation_samples.append(deviation)
+        if len(self.deviation_samples) > self.max_samples:
+            self.deviation_samples.pop(0)
+
+        if len(self.deviation_samples) >= self.max_samples:
+            median_dev = statistics.median(self.deviation_samples)
+            
+            # Hard seek if deviation is large (> 0.5s)
+            if abs(median_dev) > 0.5:
+                if self.debug_sync_logging:
+                    log_warning(f"🔄 Large sync deviation: {median_dev:.3f}s. Seeking...", component="sync")
+                self.video_player.seek(leader_time)
+                self.deviation_samples.clear()
+            # Fine-grained speed adjustment for smaller drifts
+            elif abs(median_dev) > 0.01:
+                new_rate = 1.0 - (median_dev * 0.5)
+                new_rate = max(0.9, min(1.1, new_rate))
+                self.video_player.set_speed(new_rate)
+            else:
+                self.video_player.set_speed(1.0)
+
+    def _handle_command(self, msg: dict, addr: tuple) -> None:
+        """Handle commands from leader"""
+        cmd_type = msg.get("type")
+
+        if cmd_type == "start":
+            self._handle_start_command(msg)
+        elif cmd_type == "stop":
+            self._handle_stop_command()
+        elif cmd_type == "schedule_update":
+            self._handle_schedule_update(msg, addr)
+
+    def _handle_start_command(self, msg: dict) -> None:
+        """Initialize playback session from leader start command"""
+        log_info("Start command received, initializing playback...", component="collaborator")
+        if self.system_state.is_running:
+            log_warning("Received start command while already running. Restarting...", component="collaborator")
+            self.stop_playback()
+
+        # Load schedule
+        schedule = msg.get("schedule", [])
+        if self.midi_scheduler:
+            self.midi_scheduler.load_schedule(schedule)
+
+        # Override debug mode if leader specifies it
+        leader_debug_mode = msg.get("debug_mode", False)
+        if leader_debug_mode and not self.config.debug_mode:
+            self.config.config["KITCHENSYNC"]["debug"] = "true"
+            self.debug_sync_logging = True
+
+        # Find and load video
+        self.video_path = self.video_manager.find_video_file()
+        if self.video_path:
+            self.video_player.load(self.video_path)
+            log_info(f"Loaded video: {self.video_path}", component="collaborator")
+            self.start_playback()
+        else:
+            log_error("No video file found for playback!", component="collaborator")
+
+    def _handle_stop_command(self) -> None:
+        """Stop playback as requested by leader"""
+        self.stop_playback()
+        log_info("Stopped by leader command", component="collaborator")
+
+    def _handle_schedule_update(self, msg: dict, addr: tuple) -> None:
+        """Handle schedule update from leader"""
+        schedule = msg.get("schedule", [])
+        if self.midi_scheduler:
+            self.midi_scheduler.load_schedule(schedule)
+        print(f"Updated schedule: {len(schedule)} cues")
+
+    def start_playback(self) -> None:
+        """Start video and MIDI playback"""
+        log_info("Starting playback...", component="collaborator")
+
+        # Start system state
+        self.system_state.start_session()
+        self.video_start_time = time.time()
+
+        # Start video playback first
+        if self.video_path:
+            log_info("Starting video...", component="video")
+            self.video_player.play()
+
+        # Start MIDI playback with video duration for looping
+        video_duration = self.video_player.get_duration()
+        if self.midi_scheduler:
+            self.midi_scheduler.start_playback(self.system_state.start_time, video_duration)
+
+        log_info("Playback started", component="collaborator")
+
+    def stop_playback(self) -> None:
+        """Stop video and MIDI playback"""
+        log_info("Stopping playback...", component="collaborator")
+
+        # Stop video
+        self.video_player.stop()
+
+        # Stop MIDI
+        if self.midi_scheduler:
+            self.midi_scheduler.stop_playback()
+
+        # Stop system state
+        self.system_state.stop_session()
+
+        # Reset video state
+        self.video_start_time = None
+        self.deviation_samples.clear()
+
+        log_info("Playback stopped", component="collaborator")
+
+    def _update_critical_window_status(self, leader_time: float) -> None:
+        """Update critical sync logging window status"""
+        if not self.video_player.is_playing:
+            if self.in_critical_window:
+                self.in_critical_window = False
+            return
+
+        duration = self.video_player.get_duration()
+        video_position = self.video_player.get_position()
+        if not duration or duration <= 0 or video_position is None:
+            return
+
+        # 5 seconds before end or 5 seconds after start
+        is_near_end = video_position > (duration - 5.0)
+        is_near_start = video_position < 5.0
+
+        if (is_near_end or is_near_start) and not self.in_critical_window:
+            self.in_critical_window = True
+            print("\n>>> ENTERING CRITICAL SYNC WINDOW (Loop point proximity) <<<")
+        elif not (is_near_end or is_near_start) and self.in_critical_window:
+            self.in_critical_window = False
+            print(">>> EXITING CRITICAL SYNC WINDOW <<<\n")
+
+    def run(self) -> None:
+        """Main execution loop"""
+        log_info(f"✅ Collaborator {self.config.device_id} started successfully!", component="collaborator")
+        print("Collaborator ready. Waiting for time sync from leader...")
+        print("Press Ctrl+C to exit")
+
+        self.command_listener.start_listening()
+        self.sync_receiver.start_listening()
+
+        try:
+            while True:
+                time.sleep(1)
+        except KeyboardInterrupt:
+            self.cleanup()
+
+    def cleanup(self) -> None:
+        """Clean up resources"""
+        if self.system_state.is_running:
+            self.stop_playback()
+
+        self.video_player.cleanup()
+        if self.midi_manager:
+            self.midi_manager.cleanup()
+        log_info("Cleanup completed", component="collaborator")
+
+
+def main():
+    parser = argparse.ArgumentParser(description="KitchenSync Collaborator Node")
+    parser.add_argument("--config", dest="config_file", help="Path to config file")
+    parser.add_argument(
+        "--debug", action="store_true", help="Enable verbose sync logging"
+    )
+    parser.add_argument(
+        "--debug_loop",
+        action="store_true",
+        help="Enable critical window sync logging (looping behavior)",
+    )
+    parser.add_argument(
+        "--debug_deviation",
+        action="store_true",
+        help="Print raw deviation between leader and collaborator video positions to the console",
+    )
+    args = parser.parse_args()
+
+    try:
+        collaborator = CollaboratorPi(args.config_file)
+
+        # Override debug mode if specified
+        if args.debug:
+            collaborator.config.config["KITCHENSYNC"]["debug"] = "true"
+            collaborator.debug_sync_logging = True
+            enable_system_logging(True)
+            print("✓ Debug mode: ENABLED (via command line)")
+            print("✓ Sync debug logging: ENABLED")
+
+        # Enable critical window sync logging if specified
+        if args.debug_loop:
+            collaborator.critical_window_logging = True
+            print("✓ Loop debug mode: ENABLED (via command line)")
+            print(
+                "✓ Critical window sync logging: ENABLED (5s before video end to 5s after restart)"
+            )
+
+        # Enable debug deviation mode if specified
+        if args.debug_deviation:
+            collaborator.debug_deviation_mode = True
+            print("✓ Debug deviation mode: ENABLED (prints raw deviation)")
+
+        collaborator.run()
+    except KeyboardInterrupt:
+        print("\nExiting...")
+    except Exception as e:
+        print(f"Fatal error: {e}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()
