@@ -22,7 +22,7 @@ from networking.communication import SyncBroadcaster, CommandManager
 from core.schedule import Schedule
 from core.system_state import SystemState
 from core.logger import log_info, log_error, log_warning, enable_system_logging
-from ui.interface import create_command_interface, StatusDisplay
+from ui.interface import CommandInterface, StatusDisplay
 from protocols.midi_handler import MidiManager, MidiScheduler
 from debug.html_overlay import HTMLDebugManager
 
@@ -90,16 +90,15 @@ class LeaderPi:
             log_info("HTML overlay started successfully", component="leader")
 
         # Collaboration State
-        from networking.communication import CollaboratorRegistry
-        self.collaborators = CollaboratorRegistry()
+        # CommandManager already has a 'collaborators' dict internally
+        # We'll use its get_collaborators() method for the UI
+        self.collaborators = self.command_manager
 
-        # Wire command listener for registration
+        # Wire command listener for registration handled internally by CommandManager
+        # but we can add an extra callback if we want custom logging
         def on_command(msg, addr):
             if msg.get("type") == "register":
-                self.collaborators.register(msg.get("id"), addr[0])
-                log_info(f"Collaborator registered: {msg.get('id')} at {addr[0]}", component="network")
-            elif msg.get("type") == "status":
-                self.collaborators.update_status(msg.get("id"), msg)
+                log_info(f"Collaborator registered: {msg.get('device_id', 'unknown')} at {addr[0]}", component="network")
 
         self.command_manager.register_callback(on_command)
 
@@ -303,7 +302,15 @@ def main():
             except KeyboardInterrupt:
                 leader_instance.stop_system()
         else:
-            interface = create_command_interface(leader_instance)
+            interface = CommandInterface("KitchenSync Leader")
+            interface.register_command("start", leader_instance.start_system, "Start synchronized playback")
+            interface.register_command("stop", leader_instance.stop_system, "Stop synchronized playback")
+            interface.register_command("status", lambda: StatusDisplay.show_leader_status(
+                leader_instance.system_state, leader_instance.collaborators.get_collaborators(), leader_instance.schedule.get_cue_count()
+            ), "Show system status")
+            interface.register_command("cues", lambda: StatusDisplay.show_schedule_summary(
+                leader_instance.schedule.get_cues()
+            ), "Show schedule summary")
             interface.run()
         leader_instance.cleanup()
     except KeyboardInterrupt:
