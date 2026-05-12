@@ -164,12 +164,20 @@ class CollaboratorPi:
         # late joiners, so this is the common case.
         if self.system_state.is_running and incoming_video == self.video_path:
             leader_time = self.system_state.current_time
-            if leader_time > 0:
-                self.video_player.seek(leader_time)
-                log_info(
-                    f"Duplicate start command; re-synced to {leader_time:.2f}s",
-                    component="collaborator",
-                )
+            current_position = self.video_player.get_position()
+            if leader_time > 0 and current_position is not None:
+                deviation = current_position - leader_time
+                if abs(deviation) > 0.5:
+                    self.video_player.seek(leader_time)
+                    log_info(
+                        f"Duplicate start command; re-synced to {leader_time:.2f}s",
+                        component="collaborator",
+                    )
+                elif self.debug_sync_logging:
+                    log_info(
+                        f"Duplicate start command ignored; drift {deviation:+.3f}s",
+                        component="collaborator",
+                    )
             return
 
         log_info("Start command received, initializing playback...", component="collaborator")

@@ -148,18 +148,14 @@ class GstDriver(VideoDriver):
         if rate == self.current_rate:
             return True
 
-        # GStreamer allows changing rate via a Seek event
-        # We use a non-flushing seek to keep playback smooth
-        pos = self.get_position()
-        pos_nanos = int(pos * Gst.SECOND)
-
-        # Rate change event
-        # If rate is 1.0, it plays normally. If 1.001, it catches up.
+        # INSTANT_RATE_CHANGE requires NONE/NONE seek types and no FLUSH.
+        # Using position-based seek parameters here triggers GStreamer assertions
+        # and causes all fine-grained sync corrections to fail.
         event = Gst.Event.new_seek(
             rate,
             Gst.Format.TIME,
-            Gst.SeekFlags.INSTANT_RATE_CHANGE, # Most efficient rate change
-            Gst.SeekType.SET, pos_nanos,
+            Gst.SeekFlags.INSTANT_RATE_CHANGE,
+            Gst.SeekType.NONE, 0,
             Gst.SeekType.NONE, -1
         )
         
