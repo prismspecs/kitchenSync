@@ -31,13 +31,44 @@ Once the Pi is booted and connected to the internet, run the following to instal
 # Update and install core dependencies
 sudo apt update
 sudo apt install -y --no-install-recommends \
-    xserver-xorg xinit openbox x11-xserver-utils \
+    xserver-xorg xinit openbox x11-xserver-utils xserver-xorg-legacy \
     udevil firefox-esr vlc libvlc-dev python3-vlc \
     python3-pip python3-dev python3-full \
     alsa-utils libasound2-dev libdbus-1-dev libglib2.0-dev libgl1-mesa-dri \
     gstreamer1.0-plugins-base gstreamer1.0-plugins-good \
     gstreamer1.0-plugins-bad gstreamer1.0-libav \
     gstreamer1.0-tools python3-gst-1.0 gir1.2-gst-plugins-base-1.0
+
+# 3.1 Raspberry Pi 5 Specific Configuration
+On Raspberry Pi 5, the X server requires specific configuration to identify the correct display controller and permissions.
+
+**X Server Permissions:**
+```bash
+echo "allowed_users=anybody" | sudo tee /etc/X11/Xwrapper.config
+echo "needs_root_rights=yes" | sudo tee -a /etc/X11/Xwrapper.config
+sudo usermod -a -G video,render,tty $USER
+```
+
+**Xorg Hardware Mapping:**
+Create `/etc/X11/xorg.conf.d/99-vc4.conf`:
+```text
+Section "Device"
+    Identifier "VC4"
+    Driver "modesetting"
+    Option "kmsdev" "/dev/dri/card1"
+EndSection
+
+Section "Screen"
+    Identifier "Default Screen"
+    Device "VC4"
+EndSection
+```
+
+**GStreamer on Pi 5:**
+Note that Pi 5 uses high-performance software decoding for H.264. Use the following pipeline for testing:
+```bash
+DISPLAY=:0 gst-launch-1.0 filesrc location=your_video.mp4 ! decodebin ! videoconvert ! glimagesink
+```
 
 # Enable auto-mounting service
 # udevil provides devmon, which handles instant USB mounting to /media/
