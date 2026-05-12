@@ -242,42 +242,22 @@ class GstDriver(VideoDriver):
         )
 
     def _build_explicit_hevc_pipeline(self, video_path: str):
-        pipeline = Gst.Pipeline.new("player")
-        filesrc = Gst.ElementFactory.make("filesrc", "filesrc")
-        parsebin = Gst.ElementFactory.make("parsebin", "parsebin")
-        decoder = Gst.ElementFactory.make("v4l2slh265dec", "videodecoder")
-        sink, sink_name = self._create_explicit_hevc_sink()
-
-        elements = [filesrc, parsebin, decoder, sink]
-        if not pipeline or any(element is None for element in elements):
+        # Use Gst.parse_launch to mirror gst-launch-1.0 behaviour exactly.
+        # Manual element linking + pad-added callbacks have timing issues with
+        # parsebin that cause v4l2slh265dec to report "no valid frames found".
+        pipeline = Gst.parse_launch(
+            "filesrc name=filesrc ! parsebin ! v4l2slh265dec ! autovideosink name=videosink"
+        )
+        if not pipeline:
             return None, None
 
+        filesrc = pipeline.get_by_name("filesrc")
+        if not filesrc:
+            return None, None
         filesrc.set_property("location", os.path.abspath(video_path))
 
-        for element in elements:
-            pipeline.add(element)
-
-        if not filesrc.link(parsebin):
-            return None, None
-        if not decoder.link(sink):
-            return None, None
-
-        def on_pad_added(_parsebin, pad):
-            caps = pad.get_current_caps() or pad.query_caps(None)
-            if not caps or caps.get_size() == 0:
-                return
-
-            media_type = caps.to_string().split(",", 1)[0]
-            if media_type != "video/x-h265":
-                return
-
-            sink_pad = decoder.get_static_pad("sink")
-            if sink_pad and not sink_pad.is_linked():
-                pad.link(sink_pad)
-
-        parsebin.connect("pad-added", on_pad_added)
         self.video_converter_name = "none"
-        return pipeline, sink_name
+        return pipeline, "autovideosink"
 
     def load(self, video_path: str) -> bool:
         if not os.path.exists(video_path):

@@ -155,43 +155,23 @@ def _should_use_explicit_hevc_pipeline(video_stream: dict) -> bool:
 
 
 def _build_explicit_hevc_pipeline(video_path: Path, report: dict):
-    pipeline = Gst.Pipeline.new("verifier")
-    filesrc = Gst.ElementFactory.make("filesrc", "filesrc")
-    parsebin = Gst.ElementFactory.make("parsebin", "parsebin")
-    decoder = Gst.ElementFactory.make("v4l2slh265dec", "videodecoder")
-    sink, sink_name = _create_explicit_hevc_sink()
+    # Use Gst.parse_launch to mirror gst-launch-1.0 behaviour exactly.
+    # Manual element linking + pad-added callbacks have timing issues with
+    # parsebin that cause v4l2slh265dec to report "no valid frames found".
+    pipeline = Gst.parse_launch(
+        "filesrc name=filesrc ! parsebin ! v4l2slh265dec ! autovideosink name=videosink"
+    )
+    if not pipeline:
+        raise RuntimeError("Gst.parse_launch failed to create explicit HEVC pipeline")
 
-    elements = [filesrc, parsebin, decoder, sink]
-    if not pipeline or any(element is None for element in elements):
-        raise RuntimeError("Failed to create explicit HEVC pipeline elements")
-
+    filesrc = pipeline.get_by_name("filesrc")
+    if not filesrc:
+        raise RuntimeError("filesrc element not found in parsed HEVC pipeline")
     filesrc.set_property("location", str(video_path.resolve()))
 
-    for element in elements:
-        pipeline.add(element)
-
-    if not filesrc.link(parsebin):
-        raise RuntimeError("Failed to link filesrc to parsebin")
-    if not decoder.link(sink):
-        raise RuntimeError("Failed to link v4l2slh265dec to video sink")
-
-    def on_pad_added(_parsebin, pad):
-        caps = pad.get_current_caps() or pad.query_caps(None)
-        if not caps or caps.get_size() == 0:
-            return
-
-        media_type = caps.to_string().split(",", 1)[0]
-        if media_type != "video/x-h265":
-            return
-
-        sink_pad = decoder.get_static_pad("sink")
-        if sink_pad and not sink_pad.is_linked():
-            pad.link(sink_pad)
-
-    parsebin.connect("pad-added", on_pad_added)
     report["pipeline_kind"] = "explicit-hevc"
     report["selected_converter"] = "none"
-    return pipeline, sink_name
+    return pipeline, "autovideosink"
 
 
 def _ensure_display_session_ready():
