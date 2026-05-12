@@ -9,7 +9,7 @@ import re
 import shutil
 from pathlib import Path
 from typing import Dict, Any
-from src.core.logger import log_error, debug_log_info, debug_log_warning
+from core.logger import log_error, debug_log_info, debug_log_warning
 
 
 class TemplateEngine:

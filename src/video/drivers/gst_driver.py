@@ -18,8 +18,8 @@ try:
 except ImportError:
     GST_AVAILABLE = False
 
-from src.video.driver import VideoDriver, PlayerState
-from src.core.logger import log_info, log_error, log_warning
+from video.driver import VideoDriver, PlayerState
+from core.logger import log_info, log_error, log_warning
 
 class GstDriver(VideoDriver):
     """

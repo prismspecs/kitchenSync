@@ -128,7 +128,7 @@ class SyncBroadcaster:
                         )
                         # Log diagnostic info if system logging is enabled
                         try:
-                            from src.core.logger import log_info
+                            from core.logger import log_info
 
                             log_info(
                                 f"Sync broadcast: {current_time:.3f}s from {time_source} "
@@ -208,7 +208,7 @@ class SyncReceiver:
                                 self.sync_callback(leader_time, self.last_sync_time)
                                 # Log diagnostic info if system logging is enabled
                                 try:
-                                    from src.core.logger import log_info
+                                    from core.logger import log_info
 
                                     log_info(
                                         f"Sync received: {leader_time:.3f}s from {time_source} "

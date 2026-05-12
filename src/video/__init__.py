@@ -5,8 +5,8 @@ Loads the appropriate driver backend based on configuration.
 """
 
 from typing import Optional
-from src.video.driver import VideoDriver
-from src.core.logger import log_info, log_error
+from video.driver import VideoDriver
+from core.logger import log_info, log_error
 
 def get_video_driver(driver_name: str, debug_mode: bool = False) -> Optional[VideoDriver]:
     """
@@ -16,14 +16,19 @@ def get_video_driver(driver_name: str, debug_mode: bool = False) -> Optional[Vid
     
     try:
         if driver_name == "vlc":
-            from src.video.drivers.vlc_driver import VLCDriver
+            from video.drivers.vlc_driver import VLCDriver
             log_info("Video: Using VLC driver backend")
             return VLCDriver(debug_mode=debug_mode)
         
         elif driver_name == "gstreamer" or driver_name == "gst":
-            from src.video.drivers.gst_driver import GstDriver
+            from video.drivers.gst_driver import GstDriver
             log_info("Video: Using GStreamer driver backend")
             return GstDriver(debug_mode=debug_mode)
+            
+        elif driver_name == "mock":
+            from video.drivers.mock_driver import MockVideoDriver
+            log_info("Video: Using Mock driver backend")
+            return MockVideoDriver(debug_mode=debug_mode)
             
         else:
             log_error(f"Video: Unknown driver backend '{driver_name}'")

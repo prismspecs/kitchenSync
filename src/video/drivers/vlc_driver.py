@@ -15,8 +15,8 @@ try:
 except ImportError:
     VLC_AVAILABLE = False
 
-from src.video.driver import VideoDriver, PlayerState
-from src.core.logger import log_info, log_error, log_warning
+from video.driver import VideoDriver, PlayerState
+from core.logger import log_info, log_error, log_warning
 
 
 class VLCDriver(VideoDriver):

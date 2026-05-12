@@ -10,7 +10,7 @@ import subprocess
 from pathlib import Path
 from typing import Optional, Dict, Any
 
-from src.core.logger import log_info, log_warning, log_error
+from core.logger import log_info, log_warning, log_error
 
 
 class ConfigurationError(Exception):

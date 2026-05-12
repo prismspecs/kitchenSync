@@ -8,7 +8,7 @@ import os
 import subprocess
 import time
 from typing import Optional, List, Tuple
-from src.core.logger import log_info, log_warning, log_error
+from core.logger import log_info, log_warning, log_error
 
 
 class WindowManager:

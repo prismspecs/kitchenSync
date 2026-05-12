@@ -18,7 +18,7 @@ try:
     import psutil
 except ImportError:
     psutil = None
-from src.core.logger import (
+from core.logger import (
     debug_log_info,
     log_error,
     debug_log_warning,
@@ -27,8 +27,8 @@ from src.core.logger import (
 )
 
 
-from src.debug.template_engine import DebugTemplateManager
-from src.ui.window_manager import WindowManager
+from debug.template_engine import DebugTemplateManager
+from ui.window_manager import WindowManager
 
 
 def _tail_log_file(file_path: str, max_lines: int = 10) -> list:
@@ -717,7 +717,7 @@ user_pref("browser.newtabpage.activity-stream.default.sites", "");
                                 )
                         else:
                             # Fallback to log file check (old method)
-                            from src.core.logger import log_file_paths
+                            from core.logger import log_file_paths
 
                             paths = log_file_paths()
 
@@ -888,7 +888,7 @@ user_pref("browser.newtabpage.activity-stream.default.sites", "");
             # Get recent logs ONLY if system logging is enabled
             if _ENABLE_SYSTEM_LOGGING:
                 try:
-                    from src.core.logger import log_file_paths
+                    from core.logger import log_file_paths
 
                     paths = log_file_paths()
                     debug_log_info(f"Log paths: {paths}")
