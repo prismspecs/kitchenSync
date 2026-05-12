@@ -11,6 +11,9 @@ import time
 from typing import Callable, Optional, Dict, Any
 
 
+UDP_MAX_DATAGRAM_SIZE = 65535
+
+
 class NetworkError(Exception):
     """Raised when network operations fail"""
 
@@ -278,7 +281,7 @@ class CommandManager:
         def listen_loop():
             while self.is_running:
                 try:
-                    data, addr = self.control_sock.recvfrom(1024)
+                    data, addr = self.control_sock.recvfrom(UDP_MAX_DATAGRAM_SIZE)
                     msg_text = data.decode()
                     print(f"\n[NET] Received from {addr}: {msg_text}")
                     msg = json.loads(msg_text)
@@ -415,7 +418,7 @@ class CommandListener:
         def listen_loop():
             while self.is_running:
                 try:
-                    data, addr = self.control_sock.recvfrom(1024)
+                    data, addr = self.control_sock.recvfrom(UDP_MAX_DATAGRAM_SIZE)
                     msg = json.loads(data.decode())
                     
                     msg_type = msg.get("type")
