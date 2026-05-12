@@ -59,13 +59,15 @@ class GstDriver(VideoDriver):
         uri = "file://" + os.path.abspath(video_path)
         self.pipeline.set_property("uri", uri)
 
-        # Configure hardware-accelerated video sink
-        # We use glimagesink for X11/Openbox compatibility
-        # We wrap it in a bin to add sync=true for proper timing
-        sink = Gst.ElementFactory.make("glimagesink", "videosink")
+        # Configure video sink.
+        # autovideosink lets GStreamer pick the best available backend:
+        # xvimagesink (X11), kmssink (DRM/KMS), glimagesink (GL), etc.
+        sink = Gst.ElementFactory.make("autovideosink", "videosink")
         if sink:
             self.pipeline.set_property("video-sink", sink)
-            log_info("Gst: Using glimagesink for hardware rendering")
+            log_info("Gst: Using autovideosink")
+        else:
+            log_warning("Gst: autovideosink unavailable; using default sink")
 
         # Set up the bus to watch for messages
         bus = self.pipeline.get_bus()

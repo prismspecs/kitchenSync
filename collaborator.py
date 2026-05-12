@@ -142,7 +142,7 @@ class CollaboratorPi:
             # Hard seek if deviation is large (> 0.5s)
             if abs(median_dev) > 0.5:
                 if self.debug_sync_logging:
-                    log_warning(f"🔄 Large sync deviation: {median_dev:.3f}s. Seeking...", component="sync")
+                    log_warning(f" Large sync deviation: {median_dev:.3f}s. Seeking...", component="sync")
                 self.video_player.seek(leader_time)
                 self.deviation_samples.clear()
             # Fine-grained speed adjustment for smaller drifts
@@ -166,9 +166,24 @@ class CollaboratorPi:
 
     def _handle_start_command(self, msg: dict) -> None:
         """Initialize playback session from leader start command"""
+        incoming_video = self.video_manager.find_video_file()
+
+        # If already playing the same content, just re-sync position instead of
+        # doing a disruptive restart. The simulator resends start every 2s for
+        # late joiners, so this is the common case.
+        if self.system_state.is_running and incoming_video == self.video_path:
+            leader_time = self.system_state.current_time
+            if leader_time > 0:
+                self.video_player.seek(leader_time)
+                log_info(
+                    f"Duplicate start command; re-synced to {leader_time:.2f}s",
+                    component="collaborator",
+                )
+            return
+
         log_info("Start command received, initializing playback...", component="collaborator")
         if self.system_state.is_running:
-            log_warning("Received start command while already running. Restarting...", component="collaborator")
+            log_warning("Video file changed; restarting playback.", component="collaborator")
             self.stop_playback()
 
         # Load schedule
@@ -183,7 +198,7 @@ class CollaboratorPi:
             self.debug_sync_logging = True
 
         # Find and load video
-        self.video_path = self.video_manager.find_video_file()
+        self.video_path = incoming_video
         if self.video_path:
             self.video_player.load(self.video_path)
             log_info(f"Loaded video: {self.video_path}", component="collaborator")
@@ -268,7 +283,7 @@ class CollaboratorPi:
 
     def run(self) -> None:
         """Main execution loop"""
-        log_info(f"✅ Collaborator {self.config.device_id} started successfully!", component="collaborator")
+        log_info(f" Collaborator {self.config.device_id} started successfully!", component="collaborator")
         print("Collaborator ready. Waiting for time sync from leader...")
         print("Press Ctrl+C to exit")
 
@@ -323,25 +338,25 @@ def main():
             collaborator.config.config["KITCHENSYNC"]["debug"] = "true"
             collaborator.debug_sync_logging = True
             enable_system_logging(True)
-            print("✓ Debug mode: ENABLED (via command line)")
-            print("✓ Sync debug logging: ENABLED")
+            print(" Debug mode: ENABLED (via command line)")
+            print(" Sync debug logging: ENABLED")
 
         # Enable critical window sync logging if specified
         if args.debug_loop:
             collaborator.critical_window_logging = True
-            print("✓ Loop debug mode: ENABLED (via command line)")
+            print(" Loop debug mode: ENABLED (via command line)")
             print(
-                "✓ Critical window sync logging: ENABLED (5s before video end to 5s after restart)"
+                " Critical window sync logging: ENABLED (5s before video end to 5s after restart)"
             )
 
         # Enable debug deviation mode if specified
         if args.debug_deviation:
             collaborator.debug_deviation_mode = True
-            print("✓ Debug deviation mode: ENABLED (prints raw deviation)")
+            print(" Debug deviation mode: ENABLED (prints raw deviation)")
 
         # Start playback immediately if --auto is specified
         if args.auto:
-            print("🎯 Auto-start: Triggering playback immediately...")
+            print(" Auto-start: Triggering playback immediately...")
             # Find and load video
             collaborator.video_path = collaborator.video_manager.find_video_file()
             if collaborator.video_path:
