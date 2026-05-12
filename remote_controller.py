@@ -2,12 +2,16 @@
 import json
 import os
 import shutil
+import sys
 import threading
 import time
 from dataclasses import dataclass
 from http.server import HTTPServer, BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 from pathlib import Path
+
+# Add 'src' to path so internal absolute imports like 'from core.logger' work
+sys.path.append(os.path.join(os.path.dirname(__file__), 'src'))
 
 # KitchenSync Imports
 from src.networking.communication import CommandManager, SyncBroadcaster
