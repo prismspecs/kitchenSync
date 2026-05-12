@@ -400,9 +400,9 @@ class RemoteHandler(BaseHTTPRequestHandler):
                                     <div class="pi-status">${{info.online ? 'ONLINE' : 'OFFLINE'}}</div>
                                 </div>
                             `).join('');
-                        }
+                        }}
                         
-                    } catch (e) {{
+                    }} catch (e) {{
                         console.error("Update loop failed", e);
                     }}
                 }}
