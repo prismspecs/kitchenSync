@@ -258,6 +258,18 @@ class GstDriver(VideoDriver):
             return None, None
 
         def on_pad_added(_demux, pad):
+            caps = pad.get_current_caps() or pad.query_caps(None)
+            if not caps or caps.get_size() == 0:
+                return
+
+            structure = caps.get_structure(0)
+            if structure is None:
+                return
+
+            media_type = structure.get_name()
+            if not media_type.startswith("video/"):
+                return
+
             sink_pad = queue.get_static_pad("sink")
             if sink_pad and not sink_pad.is_linked():
                 pad.link(sink_pad)
@@ -345,6 +357,8 @@ class GstDriver(VideoDriver):
         self.state = PlayerState.PLAYING
         time.sleep(0.1)
         self.decoder_name = self._discover_active_decoder()
+        if not self.decoder_name and self.pipeline_kind == "explicit-hevc":
+            self.decoder_name = "v4l2slh265dec"
         if not self.decoder_name and self.decoder_candidates:
             self.decoder_name = self.decoder_candidates[-1]
         if self.decoder_name:

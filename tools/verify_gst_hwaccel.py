@@ -170,6 +170,18 @@ def _build_explicit_hevc_pipeline(video_path: Path, report: dict):
         raise RuntimeError("Failed to link videoconvert to video sink")
 
     def on_pad_added(_demux, pad):
+        caps = pad.get_current_caps() or pad.query_caps(None)
+        if not caps or caps.get_size() == 0:
+            return
+
+        structure = caps.get_structure(0)
+        if structure is None:
+            return
+
+        media_type = structure.get_name()
+        if not media_type.startswith("video/"):
+            return
+
         sink_pad = queue.get_static_pad("sink")
         if sink_pad and not sink_pad.is_linked():
             pad.link(sink_pad)
@@ -378,6 +390,7 @@ def build_report(video_path: Path, sample_seconds: float) -> dict:
         time.sleep(sample_seconds)
         report["active_decoder"] = (
             _discover_active_decoder(pipeline)
+            or ("v4l2slh265dec" if report.get("pipeline_kind") == "explicit-hevc" else None)
             or (report["observed_decoder_candidates"][-1] if report["observed_decoder_candidates"] else None)
             or "unknown"
         )
