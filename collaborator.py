@@ -99,6 +99,8 @@ class CollaboratorPi:
         self.last_sync_at = received_at
 
         if not self.system_state.is_running:
+            if self.debug_sync_logging:
+                log_info(f"Received sync while idle: {leader_time:.3f}s", component="sync")
             return
 
         # Update system time and maintain sync

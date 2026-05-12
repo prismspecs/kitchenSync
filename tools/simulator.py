@@ -191,10 +191,18 @@ def run_leader(driver_name, target_ip=None):
     command_manager.send_command(start_cmd)
     log("Sent 'start' command to network.")
     
+    last_start_send = time.time()
+    
     try:
         while True:
             sim_state.video_pos = player.get_position()
             sim_state.leader_time = sim_state.video_pos
+            
+            # Periodically resend start command to catch late-joiners
+            if time.time() - last_start_send > 2.0:
+                command_manager.send_command(start_cmd)
+                last_start_send = time.time()
+                
             time.sleep(0.1)
     except KeyboardInterrupt:
         player.cleanup()
