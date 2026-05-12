@@ -95,12 +95,29 @@ def _element_available(name: str) -> bool:
 
 def _preferred_sink_names() -> list[str]:
     if os.environ.get("DISPLAY"):
-        return ["glimagesink", "xvimagesink", "autovideosink"]
+        return ["glsinkbin(glimagesink)", "glimagesink", "xvimagesink", "autovideosink"]
     return ["kmssink", "glimagesink", "autovideosink"]
 
 
+def _create_gl_sinkbin():
+    sink_bin = Gst.ElementFactory.make("glsinkbin", "videosink")
+    inner_sink = Gst.ElementFactory.make("glimagesink", "glimagesink")
+    if not sink_bin or not inner_sink:
+        return None, None
+
+    sink_bin.set_property("sink", inner_sink)
+    return sink_bin, "glsinkbin(glimagesink)"
+
+
 def _create_video_sink():
+    if os.environ.get("DISPLAY"):
+        sink, sink_name = _create_gl_sinkbin()
+        if sink:
+            return sink, sink_name
+
     for sink_name in _preferred_sink_names():
+        if sink_name == "glsinkbin(glimagesink)":
+            continue
         sink = Gst.ElementFactory.make(sink_name, "videosink")
         if sink:
             return sink, sink_name
@@ -251,7 +268,7 @@ def build_report(video_path: Path, sample_seconds: float) -> dict:
         "preferred_sinks": _preferred_sink_names(),
         "available_sinks": {
             name: _element_available(name)
-            for name in ["glimagesink", "xvimagesink", "kmssink", "autovideosink"]
+            for name in ["glsinkbin", "glimagesink", "xvimagesink", "kmssink", "autovideosink"]
         },
         "available_decoders": {
             name: _element_available(name) for name in KNOWN_DECODERS
@@ -270,7 +287,7 @@ def build_report(video_path: Path, sample_seconds: float) -> dict:
     if sink is not None:
         pipeline.set_property("video-sink", sink)
     report["selected_sink"] = sink_name or "default"
-    report["hardware_preferred_sink"] = sink_name in {"kmssink", "glimagesink", "xvimagesink"}
+    report["hardware_preferred_sink"] = sink_name in {"kmssink", "glsinkbin(glimagesink)", "glimagesink", "xvimagesink"}
 
     pipeline.set_property("uri", video_path.resolve().as_uri())
     loop = GLib.MainLoop()
