@@ -258,14 +258,12 @@ class GstDriver(VideoDriver):
 
         # v4l2slh265dec is a stateless V4L2 decoder that requires exactly one
         # access unit per buffer in Annex-B byte-stream format (alignment=au).
-        # Without the caps filter, parsebin may emit alignment=nal (individual
-        # NAL units) which the kernel driver silently rejects -> no valid frames.
+        # parsebin autoplugs h265parse internally to satisfy those caps;
+        # an explicit capsfilter here causes parsebin to try to route audio
+        # through the video caps filter, which fails at the qtdemux level with
+        # a fatal NOT_LINKED bus error.  Let parsebin handle caps negotiation.
         pipeline = Gst.parse_launch(
-            "filesrc name=filesrc"
-            " ! parsebin"
-            " ! video/x-h265,stream-format=byte-stream,alignment=au"
-            " ! v4l2slh265dec"
-            f" ! {sink_elem} name=videosink"
+            f"filesrc name=filesrc ! parsebin ! v4l2slh265dec ! {sink_elem} name=videosink"
         )
         if not pipeline:
             return None, None
