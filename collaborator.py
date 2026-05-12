@@ -34,7 +34,7 @@ class CollaboratorPi:
 
         # Core Components
         self.system_state = SystemState()
-        self.video_manager = VideoFileManager(self.config.content_dir)
+        self.video_manager = VideoFileManager(self.config.video_file, self.config.usb_mount_point)
 
         # Video Driver
         driver_name = self.config.video_driver
