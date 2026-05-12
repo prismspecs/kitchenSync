@@ -18,7 +18,7 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from video import get_video_driver
-from networking import SyncBroadcaster, SyncReceiver
+from networking import SyncBroadcaster, SyncReceiver, CommandManager
 from core import SyncTracker, SystemState
 from core.logger import enable_system_logging
 
@@ -171,8 +171,22 @@ def run_leader(driver_name):
     broadcaster.set_time_provider(player.get_position)
     broadcaster.set_duration_provider(player.get_duration)
     
+    # Add CommandManager to trigger real collaborators
+    command_manager = CommandManager()
+    
     log(f"Leader simulation started with '{driver_name}' driver.")
-    broadcaster.start_broadcasting(time.time())
+    start_time = time.time()
+    broadcaster.start_broadcasting(start_time)
+    
+    # Send start command to any real Pis on the network
+    start_cmd = {
+        "type": "start",
+        "start_time": start_time,
+        "schedule": [],
+        "debug_mode": True
+    }
+    command_manager.send_command(start_cmd)
+    log("Sent 'start' command to network.")
     
     try:
         while True:
@@ -182,6 +196,7 @@ def run_leader(driver_name):
     except KeyboardInterrupt:
         player.cleanup()
         broadcaster.stop_broadcasting()
+        command_manager.send_command({"type": "stop"})
 
 def run_collaborator(driver_name):
     sim_state.role = "collaborator"
