@@ -232,66 +232,45 @@ class GstDriver(VideoDriver):
             return False
         return all(
             Gst.ElementFactory.find(name) is not None
-            for name in ["qtdemux", "h265parse", "v4l2slh265dec"]
-        ) and any(
-            Gst.ElementFactory.find(name) is not None
-            for name in ["v4l2convert", "videoconvert"]
+            for name in ["parsebin", "v4l2slh265dec"]
         )
 
     def _build_explicit_hevc_pipeline(self, video_path: str):
         pipeline = Gst.Pipeline.new("player")
         filesrc = Gst.ElementFactory.make("filesrc", "filesrc")
-        demux = Gst.ElementFactory.make("qtdemux", "demux")
-        queue = Gst.ElementFactory.make("queue", "videoqueue")
-        parser = Gst.ElementFactory.make("h265parse", "videoparse")
-        capsfilter = Gst.ElementFactory.make("capsfilter", "hevc_caps")
+        parsebin = Gst.ElementFactory.make("parsebin", "parsebin")
         decoder = Gst.ElementFactory.make("v4l2slh265dec", "videodecoder")
-        convert, converter_name = self._create_video_converter()
         sink, sink_name = self._create_video_sink()
 
-        elements = [filesrc, demux, queue, parser, capsfilter, decoder, convert, sink]
+        elements = [filesrc, parsebin, decoder, sink]
         if not pipeline or any(element is None for element in elements):
             return None, None
 
         filesrc.set_property("location", os.path.abspath(video_path))
-        parser.set_property("disable-passthrough", True)
-        parser.set_property("config-interval", -1)
-        capsfilter.set_property(
-            "caps",
-            Gst.Caps.from_string("video/x-h265,stream-format=byte-stream,alignment=au"),
-        )
 
         for element in elements:
             pipeline.add(element)
 
-        if not filesrc.link(demux):
+        if not filesrc.link(parsebin):
             return None, None
-        if not queue.link(parser):
-            return None, None
-        if not parser.link(capsfilter):
-            return None, None
-        if not capsfilter.link(decoder):
-            return None, None
-        if not decoder.link(convert):
-            return None, None
-        if not convert.link(sink):
+        if not decoder.link(sink):
             return None, None
 
-        def on_pad_added(_demux, pad):
+        def on_pad_added(_parsebin, pad):
             caps = pad.get_current_caps() or pad.query_caps(None)
             if not caps or caps.get_size() == 0:
                 return
 
             media_type = caps.to_string().split(",", 1)[0]
-            if not media_type.startswith("video/"):
+            if media_type != "video/x-h265":
                 return
 
-            sink_pad = queue.get_static_pad("sink")
+            sink_pad = decoder.get_static_pad("sink")
             if sink_pad and not sink_pad.is_linked():
                 pad.link(sink_pad)
 
-        demux.connect("pad-added", on_pad_added)
-        self.video_converter_name = converter_name
+        parsebin.connect("pad-added", on_pad_added)
+        self.video_converter_name = "none"
         return pipeline, sink_name
 
     def load(self, video_path: str) -> bool:

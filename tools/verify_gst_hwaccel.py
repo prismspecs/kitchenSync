@@ -143,68 +143,47 @@ def _should_use_explicit_hevc_pipeline(video_stream: dict) -> bool:
         return False
     return all(
         Gst.ElementFactory.find(name) is not None
-        for name in ["qtdemux", "h265parse", "v4l2slh265dec"]
-    ) and any(
-        Gst.ElementFactory.find(name) is not None
-        for name in ["v4l2convert", "videoconvert"]
+        for name in ["parsebin", "v4l2slh265dec"]
     )
 
 
 def _build_explicit_hevc_pipeline(video_path: Path, report: dict):
     pipeline = Gst.Pipeline.new("verifier")
     filesrc = Gst.ElementFactory.make("filesrc", "filesrc")
-    demux = Gst.ElementFactory.make("qtdemux", "demux")
-    queue = Gst.ElementFactory.make("queue", "videoqueue")
-    parser = Gst.ElementFactory.make("h265parse", "videoparse")
-    capsfilter = Gst.ElementFactory.make("capsfilter", "hevc_caps")
+    parsebin = Gst.ElementFactory.make("parsebin", "parsebin")
     decoder = Gst.ElementFactory.make("v4l2slh265dec", "videodecoder")
-    convert, converter_name = _create_video_converter()
     sink, sink_name = _create_video_sink()
 
-    elements = [filesrc, demux, queue, parser, capsfilter, decoder, convert, sink]
+    elements = [filesrc, parsebin, decoder, sink]
     if not pipeline or any(element is None for element in elements):
         raise RuntimeError("Failed to create explicit HEVC pipeline elements")
 
     filesrc.set_property("location", str(video_path.resolve()))
-    parser.set_property("disable-passthrough", True)
-    parser.set_property("config-interval", -1)
-    capsfilter.set_property(
-        "caps",
-        Gst.Caps.from_string("video/x-h265,stream-format=byte-stream,alignment=au"),
-    )
 
     for element in elements:
         pipeline.add(element)
 
-    if not filesrc.link(demux):
-        raise RuntimeError("Failed to link filesrc to qtdemux")
-    if not queue.link(parser):
-        raise RuntimeError("Failed to link queue to h265parse")
-    if not parser.link(capsfilter):
-        raise RuntimeError("Failed to link h265parse to capsfilter")
-    if not capsfilter.link(decoder):
-        raise RuntimeError("Failed to link capsfilter to v4l2slh265dec")
-    if not decoder.link(convert):
-        raise RuntimeError("Failed to link v4l2slh265dec to videoconvert")
-    if not convert.link(sink):
-        raise RuntimeError("Failed to link videoconvert to video sink")
+    if not filesrc.link(parsebin):
+        raise RuntimeError("Failed to link filesrc to parsebin")
+    if not decoder.link(sink):
+        raise RuntimeError("Failed to link v4l2slh265dec to video sink")
 
-    def on_pad_added(_demux, pad):
+    def on_pad_added(_parsebin, pad):
         caps = pad.get_current_caps() or pad.query_caps(None)
         if not caps or caps.get_size() == 0:
             return
 
         media_type = caps.to_string().split(",", 1)[0]
-        if not media_type.startswith("video/"):
+        if media_type != "video/x-h265":
             return
 
-        sink_pad = queue.get_static_pad("sink")
+        sink_pad = decoder.get_static_pad("sink")
         if sink_pad and not sink_pad.is_linked():
             pad.link(sink_pad)
 
-    demux.connect("pad-added", on_pad_added)
+    parsebin.connect("pad-added", on_pad_added)
     report["pipeline_kind"] = "explicit-hevc"
-    report["selected_converter"] = converter_name or "unknown"
+    report["selected_converter"] = "none"
     return pipeline, sink_name
 
 
