@@ -43,7 +43,6 @@ class GstDriver(VideoDriver):
         self.decoder_name = None
         self.decoder_candidates = []
         self.pipeline_kind = "playbin"
-        self.video_converter_name = None
         
         # MainLoop for GStreamer bus messages
         self.loop = None
@@ -162,8 +161,8 @@ class GstDriver(VideoDriver):
     def _preferred_sink_names(self):
         """Return sink candidates in priority order for the current environment."""
         if os.environ.get("DISPLAY"):
-            # On Pi with X11/Openbox, xvimagesink is generally more stable than gl
-            return ["xvimagesink", "glimagesink", "autovideosink"]
+            # On Pi with X11/Openbox, glimagesink or xvimagesink are the best bets
+            return ["glimagesink", "xvimagesink", "autovideosink"]
         return ["kmssink", "glimagesink", "autovideosink"]
 
     def _create_video_sink(self):
@@ -174,109 +173,6 @@ class GstDriver(VideoDriver):
                 return sink, sink_name
         return None, None
 
-    def _create_explicit_hevc_sink(self):
-        sink = Gst.ElementFactory.make("autovideosink", "videosink")
-        if sink:
-            return sink, "autovideosink"
-        return self._create_video_sink()
-
-    def _create_video_converter(self):
-        for converter_name in ["v4l2convert", "videoconvert"]:
-            converter = Gst.ElementFactory.make(converter_name, converter_name)
-            if converter:
-                return converter, converter_name
-        return None, None
-
-    def _probe_video_stream(self, video_path: str) -> Dict[str, Any]:
-        try:
-            result = subprocess.run(
-                [
-                    "ffprobe",
-                    "-v",
-                    "error",
-                    "-select_streams",
-                    "v:0",
-                    "-show_entries",
-                    "stream=codec_name,profile,pix_fmt,width,height",
-                    "-of",
-                    "json",
-                    video_path,
-                ],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                check=False,
-            )
-        except FileNotFoundError:
-            return {"probe_ok": False, "probe_error": "ffprobe not installed"}
-
-        if result.returncode != 0:
-            return {"probe_ok": False, "probe_error": result.stderr.strip() or "ffprobe failed"}
-
-        try:
-            payload = __import__("json").loads(result.stdout)
-        except Exception:
-            return {"probe_ok": False, "probe_error": "ffprobe returned invalid JSON"}
-
-        streams = payload.get("streams") or []
-        if not streams:
-            return {"probe_ok": False, "probe_error": "No video stream found"}
-
-        stream = streams[0]
-        return {
-            "probe_ok": True,
-            "codec_name": stream.get("codec_name", "unknown"),
-            "profile": stream.get("profile", "unknown"),
-            "pix_fmt": stream.get("pix_fmt", "unknown"),
-            "width": stream.get("width", 0),
-            "height": stream.get("height", 0),
-        }
-
-    def _should_use_explicit_hevc_pipeline(self, video_path: str) -> bool:
-        video_stream = self._probe_video_stream(video_path)
-        if video_stream.get("codec_name") != "hevc":
-            return False
-        return all(
-            Gst.ElementFactory.find(name) is not None
-            for name in ["parsebin", "v4l2slh265dec"]
-        )
-
-    def _build_explicit_hevc_pipeline(self, video_path: str):
-        # v4l2slh265dec outputs NV12 via DMA-buf.  autovideosink on X11 may choose
-        # xvimagesink which cannot import DMA-buf, causing backwards caps negotiation
-        # to fail and v4l2slh265dec to report "no valid frames found".  Use
-        # glimagesink (EGL / DMA-buf import) on X11, kmssink on headless KMS.
-        if os.environ.get("DISPLAY") and Gst.ElementFactory.find("glimagesink"):
-            sink_elem = "glimagesink"
-            sink_name = "glimagesink"
-        elif Gst.ElementFactory.find("kmssink"):
-            sink_elem = "kmssink"
-            sink_name = "kmssink"
-        else:
-            sink_elem = "autovideosink"
-            sink_name = "autovideosink"
-
-        # glimagesink accepts NV12 DMA-buf natively via EGL.
-        # videoconvert would break the DMA-buf caps chain (it only advertises
-        # system-memory formats), causing v4l2slh265dec to see "format UNKNOWN".
-        pipeline = Gst.parse_launch(
-            "filesrc name=filesrc"
-            " ! qtdemux name=demux"
-            " demux. ! h265parse"
-            " ! v4l2slh265dec"
-            f" ! {sink_elem} name=videosink"
-        )
-        if not pipeline:
-            return None, None
-
-        filesrc = pipeline.get_by_name("filesrc")
-        if not filesrc:
-            return None, None
-        filesrc.set_property("location", os.path.abspath(video_path))
-
-        self.video_converter_name = "none"
-        return pipeline, sink_name
-
     def load(self, video_path: str) -> bool:
         if not os.path.exists(video_path):
             log_error(f"Gst: Video file not found: {video_path}")
@@ -285,29 +181,23 @@ class GstDriver(VideoDriver):
         self.video_path = video_path
         self._reprioritize_decoders()
 
-        if self._should_use_explicit_hevc_pipeline(video_path):
-            self.pipeline, sink_name = self._build_explicit_hevc_pipeline(video_path)
-            self.pipeline_kind = "explicit-hevc"
-            if not self.pipeline:
-                log_error("Gst: Failed to create explicit HEVC pipeline")
-                return False
-        else:
-            self.pipeline = Gst.ElementFactory.make("playbin", "player")
-            self.pipeline_kind = "playbin"
-            if not self.pipeline:
-                log_error("Gst: Failed to create playbin element")
-                return False
+        # Always use playbin - it is much more robust at negotiating hardware 
+        # buffers (DMABuf) than a manually constructed pipeline.
+        self.pipeline = Gst.ElementFactory.make("playbin", "player")
+        self.pipeline_kind = "playbin"
+        if not self.pipeline:
+            log_error("Gst: Failed to create playbin element")
+            return False
 
-            uri = "file://" + os.path.abspath(video_path)
-            self.pipeline.set_property("uri", uri)
+        uri = "file://" + os.path.abspath(video_path)
+        self.pipeline.set_property("uri", uri)
 
-            sink, sink_name = self._create_video_sink()
-            if sink:
-                self.pipeline.set_property("video-sink", sink)
+        sink, sink_name = self._create_video_sink()
+        if sink:
+            self.pipeline.set_property("video-sink", sink)
 
         self.decoder_candidates = []
         self.decoder_name = None
-        self.video_converter_name = None
         self.pipeline.connect("deep-element-added", self._on_deep_element_added)
 
         self.video_sink_name = sink_name
@@ -348,17 +238,8 @@ class GstDriver(VideoDriver):
     def play(self) -> bool:
         if not self.pipeline:
             return False
-
-        target_state = Gst.State.PLAYING
-        if self.pipeline_kind == "explicit-hevc":
-            ret = self.pipeline.set_state(Gst.State.PAUSED)
-            if ret == Gst.StateChangeReturn.FAILURE:
-                log_error("Gst: Failed to preroll explicit HEVC pipeline")
-                self.state = PlayerState.ERROR
-                return False
-            self.pipeline.get_state(Gst.SECOND * 5)
-
-        ret = self.pipeline.set_state(target_state)
+        
+        ret = self.pipeline.set_state(Gst.State.PLAYING)
         if ret == Gst.StateChangeReturn.FAILURE:
             log_error("Gst: Failed to set pipeline to PLAYING")
             self.state = PlayerState.ERROR
@@ -367,8 +248,6 @@ class GstDriver(VideoDriver):
         self.state = PlayerState.PLAYING
         time.sleep(0.1)
         self.decoder_name = self._discover_active_decoder()
-        if not self.decoder_name and self.pipeline_kind == "explicit-hevc":
-            self.decoder_name = "v4l2slh265dec"
         if not self.decoder_name and self.decoder_candidates:
             self.decoder_name = self.decoder_candidates[-1]
         if self.decoder_name:
@@ -485,7 +364,6 @@ class GstDriver(VideoDriver):
     def get_info(self) -> Dict[str, Any]:
         info = super().get_info()
         info["video_sink"] = self.video_sink_name or "default"
-        info["video_converter"] = self.video_converter_name or "unknown"
         info["hardware_accel_preferred"] = self.hardware_accel_preferred
         info["decoder"] = self.decoder_name or "unknown"
         info["pipeline_kind"] = self.pipeline_kind
