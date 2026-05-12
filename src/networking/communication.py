@@ -278,12 +278,10 @@ class CommandManager:
             while self.is_running:
                 try:
                     data, addr = self.control_sock.recvfrom(1024)
-                    msg = json.loads(data.decode())
+                    msg_text = data.decode()
+                    print(f"\n[NET] Received: {msg_text} from {addr}")
+                    msg = json.loads(msg_text)
                     
-                    # Diagnostic log for command reception
-                    from core.logger import log_info
-                    log_info(f"Network: Received message {msg.get('type')} from {addr}", component="network")
-
                     msg_type = msg.get("type")
                     if msg_type in self.message_handlers:
                         self.message_handlers[msg_type](msg, addr)
@@ -402,12 +400,10 @@ class CommandListener:
             while self.is_running:
                 try:
                     data, addr = self.control_sock.recvfrom(1024)
-                    msg = json.loads(data.decode())
+                    msg_text = data.decode()
+                    print(f"\n[NET] Received: {msg_text} from {addr}")
+                    msg = json.loads(msg_text)
                     
-                    # Diagnostic log for command reception
-                    from core.logger import log_info
-                    log_info(f"Network: Received message {msg.get('type')} from {addr}", component="network")
-
                     msg_type = msg.get("type")
                     if msg_type in self.message_handlers:
                         self.message_handlers[msg_type](msg, addr)

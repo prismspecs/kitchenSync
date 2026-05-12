@@ -100,6 +100,7 @@ class LeaderPi:
             log_info(f"Collaborator registered: {msg.get('device_id', 'unknown')} at {addr[0]}", component="network")
 
         self.command_manager.register_handler("register", on_command)
+        self.command_manager.start_listening()
 
     def start_system(self) -> None:
         """Start the synchronized playback system"""
