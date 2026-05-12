@@ -262,11 +262,7 @@ class GstDriver(VideoDriver):
             if not caps or caps.get_size() == 0:
                 return
 
-            structure = caps.get_structure(0)
-            if structure is None:
-                return
-
-            media_type = structure.get_name()
+            media_type = caps.to_string().split(",", 1)[0]
             if not media_type.startswith("video/"):
                 return
 
