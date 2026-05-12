@@ -155,11 +155,22 @@ def _should_use_explicit_hevc_pipeline(video_stream: dict) -> bool:
 
 
 def _build_explicit_hevc_pipeline(video_path: Path, report: dict):
-    # Use Gst.parse_launch to mirror gst-launch-1.0 behaviour exactly.
-    # Manual element linking + pad-added callbacks have timing issues with
-    # parsebin that cause v4l2slh265dec to report "no valid frames found".
+    # v4l2slh265dec outputs NV12 via DMA-buf.  autovideosink on X11 may choose
+    # xvimagesink which cannot import DMA-buf, causing backwards caps negotiation
+    # to fail and v4l2slh265dec to report "no valid frames found".  Use
+    # glimagesink (EGL / DMA-buf import) on X11, kmssink on headless KMS.
+    if os.environ.get("DISPLAY") and _element_available("glimagesink"):
+        sink_elem = "glimagesink"
+        sink_name = "glimagesink"
+    elif _element_available("kmssink"):
+        sink_elem = "kmssink"
+        sink_name = "kmssink"
+    else:
+        sink_elem = "autovideosink"
+        sink_name = "autovideosink"
+
     pipeline = Gst.parse_launch(
-        "filesrc name=filesrc ! parsebin ! v4l2slh265dec ! autovideosink name=videosink"
+        f"filesrc name=filesrc ! parsebin ! v4l2slh265dec ! {sink_elem} name=videosink"
     )
     if not pipeline:
         raise RuntimeError("Gst.parse_launch failed to create explicit HEVC pipeline")
@@ -171,7 +182,7 @@ def _build_explicit_hevc_pipeline(video_path: Path, report: dict):
 
     report["pipeline_kind"] = "explicit-hevc"
     report["selected_converter"] = "none"
-    return pipeline, "autovideosink"
+    return pipeline, sink_name
 
 
 def _ensure_display_session_ready():

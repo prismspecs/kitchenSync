@@ -242,11 +242,22 @@ class GstDriver(VideoDriver):
         )
 
     def _build_explicit_hevc_pipeline(self, video_path: str):
-        # Use Gst.parse_launch to mirror gst-launch-1.0 behaviour exactly.
-        # Manual element linking + pad-added callbacks have timing issues with
-        # parsebin that cause v4l2slh265dec to report "no valid frames found".
+        # v4l2slh265dec outputs NV12 via DMA-buf.  autovideosink on X11 may choose
+        # xvimagesink which cannot import DMA-buf, causing backwards caps negotiation
+        # to fail and v4l2slh265dec to report "no valid frames found".  Use
+        # glimagesink (EGL / DMA-buf import) on X11, kmssink on headless KMS.
+        if os.environ.get("DISPLAY") and Gst.ElementFactory.find("glimagesink"):
+            sink_elem = "glimagesink"
+            sink_name = "glimagesink"
+        elif Gst.ElementFactory.find("kmssink"):
+            sink_elem = "kmssink"
+            sink_name = "kmssink"
+        else:
+            sink_elem = "autovideosink"
+            sink_name = "autovideosink"
+
         pipeline = Gst.parse_launch(
-            "filesrc name=filesrc ! parsebin ! v4l2slh265dec ! autovideosink name=videosink"
+            f"filesrc name=filesrc ! parsebin ! v4l2slh265dec ! {sink_elem} name=videosink"
         )
         if not pipeline:
             return None, None
@@ -257,7 +268,7 @@ class GstDriver(VideoDriver):
         filesrc.set_property("location", os.path.abspath(video_path))
 
         self.video_converter_name = "none"
-        return pipeline, "autovideosink"
+        return pipeline, sink_name
 
     def load(self, video_path: str) -> bool:
         if not os.path.exists(video_path):
