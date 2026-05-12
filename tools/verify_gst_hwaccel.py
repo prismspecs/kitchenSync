@@ -145,15 +145,20 @@ def _build_explicit_hevc_pipeline(video_path: Path, report: dict):
     demux = Gst.ElementFactory.make("qtdemux", "demux")
     queue = Gst.ElementFactory.make("queue", "videoqueue")
     parser = Gst.ElementFactory.make("h265parse", "videoparse")
+    capsfilter = Gst.ElementFactory.make("capsfilter", "hevc_caps")
     decoder = Gst.ElementFactory.make("v4l2slh265dec", "videodecoder")
     convert = Gst.ElementFactory.make("videoconvert", "videoconvert")
     sink, sink_name = _create_video_sink()
 
-    elements = [filesrc, demux, queue, parser, decoder, convert, sink]
+    elements = [filesrc, demux, queue, parser, capsfilter, decoder, convert, sink]
     if not pipeline or any(element is None for element in elements):
         raise RuntimeError("Failed to create explicit HEVC pipeline elements")
 
     filesrc.set_property("location", str(video_path.resolve()))
+    capsfilter.set_property(
+        "caps",
+        Gst.Caps.from_string("video/x-h265,stream-format=byte-stream,alignment=au"),
+    )
 
     for element in elements:
         pipeline.add(element)
@@ -162,8 +167,10 @@ def _build_explicit_hevc_pipeline(video_path: Path, report: dict):
         raise RuntimeError("Failed to link filesrc to qtdemux")
     if not queue.link(parser):
         raise RuntimeError("Failed to link queue to h265parse")
-    if not parser.link(decoder):
-        raise RuntimeError("Failed to link h265parse to v4l2slh265dec")
+    if not parser.link(capsfilter):
+        raise RuntimeError("Failed to link h265parse to capsfilter")
+    if not capsfilter.link(decoder):
+        raise RuntimeError("Failed to link capsfilter to v4l2slh265dec")
     if not decoder.link(convert):
         raise RuntimeError("Failed to link v4l2slh265dec to videoconvert")
     if not convert.link(sink):

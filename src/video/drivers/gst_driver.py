@@ -233,15 +233,20 @@ class GstDriver(VideoDriver):
         demux = Gst.ElementFactory.make("qtdemux", "demux")
         queue = Gst.ElementFactory.make("queue", "videoqueue")
         parser = Gst.ElementFactory.make("h265parse", "videoparse")
+        capsfilter = Gst.ElementFactory.make("capsfilter", "hevc_caps")
         decoder = Gst.ElementFactory.make("v4l2slh265dec", "videodecoder")
         convert = Gst.ElementFactory.make("videoconvert", "videoconvert")
         sink, sink_name = self._create_video_sink()
 
-        elements = [filesrc, demux, queue, parser, decoder, convert, sink]
+        elements = [filesrc, demux, queue, parser, capsfilter, decoder, convert, sink]
         if not pipeline or any(element is None for element in elements):
             return None, None
 
         filesrc.set_property("location", os.path.abspath(video_path))
+        capsfilter.set_property(
+            "caps",
+            Gst.Caps.from_string("video/x-h265,stream-format=byte-stream,alignment=au"),
+        )
 
         for element in elements:
             pipeline.add(element)
@@ -250,7 +255,9 @@ class GstDriver(VideoDriver):
             return None, None
         if not queue.link(parser):
             return None, None
-        if not parser.link(decoder):
+        if not parser.link(capsfilter):
+            return None, None
+        if not capsfilter.link(decoder):
             return None, None
         if not decoder.link(convert):
             return None, None
