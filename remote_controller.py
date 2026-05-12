@@ -88,29 +88,44 @@ class RemoteHandler(BaseHTTPRequestHandler):
                     <video id="preview" controls muted playsinline src="/video_file"></video>
 
                     <div class="controls">
-                        <button class="play" onclick="post('/play')">PLAY CLUSTER</button>
-                        <button class="stop" onclick="post('/stop')">STOP ALL</button>
+                        <button class="play" onclick="playCluster()">PLAY CLUSTER</button>
+                        <button class="stop" onclick="stopCluster()">STOP ALL</button>
                     </div>
-                    
-                    <div class="status" id="state">Status: Initializing...</div>
-                </div>
 
-                <div class="card">
+                    <div class="status" id="state">Status: Initializing...</div>
+                    </div>
+
+                    <div class="card">
                     <h3>Collaborators</h3>
                     <div id="collabs" class="collab-list"></div>
-                </div>
+                    </div>
 
-                <script>
-                    function post(path) {{
-                        fetch(path, {{method: 'POST'}});
-                    }}
+                    <script>
+                    function playCluster() {
+                        fetch('/play', {method: 'POST'})
+                        .then(() => {
+                            document.getElementById('preview').play();
+                        });
+                    }
 
-                    function changeVideo(filename) {{
-                        fetch('/set_video?file=' + encodeURIComponent(filename), {{method: 'POST'}})
-                        .then(() => {{
-                            document.getElementById('preview').src = '/video_file?t=' + Date.now();
-                        }});
-                    }}
+                    function stopCluster() {
+                        fetch('/stop', {method: 'POST'})
+                        .then(() => {
+                            const vid = document.getElementById('preview');
+                            vid.pause();
+                            vid.currentTime = 0;
+                        });
+                    }
+
+                    function changeVideo(filename) {
+                        fetch('/set_video?file=' + encodeURIComponent(filename), {method: 'POST'})
+                        .then(() => {
+                            const vid = document.getElementById('preview');
+                            vid.src = '/video_file?t=' + Date.now();
+                            vid.load();
+                        });
+                    }
+
 
                     function update() {{
                         fetch('/state').then(r => r.json()).then(data => {{
@@ -231,6 +246,9 @@ def start_remote():
     """Start the remote controller services"""
     enable_system_logging(True)
     
+    # Initialize the sync socket for the master clock
+    sync_broadcaster.setup_socket()
+    
     # Master Clock Thread (only active when is_master is True)
     def master_clock():
         last_broadcast = 0
@@ -250,8 +268,22 @@ def start_remote():
                     command_manager.send_command(start_cmd)
                     last_broadcast = time.time()
                 
-                # Broadcast actual time sync
-                sync_broadcaster.broadcast_sync(cluster_state.video_pos)
+                # The browser/master clock logic handles the "sync" by virtue 
+                # of the collaborators following the master_start_time and current time.
+                # However, we should still broadcast the sync packets for the legacy 
+                # SyncReceiver logic in collaborator.py.
+                
+                # We need to manually send the sync packet because we aren't using 
+                # sync_broadcaster.start_broadcasting() (which expects a media provider).
+                sync_packet = json.dumps({
+                    "type": "sync",
+                    "time": cluster_state.video_pos,
+                    "leader_id": sync_broadcaster.leader_id,
+                    "source": "wall"
+                })
+                sync_broadcaster.sync_sock.sendto(
+                    sync_packet.encode(), (sync_broadcaster.broadcast_ip, sync_broadcaster.sync_port)
+                )
                     
             time.sleep(0.05)
     
