@@ -308,6 +308,11 @@ def main():
         action="store_true",
         help="Print raw deviation between leader and collaborator video positions to the console",
     )
+    parser.add_argument(
+        "--auto",
+        action="store_true",
+        help="Start playback immediately without waiting for leader command",
+    )
     args = parser.parse_args()
 
     try:
@@ -333,6 +338,17 @@ def main():
         if args.debug_deviation:
             collaborator.debug_deviation_mode = True
             print("✓ Debug deviation mode: ENABLED (prints raw deviation)")
+
+        # Start playback immediately if --auto is specified
+        if args.auto:
+            print("🎯 Auto-start: Triggering playback immediately...")
+            # Find and load video
+            collaborator.video_path = collaborator.video_manager.find_video_file()
+            if collaborator.video_path:
+                collaborator.video_player.load(collaborator.video_path)
+                collaborator.start_playback()
+            else:
+                log_error("Auto-start failed: No video file found.")
 
         collaborator.run()
     except KeyboardInterrupt:
