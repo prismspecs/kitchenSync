@@ -462,6 +462,15 @@ class RemoteHandler(BaseHTTPRequestHandler):
         </html>
         """
 
+class RobustRemoteServer(ThreadingHTTPServer):
+    def handle_error(self, request, client_address):
+        # Silence messy disconnect errors that happen during streaming
+        import sys
+        exctype, value = sys.exc_info()[:2]
+        if exctype in (ConnectionResetError, BrokenPipeError):
+            return
+        super().handle_error(request, client_address)
+
 def start_remote():
     """Start the remote controller services"""
     enable_system_logging(True)
@@ -490,7 +499,7 @@ def start_remote():
     
     # Start web server
     web_thread = threading.Thread(
-        target=lambda: ThreadingHTTPServer(("0.0.0.0", 8080), RemoteHandler).serve_forever(),
+        target=lambda: RobustRemoteServer(("0.0.0.0", 8080), RemoteHandler).serve_forever(),
         daemon=True
     )
     web_thread.start()
