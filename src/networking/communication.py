@@ -278,9 +278,7 @@ class CommandManager:
             while self.is_running:
                 try:
                     data, addr = self.control_sock.recvfrom(1024)
-                    msg_text = data.decode()
-                    print(f"\n[NET] Received: {msg_text} from {addr}")
-                    msg = json.loads(msg_text)
+                    msg = json.loads(data.decode())
                     
                     msg_type = msg.get("type")
                     if msg_type in self.message_handlers:
@@ -404,9 +402,7 @@ class CommandListener:
             while self.is_running:
                 try:
                     data, addr = self.control_sock.recvfrom(1024)
-                    msg_text = data.decode()
-                    print(f"\n[NET] Received: {msg_text} from {addr}")
-                    msg = json.loads(msg_text)
+                    msg = json.loads(data.decode())
                     
                     msg_type = msg.get("type")
                     if msg_type in self.message_handlers:
