@@ -26,20 +26,20 @@ CONFIG_ROLE_SECTIONS = {
 
 EDITABLE_CONFIG_FIELDS = {
     "leader": [
-        {"key": "video_file", "section": "DEFAULT", "type": "string", "label": "Video file"},
-        {"key": "enable_audio", "section": "KITCHENSYNC", "type": "bool", "label": "Enable Audio"},
-        {"key": "debug", "section": "KITCHENSYNC", "type": "bool", "label": "Debug"},
-        {"key": "tick_interval", "section": "DEFAULT", "type": "float", "label": "Sync Interval"},
-        {"key": "max_drift", "section": "DEFAULT", "type": "float", "label": "Max Drift"},
-        {"key": "min_drift", "section": "DEFAULT", "type": "float", "label": "Min Drift"},
-        {"key": "kp", "section": "DEFAULT", "type": "float", "label": "P-Gain"},
-        {"key": "enable_system_logging", "section": "KITCHENSYNC", "type": "bool", "label": "Verbose logging"},
+        {"key": "video_file", "section": "DEFAULT", "type": "string", "label": "Video file", "default": "video.mp4"},
+        {"key": "enable_audio", "section": "KITCHENSYNC", "type": "bool", "label": "Enable Audio", "default": True},
+        {"key": "debug", "section": "KITCHENSYNC", "type": "bool", "label": "Debug", "default": False},
+        {"key": "tick_interval", "section": "DEFAULT", "type": "float", "label": "Sync Interval", "default": 0.1},
+        {"key": "max_drift", "section": "DEFAULT", "type": "float", "label": "Max Drift", "default": 0.5},
+        {"key": "min_drift", "section": "DEFAULT", "type": "float", "label": "Min Drift", "default": 0.01},
+        {"key": "kp", "section": "DEFAULT", "type": "float", "label": "P-Gain", "default": 0.5},
+        {"key": "enable_system_logging", "section": "KITCHENSYNC", "type": "bool", "label": "Verbose logging", "default": False},
     ],
     "collaborator": [
-        {"key": "video_file", "section": "DEFAULT", "type": "string", "label": "Video file"},
-        {"key": "enable_audio", "section": "KITCHENSYNC", "type": "bool", "label": "Enable Audio"},
-        {"key": "midi_port", "section": "DEFAULT", "type": "int", "label": "MIDI port"},
-        {"key": "debug", "section": "KITCHENSYNC", "type": "bool", "label": "Debug"},
+        {"key": "video_file", "section": "DEFAULT", "type": "string", "label": "Video file", "default": "video.mp4"},
+        {"key": "enable_audio", "section": "KITCHENSYNC", "type": "bool", "label": "Enable Audio", "default": True},
+        {"key": "midi_port", "section": "DEFAULT", "type": "int", "label": "MIDI port", "default": 0},
+        {"key": "debug", "section": "KITCHENSYNC", "type": "bool", "label": "Debug", "default": False},
     ],
 }
 
@@ -314,14 +314,15 @@ class ConfigManager:
             key = field["key"]
             section = field["section"]
             field_type = field["type"]
+            default = field.get("default")
             if field_type == "int":
-                values[key] = self.getint(key, 0, section=section)
+                values[key] = self.getint(key, int(default) if default is not None else 0, section=section)
             elif field_type == "float":
-                values[key] = self.getfloat(key, 0.0, section=section)
+                values[key] = self.getfloat(key, float(default) if default is not None else 0.0, section=section)
             elif field_type == "bool":
-                values[key] = self.getboolean(key, False, section=section)
+                values[key] = self.getboolean(key, bool(default) if default is not None else False, section=section)
             else:
-                values[key] = self.get(key, "", section=section)
+                values[key] = self.get(key, str(default) if default is not None else "", section=section)
         return values
 
     def clean_and_save_config(

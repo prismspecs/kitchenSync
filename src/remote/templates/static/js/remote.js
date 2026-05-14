@@ -48,11 +48,12 @@ function renderField(deviceId, field, value, videoOptions) {
     }
 
     const type = field.type === 'int' || field.type === 'float' ? 'number' : 'text';
+    const step = field.type === 'float' ? 'step="any"' : '';
     const list = field.key === 'video_file' && videoOptions.length ? 'list="videoSuggestions"' : '';
     return `
         <div class="row">
             <label for="${fieldId}">${field.label}</label>
-            <input id="${fieldId}" data-key="${field.key}" type="${type}" value="${value ?? ''}" ${list}>
+            <input id="${fieldId}" data-key="${field.key}" type="${type}" value="${value ?? ''}" ${step} ${list}>
         </div>
     `;
 }
