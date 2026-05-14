@@ -35,6 +35,8 @@ class TestGstDriverSetSpeed(unittest.TestCase):
             SeekType=SimpleNamespace(NONE="none"),
             Event=SimpleNamespace(new_seek=MagicMock(return_value=fake_event)),
             init=MagicMock(),
+            StateChangeReturn=SimpleNamespace(FAILURE=0, SUCCESS=1),
+            State=SimpleNamespace(PAUSED=3, PLAYING=4),
         )
 
         original_gst = gst_driver.Gst
@@ -46,6 +48,7 @@ class TestGstDriverSetSpeed(unittest.TestCase):
             driver = gst_driver.GstDriver.__new__(gst_driver.GstDriver)
             driver.pipeline = MagicMock()
             driver.pipeline.send_event.return_value = True
+            driver.pipeline.get_state.return_value = (None, 3, None) # State.PLAYING is 4, PAUSED is 3. Mocking success and PAUSED.
             driver.current_rate = 1.0
 
             success = driver.set_speed(1.02)

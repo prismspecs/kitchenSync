@@ -265,6 +265,14 @@ class GstDriver(VideoDriver):
             log_error(f"Gst Error: {err.message}")
             self.state = PlayerState.ERROR
 
+    def _is_ready(self) -> bool:
+        """Check if the pipeline is in a state that allows queries and seeks."""
+        if not self.pipeline:
+            return False
+        # Use a short timeout (0) to check current state without blocking
+        success, current, _ = self.pipeline.get_state(0)
+        return success != Gst.StateChangeReturn.FAILURE and current >= Gst.State.PAUSED
+
     def play(self) -> bool:
         if not self.pipeline:
             return False
@@ -276,7 +284,10 @@ class GstDriver(VideoDriver):
             return False
             
         self.state = PlayerState.PLAYING
-        time.sleep(0.1)
+        
+        # Wait up to 500ms for the pipeline to reach PAUSED/PLAYING so queries work
+        self.pipeline.get_state(0.5 * Gst.SECOND)
+        
         self.decoder_name = self._discover_active_decoder()
         if not self.decoder_name and self.decoder_candidates:
             self.decoder_name = self.decoder_candidates[-1]
@@ -309,7 +320,7 @@ class GstDriver(VideoDriver):
         """
         Perform a precise seek.
         """
-        if not self.pipeline:
+        if not self._is_ready():
             return False
         
         # Convert seconds to nanoseconds
@@ -328,7 +339,7 @@ class GstDriver(VideoDriver):
         Adjust playback rate. Attempts seamless rate change, fallbacks to 
         flushing seek if hardware (like Pi 5 v4l2sl) rejects it.
         """
-        if not self.pipeline:
+        if not self._is_ready():
             return False
             
         if abs(rate - self.current_rate) < 0.001:
@@ -351,6 +362,10 @@ class GstDriver(VideoDriver):
         # 2. Fallback to Flushing Seek (for hardware that rejects instant changes)
         # This is less seamless (minor flicker) but works on Pi 5.
         pos = self.get_position()
+        if pos is None:
+            log_warning("Gst: Cannot adjust rate (position query failed)")
+            return False
+
         success = self.pipeline.seek(
             rate,
             Gst.Format.TIME,
@@ -369,7 +384,7 @@ class GstDriver(VideoDriver):
         return success
 
     def get_position(self) -> Optional[float]:
-        if not self.pipeline:
+        if not self._is_ready():
             return None
         
         success, position = self.pipeline.query_position(Gst.Format.TIME)
@@ -378,7 +393,7 @@ class GstDriver(VideoDriver):
         return None
 
     def get_duration(self) -> float:
-        if not self.pipeline:
+        if not self._is_ready():
             return 0.0
         
         success, duration = self.pipeline.query_duration(Gst.Format.TIME)

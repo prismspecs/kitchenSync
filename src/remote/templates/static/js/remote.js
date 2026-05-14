@@ -1,4 +1,5 @@
 const requestedConfigs = new Set();
+const lastSaveAt = new Map();
 
 async function postJson(path, payload) {
     const response = await fetch(path, {
@@ -91,7 +92,7 @@ function renderConfigCell(device, videoOptions, scheduleOptions) {
         }
         return `
             <button onclick="requestConfig('${device.device_id}')">Load config</button>
-            ${renderMessage(device.message)}
+            <div class="message-area">${renderMessage(device.message)}</div>
         `;
     }
 
@@ -104,10 +105,12 @@ function renderConfigCell(device, videoOptions, scheduleOptions) {
                 <button type="button" onclick="loadDefaults('${device.device_id}')">Load Defaults</button>
                 ${device.role === 'collaborator' ? `<button type="button" onclick="requestConfig('${device.device_id}')">Refresh</button>` : ''}
             </div>
-            ${renderMessage(device.message)}
+            <div class="message-area">${renderMessage(device.message)}</div>
         </form>
     `;
 }
+
+let initialLoadDone = false;
 
 function renderState(state) {
     const selector = document.getElementById('videoSelector');
@@ -116,6 +119,17 @@ function renderState(state) {
             <option value="${video}" ${video === state.current_video ? 'selected' : ''}>${video}</option>
         `).join('');
         selector.onchange = () => changeVideo(selector.value);
+
+        // If this is the first time we've loaded the state, or if the current video
+        // changed on the backend, ensure the preview matches.
+        if (!initialLoadDone && state.available_videos?.length) {
+            const preview = document.getElementById('preview');
+            if (preview && !preview.src.includes('/video_file')) {
+                preview.src = '/video_file?t=' + Date.now();
+                preview.load();
+            }
+            initialLoadDone = true;
+        }
     }
 
     const suggestions = document.getElementById('videoSuggestions');
@@ -158,10 +172,27 @@ function renderState(state) {
             cells[3].textContent = device.status;
 
             const configCell = cells[4];
-            // Only update the config cell if no input inside it has focus
+            
+            // Snapshot timing to prevent premature reverts
+            const snapshotTime = device.config?.updated_at || 0;
+            const saveTime = lastSaveAt.get(device.device_id) || 0;
+            // Consider pending if we saved recently and snapshot hasn't caught up
+            const isPending = saveTime > snapshotTime && (Date.now() / 1000 - saveTime < 10);
+
+            // Only update the config cell if no input inside it has focus AND no save is pending
             const hasFocus = configCell.contains(document.activeElement);
-            if (!hasFocus) {
+            if (!hasFocus && !isPending) {
                 configCell.innerHTML = renderConfigCell(device, state.available_videos || [], state.available_schedules || []);
+            } else {
+                // Update only the message area if it exists
+                const messageArea = configCell.querySelector('.message-area');
+                if (messageArea) {
+                    if (isPending && (!device.message || device.message.updated_at < saveTime)) {
+                        messageArea.innerHTML = '<div class="message info">Saving...</div>';
+                    } else {
+                        messageArea.innerHTML = renderMessage(device.message);
+                    }
+                }
             }
         });
 
@@ -188,6 +219,13 @@ async function saveConfig(event, deviceId, role) {
             updates[input.dataset.key] = input.value;
         }
     });
+
+    const messageArea = form.querySelector('.message-area');
+    if (messageArea) {
+        messageArea.innerHTML = '<div class="message info">Saving...</div>';
+    }
+
+    lastSaveAt.set(deviceId, Date.now() / 1000);
     await postJson('/api/config/save', { device_id: deviceId, role, updates });
     await refresh();
 }
