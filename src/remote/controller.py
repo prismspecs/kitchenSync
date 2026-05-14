@@ -160,7 +160,10 @@ class RemoteHandler(BaseHTTPRequestHandler):
             return {}
 
     def do_GET(self):
-        if self.path == "/":
+        parsed_path = urlparse(self.path)
+        path = parsed_path.path
+
+        if path == "/":
             self.send_response(200)
             self.send_header("Content-type", "text/html")
             self.end_headers()
@@ -168,8 +171,8 @@ class RemoteHandler(BaseHTTPRequestHandler):
                 self.wfile.write(f.read())
             return
 
-        if self.path.startswith("/static/"):
-            file_path = TEMPLATE_DIR / self.path.lstrip("/")
+        if path.startswith("/static/"):
+            file_path = TEMPLATE_DIR / path.lstrip("/")
             if file_path.exists() and file_path.is_file():
                 self.send_response(200)
                 if file_path.suffix == ".css":
@@ -183,11 +186,11 @@ class RemoteHandler(BaseHTTPRequestHandler):
             self.send_error(404)
             return
 
-        if self.path in ["/state", "/json", "/api/state"]:
+        if path in ["/state", "/json", "/api/state"]:
             self._send_json(build_ui_state())
             return
 
-        if self.path.startswith("/video_file"):
+        if path.startswith("/video_file"):
             video_path = Path("videos") / cluster_state.current_video
             if not video_path.exists():
                 self.send_error(404, "Video file not found")
