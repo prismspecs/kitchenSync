@@ -226,6 +226,14 @@ class RemoteHandler(BaseHTTPRequestHandler):
                 "start_time": cluster_state.master_start_time,
                 "schedule": [],
                 "debug_mode": config.debug_mode,
+                "sync_params": {
+                    "max_drift": config.max_drift,
+                    "min_drift": config.min_drift,
+                    "kp": config.kp,
+                    "min_rate": config.min_rate,
+                    "max_rate": config.max_rate,
+                    "max_samples": config.max_samples,
+                },
             }
             command_manager.send_command(start_cmd)
             log_info(f"Cluster PLAY: {cluster_state.current_video}", component="remote")
@@ -342,6 +350,14 @@ def start_remote():
                         "start_time": cluster_state.master_start_time,
                         "schedule": [],
                         "debug_mode": config.debug_mode,
+                "sync_params": {
+                    "max_drift": config.max_drift,
+                    "min_drift": config.min_drift,
+                    "kp": config.kp,
+                    "min_rate": config.min_rate,
+                    "max_rate": config.max_rate,
+                    "max_samples": config.max_samples,
+                },
                     }
                     command_manager.send_command(start_cmd)
                     last_broadcast = time.time()
@@ -359,7 +375,7 @@ def start_remote():
                     (sync_broadcaster.broadcast_ip, sync_broadcaster.sync_port),
                 )
 
-            time.sleep(0.05)
+            time.sleep(config.tick_interval)
 
     threading.Thread(target=master_clock, daemon=True).start()
 

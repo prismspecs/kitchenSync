@@ -211,6 +211,8 @@ class GstDriver(VideoDriver):
 
         uri = "file://" + os.path.abspath(video_path)
         self.pipeline.set_property("uri", uri)
+        # Disable audio in playbin to avoid PipeWire/ALSA errors if sound card is missing
+        self.pipeline.set_property("flags", self.pipeline.get_property("flags") & ~(1 << 1))
 
         sink, sink_name = self._create_video_sink()
         if sink:
