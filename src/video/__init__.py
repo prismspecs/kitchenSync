@@ -8,7 +8,7 @@ from typing import Optional
 from video.driver import VideoDriver
 from core.logger import log_info, log_error, log_warning
 
-def get_video_driver(driver_name: str, debug_mode: bool = False) -> Optional[VideoDriver]:
+def get_video_driver(driver_name: str, debug_mode: bool = False, enable_audio: bool = True) -> Optional[VideoDriver]:
     """
     Factory function to instantiate a video driver.
     """
@@ -22,7 +22,7 @@ def get_video_driver(driver_name: str, debug_mode: bool = False) -> Optional[Vid
         if driver_name == "gstreamer" or driver_name == "gst":
             from video.drivers.gst_driver import GstDriver
             log_info("Video: Using GStreamer driver backend")
-            return GstDriver(debug_mode=debug_mode)
+            return GstDriver(debug_mode=debug_mode, enable_audio=enable_audio)
             
         elif driver_name == "mock":
             from video.drivers.mock_driver import MockVideoDriver

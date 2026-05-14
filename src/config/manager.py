@@ -15,11 +15,11 @@ from core.logger import log_info, log_warning, log_error
 
 CONFIG_ROLE_SECTIONS = {
     "leader": {
-        "KITCHENSYNC": {"is_leader", "device_id", "debug", "enable_system_logging"},
+        "KITCHENSYNC": {"is_leader", "device_id", "debug", "enable_system_logging", "enable_audio"},
         "DEFAULT": {"video_file", "video_driver", "sync_port", "tick_interval", "max_drift", "min_drift", "kp", "min_rate", "max_rate", "max_samples"},
     },
     "collaborator": {
-        "KITCHENSYNC": {"debug", "enable_system_logging"},
+        "KITCHENSYNC": {"debug", "enable_system_logging", "enable_audio"},
         "DEFAULT": {"device_id", "video_file", "video_driver", "midi_port", "sync_port"},
     },
 }
@@ -27,6 +27,7 @@ CONFIG_ROLE_SECTIONS = {
 EDITABLE_CONFIG_FIELDS = {
     "leader": [
         {"key": "video_file", "section": "DEFAULT", "type": "string", "label": "Video file"},
+        {"key": "enable_audio", "section": "KITCHENSYNC", "type": "bool", "label": "Enable Audio"},
         {"key": "debug", "section": "KITCHENSYNC", "type": "bool", "label": "Debug"},
         {"key": "tick_interval", "section": "DEFAULT", "type": "float", "label": "Sync Interval"},
         {"key": "max_drift", "section": "DEFAULT", "type": "float", "label": "Max Drift"},
@@ -36,6 +37,7 @@ EDITABLE_CONFIG_FIELDS = {
     ],
     "collaborator": [
         {"key": "video_file", "section": "DEFAULT", "type": "string", "label": "Video file"},
+        {"key": "enable_audio", "section": "KITCHENSYNC", "type": "bool", "label": "Enable Audio"},
         {"key": "midi_port", "section": "DEFAULT", "type": "int", "label": "MIDI port"},
         {"key": "debug", "section": "KITCHENSYNC", "type": "bool", "label": "Debug"},
     ],
@@ -450,6 +452,12 @@ class ConfigManager:
         """Check if system detailed logging is enabled"""
         return self.getboolean("enable_system_logging", False)
         {
+            "key": "enable_audio",
+            "section": "KITCHENSYNC",
+            "type": "bool",
+            "label": "Enable Audio",
+        },
+        {
             "key": "tick_interval",
             "section": "DEFAULT",
             "type": "float",
@@ -513,3 +521,8 @@ class ConfigManager:
     def max_samples(self) -> int:
         """Number of samples for drift averaging (default 10)."""
         return self.getint("max_samples", 10)
+
+    @property
+    def enable_audio(self) -> bool:
+        """Check if audio playback is enabled (default: True)."""
+        return self.getboolean("enable_audio", True)

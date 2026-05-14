@@ -80,9 +80,23 @@ EOF
 
 # 5. Autostart Configuration (Mouse hiding)
 echo "Configuring autostart..."
+mkdir -p ~/.config/openbox
 AUTOSTART=~/.config/openbox/autostart
+# Fix ownership in case it was created as root by mistake
+sudo chown -R $USER:$USER ~/.config/openbox
 touch $AUTOSTART
 grep -q "unclutter" $AUTOSTART || echo "unclutter -idle 0.1 -root &" >> $AUTOSTART
+
+# 6. Python Virtual Environment
+echo "Setting up Python virtual environment..."
+if [ ! -d ".venv" ]; then
+    python3 -m venv --system-site-packages .venv
+    echo "Virtual environment created."
+fi
+
+echo "Installing Python dependencies..."
+./.venv/bin/pip install --upgrade pip
+./.venv/bin/pip install mido pyserial python-osc
 
 echo "-------------------------------------------------------"
 echo "Setup Complete! Please REBOOT for group changes to take effect."

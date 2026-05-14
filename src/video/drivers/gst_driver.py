@@ -28,12 +28,13 @@ class GstDriver(VideoDriver):
     Uses playbin for robustness and custom seek events for seamless rate control.
     """
 
-    def __init__(self, debug_mode: bool = False):
+    def __init__(self, debug_mode: bool = False, enable_audio: bool = True):
         if not GST_AVAILABLE:
             raise ImportError("GStreamer or GObject Introspection not found. Install via OS_SETUP.md.")
 
         Gst.init(None)
         self.debug_mode = debug_mode
+        self.enable_audio = enable_audio
         self.pipeline = None
         self.video_path = None
         self.state = PlayerState.STOPPED
@@ -211,8 +212,15 @@ class GstDriver(VideoDriver):
 
         uri = "file://" + os.path.abspath(video_path)
         self.pipeline.set_property("uri", uri)
-        # Disable audio in playbin to avoid PipeWire/ALSA errors if sound card is missing
-        self.pipeline.set_property("flags", self.pipeline.get_property("flags") & ~(1 << 1))
+
+        # Conditionally disable audio in playbin to avoid PipeWire/ALSA errors 
+        # when a sound card is missing or not needed.
+        if not self.enable_audio:
+            # Flag 1 << 1 is GST_PLAY_FLAG_AUDIO
+            self.pipeline.set_property("flags", self.pipeline.get_property("flags") & ~(1 << 1))
+            log_info("Gst: Audio output disabled by configuration")
+        else:
+            log_info("Gst: Audio output enabled")
 
         sink, sink_name = self._create_video_sink()
         if sink:

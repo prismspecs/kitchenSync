@@ -41,7 +41,11 @@ class CollaboratorPi:
 
         # Video Driver
         driver_name = self.config.video_driver
-        self.video_player = get_video_driver(driver_name, debug_mode=self.config.debug_mode)
+        self.video_player = get_video_driver(
+            driver_name,
+            debug_mode=self.config.debug_mode,
+            enable_audio=self.config.enable_audio
+        )
 
         if not self.video_player:
             log_error("Failed to initialize video driver", component="collaborator")
