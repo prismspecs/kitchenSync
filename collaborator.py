@@ -470,18 +470,6 @@ def main():
         # Start playback immediately if --auto is specified
         if args.auto:
             print(" Auto-start: Triggering playback immediately...")
-        # Update sync parameters if provided by leader
-        sync_params = msg.get("sync_params", {})
-        if sync_params:
-            self.max_drift = sync_params.get("max_drift", self.max_drift)
-            self.min_drift = sync_params.get("min_drift", self.min_drift)
-            self.kp = sync_params.get("kp", self.kp)
-            self.min_rate = sync_params.get("min_rate", self.min_rate)
-            self.max_rate = sync_params.get("max_rate", self.max_rate)
-            new_max_samples = sync_params.get("max_samples", self.max_samples)
-            if new_max_samples != self.max_samples:
-                self.max_samples = new_max_samples
-                self.deviation_samples.clear()
 
             # Find and load video
             collaborator.video_path = collaborator.video_manager.find_video_file()
