@@ -519,8 +519,8 @@ class ConfigManager:
 
     @property
     def kp(self) -> float:
-        """P-gain coefficient for speed adjustment (default 0.1)."""
-        return self.getfloat("kp", 0.1)
+        """P-gain coefficient for speed adjustment (default 0.25)."""
+        return self.getfloat("kp", 0.25)
 
     @property
     def min_rate(self) -> float:
@@ -534,8 +534,8 @@ class ConfigManager:
 
     @property
     def max_samples(self) -> int:
-        """Number of samples for drift averaging (default 5)."""
-        return self.getint("max_samples", 5)
+        """Number of samples for drift averaging (default 10)."""
+        return self.getint("max_samples", 10)
 
     @property
     def enable_audio(self) -> bool:

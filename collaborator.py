@@ -127,19 +127,25 @@ class CollaboratorPi:
                 log_info(f"Received sync while idle: {leader_time:.3f}s", component="sync")
             return
 
+        # Compensate for network and processing latency
+        # 'received_at' is when the packet hit the network listener.
+        # 'leader_time' was the leader's position at that instant.
+        processing_latency = time.time() - received_at
+        adjusted_leader_time = leader_time + processing_latency
+        
         # Update system time and maintain sync
-        self.system_state.current_time = leader_time
+        self.system_state.current_time = adjusted_leader_time
 
         # Process MIDI cues (safe no-op if no schedule)
         if self.midi_scheduler:
-            self.midi_scheduler.process_cues(leader_time)
+            self.midi_scheduler.process_cues(adjusted_leader_time)
 
         # Check for critical sync window (only if enabled via --debug_loop)
         if self.critical_window_logging:
-            self._update_critical_window_status(leader_time)
+            self._update_critical_window_status(adjusted_leader_time)
 
         # Maintain video sync
-        self._maintain_video_sync(leader_time)
+        self._maintain_video_sync(adjusted_leader_time)
 
     def _maintain_video_sync(self, leader_time: float) -> None:
         """Calculate drift and adjust playback speed"""

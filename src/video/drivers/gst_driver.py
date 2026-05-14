@@ -285,8 +285,8 @@ class GstDriver(VideoDriver):
             
         self.state = PlayerState.PLAYING
         
-        # Wait up to 500ms for the pipeline to reach PAUSED/PLAYING so queries work
-        self.pipeline.get_state(0.5 * Gst.SECOND)
+        # Wait up to 100ms (reduced from 500ms) for the pipeline to reach PAUSED/PLAYING
+        self.pipeline.get_state(0.1 * Gst.SECOND)
         
         self.decoder_name = self._discover_active_decoder()
         if not self.decoder_name and self.decoder_candidates:
@@ -318,7 +318,7 @@ class GstDriver(VideoDriver):
 
     def seek(self, seconds: float) -> bool:
         """
-        Perform a precise seek.
+        Perform a precise, accurate seek.
         """
         if not self._is_ready():
             return False
@@ -326,11 +326,13 @@ class GstDriver(VideoDriver):
         # Convert seconds to nanoseconds
         nanos = int(seconds * Gst.SECOND)
         
-        # Seek with flush for immediate response
-        success = self.pipeline.seek_simple(
+        # Use ACCURATE for sync seeks to avoid keyframe snapping
+        success = self.pipeline.seek(
+            self.current_rate,
             Gst.Format.TIME, 
-            Gst.SeekFlags.FLUSH | Gst.SeekFlags.KEY_UNIT, 
-            nanos
+            Gst.SeekFlags.FLUSH | Gst.SeekFlags.ACCURATE, 
+            Gst.SeekType.SET, nanos,
+            Gst.SeekType.NONE, -1
         )
         return success
 
