@@ -253,6 +253,18 @@ class RemoteHandler(BaseHTTPRequestHandler):
             self.end_headers()
             return
 
+        if action == "api/seek":
+            new_pos = payload.get("value", 0)
+            cluster_state.video_pos = float(new_pos)
+            # Adjust master start time so wall-clock sync remains accurate
+            cluster_state.master_start_time = time.time() - cluster_state.video_pos
+            
+            command_manager.send_command({"type": "remote_seek", "value": cluster_state.video_pos})
+            log_info(f"Cluster SEEK: {cluster_state.video_pos:.2f}s", component="remote")
+            self.send_response(204)
+            self.end_headers()
+            return
+
         if action in {"set_video", "api/video"}:
             new_file = query.get("file", [None])[0]
             if new_file:

@@ -31,6 +31,10 @@ async function changeVideo(filename) {
     preview.load();
 }
 
+async function seekCluster(seconds) {
+    await postJson('/api/seek', { value: seconds });
+}
+
 async function requestConfig(deviceId) {
     requestedConfigs.add(deviceId);
     await postJson('/api/config/request', { device_id: deviceId });
@@ -186,3 +190,14 @@ async function refresh() {
 
 refresh();
 setInterval(refresh, 2000); // Relaxed refresh rate slightly
+
+// Initialize seek event listener for preview video
+document.addEventListener('DOMContentLoaded', () => {
+    const preview = document.getElementById('preview');
+    if (preview) {
+        preview.addEventListener('seeked', () => {
+            // Only seek cluster if we are the master (playing)
+            seekCluster(preview.currentTime);
+        });
+    }
+});
