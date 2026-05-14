@@ -38,10 +38,12 @@ async function requestConfig(deviceId) {
 
 function renderField(deviceId, field, value, videoOptions) {
     const fieldId = `${deviceId}-${field.key}`;
+    const tooltip = field.tooltip ? `<span class="tooltip-icon" data-tooltip="${field.tooltip}">?</span>` : '';
+    
     if (field.type === 'bool') {
         return `
             <div class="row">
-                <label for="${fieldId}">${field.label}</label>
+                <label for="${fieldId}">${field.label}${tooltip}</label>
                 <input id="${fieldId}" data-key="${field.key}" type="checkbox" ${value ? 'checked' : ''}>
             </div>
         `;
@@ -52,7 +54,7 @@ function renderField(deviceId, field, value, videoOptions) {
     const list = field.key === 'video_file' && videoOptions.length ? 'list="videoSuggestions"' : '';
     return `
         <div class="row">
-            <label for="${fieldId}">${field.label}</label>
+            <label for="${fieldId}">${field.label}${tooltip}</label>
             <input id="${fieldId}" data-key="${field.key}" type="${type}" value="${value ?? ''}" ${step} ${list}>
         </div>
     `;
