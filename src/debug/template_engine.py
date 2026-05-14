@@ -172,6 +172,10 @@ class DebugTemplateManager:
             "looping_status": (
                 "Enabled" if system_info.get("looping_enabled", False) else "Disabled"
             ),
+            "video_sink": system_info.get("video_sink", "Unknown"),
+            "video_decoder": system_info.get("video_decoder", "Unknown"),
+            "hw_accel_status": "Active" if system_info.get("is_hardware_accelerated", False) else "Inactive",
+            "hw_accel_class": "good" if system_info.get("is_hardware_accelerated", False) else "warning",
             # MIDI information (removed redundant current/next, keeping comprehensive lists)
             "midi_recent_html": self._format_midi_list(
                 system_info.get("midi_recent", []), "midi-recent"

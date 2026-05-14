@@ -94,6 +94,7 @@ class TestCollaboratorDuplicateStart(unittest.TestCase):
                 seek=MagicMock(),
             ),
             debug_sync_logging=False,
+            max_drift=0.5,
         )
 
         collaborator.CollaboratorPi._handle_start_command(dummy, {"type": "start"})
@@ -110,6 +111,7 @@ class TestCollaboratorDuplicateStart(unittest.TestCase):
                 seek=MagicMock(),
             ),
             debug_sync_logging=False,
+            max_drift=0.5,
         )
 
         collaborator.CollaboratorPi._handle_start_command(dummy, {"type": "start"})

@@ -122,4 +122,10 @@ python3 -m unittest tests/test_networking.py
 python3 -m unittest tests/test_sync_regressions.py
 ```
 
+If you need a sample file for manual testing, download a test video into `videos/`:
+```bash
+mkdir -p videos
+wget -O videos/big_buck_bunny_1080p_h264.mov https://download.blender.org/peach/bigbuckbunny_movies/big_buck_bunny_1080p_h264.mov
+```
+
 For distributed manual testing, use the commands in [docs/TESTING.md](docs/TESTING.md).

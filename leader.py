@@ -176,6 +176,7 @@ class LeaderPi:
                     "min_rate": self.config.min_rate,
                     "max_rate": self.config.max_rate,
                     "max_samples": self.config.max_samples,
+                    "enable_audio": self.config.enable_audio,
                 },
             }
             while self.system_state.is_running:

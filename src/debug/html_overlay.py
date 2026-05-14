@@ -757,22 +757,28 @@ user_pref("browser.newtabpage.activity-stream.default.sites", "");
 
                     # Get video playback information directly from video player
                     try:
-                        if self.video_player and hasattr(
-                            self.video_player, "get_video_info"
-                        ):
-                            video_info = self.video_player.get_video_info()
+                        if self.video_player:
+                            player_info = {}
+                            if hasattr(self.video_player, "get_info"):
+                                player_info = self.video_player.get_info()
+                            elif hasattr(self.video_player, "get_video_info"):
+                                player_info = self.video_player.get_video_info()
+                            
                             debug_log_info(
-                                f"Raw video info from player: {video_info}",
+                                f"Raw player info: {player_info}",
                                 component="overlay",
                             )
-                            info["video_current_time"] = video_info["current_time"]
-                            info["video_total_time"] = video_info["total_time"]
-                            info["video_position"] = video_info["position"]
-                            info["video_state"] = video_info["state"]
-                            info["video_loop_count"] = video_info.get("loop_count", 0)
-                            info["looping_enabled"] = video_info.get(
-                                "looping_enabled", False
-                            )
+                            info["video_current_time"] = player_info.get("position", 0.0)
+                            info["video_total_time"] = player_info.get("duration", 0.0)
+                            info["video_position"] = player_info.get("position_percent", 0.0)
+                            info["video_state"] = player_info.get("state", "unknown")
+                            info["video_loop_count"] = player_info.get("loop_count", 0)
+                            info["looping_enabled"] = player_info.get("looping_enabled", False)
+                            
+                            # GStreamer specific info
+                            info["video_sink"] = player_info.get("video_sink", "unknown")
+                            info["video_decoder"] = player_info.get("decoder", "unknown")
+                            info["is_hardware_accelerated"] = player_info.get("is_hardware_accelerated", False)
 
                             # Get video file - prioritize state from update_debug_info
                             with self.state_lock:

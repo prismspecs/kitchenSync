@@ -81,6 +81,15 @@ def list_available_videos() -> list[str]:
     )
 
 
+def list_available_schedules() -> list[str]:
+    # Check current directory for JSON schedules
+    return sorted(
+        file.name
+        for file in Path(".").glob("*.json")
+        if file.name != "package.json" and file.name != "package-lock.json"
+    )
+
+
 def update_runtime_from_config() -> None:
     enable_system_logging(config.enable_system_logging or config.debug_mode)
     if config.video_file:
@@ -166,6 +175,7 @@ def build_ui_state() -> Dict[str, Any]:
         "is_master": cluster_state.is_master,
         "current_video": cluster_state.current_video,
         "available_videos": list_available_videos(),
+        "available_schedules": list_available_schedules(),
         "devices": devices,
     }
 
@@ -387,6 +397,32 @@ class RemoteHandler(BaseHTTPRequestHandler):
                     "target_device_id": device_id,
                     "updates": updates,
                 },
+                target_pi=device_id,
+            )
+            self._send_json({"status": "requested"}, status=202)
+            return
+
+        if action == "api/config/reset":
+            device_id = payload.get("device_id")
+            if not device_id:
+                self._send_json({"status": "error", "error": "device_id is required"}, status=400)
+                return
+
+            if device_id == LOCAL_LEADER_ID:
+                defaults = config.get_default_values("leader")
+                config.clean_and_save_config("leader_config.ini", defaults, role="leader")
+                update_runtime_from_config()
+                refresh_local_snapshot()
+                config_messages[LOCAL_LEADER_ID] = {
+                    "status": "ok",
+                    "requires_restart": True,
+                    "updated_at": time.time(),
+                }
+                self._send_json({"status": "ok"})
+                return
+
+            command_manager.send_command(
+                {"type": "config_reset", "target_device_id": device_id},
                 target_pi=device_id,
             )
             self._send_json({"status": "requested"}, status=202)

@@ -40,7 +40,7 @@ async function requestConfig(deviceId) {
     await postJson('/api/config/request', { device_id: deviceId });
 }
 
-function renderField(deviceId, field, value, videoOptions) {
+function renderField(deviceId, field, value, videoOptions, scheduleOptions) {
     const fieldId = `${deviceId}-${field.key}`;
     const tooltip = field.tooltip ? `<span class="tooltip-icon" data-tooltip="${field.tooltip}">?</span>` : '';
     
@@ -55,7 +55,13 @@ function renderField(deviceId, field, value, videoOptions) {
 
     const type = field.type === 'int' || field.type === 'float' ? 'number' : 'text';
     const step = field.type === 'float' ? 'step="any"' : '';
-    const list = field.key === 'video_file' && videoOptions.length ? 'list="videoSuggestions"' : '';
+    let list = '';
+    if (field.key === 'video_file' && videoOptions.length) {
+        list = 'list="videoSuggestions"';
+    } else if (field.key === 'schedule_file' && scheduleOptions.length) {
+        list = 'list="scheduleSuggestions"';
+    }
+
     return `
         <div class="row">
             <label for="${fieldId}">${field.label}${tooltip}</label>
@@ -77,7 +83,7 @@ function renderMessage(message) {
     return '<div class="message ok">Saved.</div>';
 }
 
-function renderConfigCell(device, videoOptions) {
+function renderConfigCell(device, videoOptions, scheduleOptions) {
     const config = device.config;
     if (!config) {
         if (device.role === 'collaborator' && !requestedConfigs.has(device.device_id)) {
@@ -89,12 +95,13 @@ function renderConfigCell(device, videoOptions) {
         `;
     }
 
-    const fields = config.fields.map((field) => renderField(device.device_id, field, config.values?.[field.key], videoOptions)).join('');
+    const fields = config.fields.map((field) => renderField(device.device_id, field, config.values?.[field.key], videoOptions, scheduleOptions)).join('');
     return `
         <form onsubmit="saveConfig(event, '${device.device_id}', '${config.role}')">
             ${fields}
             <div class="row">
                 <button type="submit">Save</button>
+                <button type="button" onclick="loadDefaults('${device.device_id}')">Load Defaults</button>
                 ${device.role === 'collaborator' ? `<button type="button" onclick="requestConfig('${device.device_id}')">Refresh</button>` : ''}
             </div>
             ${renderMessage(device.message)}
@@ -115,6 +122,13 @@ function renderState(state) {
     if (suggestions) {
         suggestions.innerHTML = (state.available_videos || []).map((video) => `
             <option value="${video}"></option>
+        `).join('');
+    }
+
+    const scheduleSuggestions = document.getElementById('scheduleSuggestions');
+    if (scheduleSuggestions) {
+        scheduleSuggestions.innerHTML = (state.available_schedules || []).map((schedule) => `
+            <option value="${schedule}"></option>
         `).join('');
     }
 
@@ -147,7 +161,7 @@ function renderState(state) {
             // Only update the config cell if no input inside it has focus
             const hasFocus = configCell.contains(document.activeElement);
             if (!hasFocus) {
-                configCell.innerHTML = renderConfigCell(device, state.available_videos || []);
+                configCell.innerHTML = renderConfigCell(device, state.available_videos || [], state.available_schedules || []);
             }
         });
 
@@ -175,6 +189,14 @@ async function saveConfig(event, deviceId, role) {
         }
     });
     await postJson('/api/config/save', { device_id: deviceId, role, updates });
+    await refresh();
+}
+
+async function loadDefaults(deviceId) {
+    if (!confirm('Are you sure you want to reset this device to default settings?')) {
+        return;
+    }
+    await postJson('/api/config/reset', { device_id: deviceId });
     await refresh();
 }
 

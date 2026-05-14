@@ -15,11 +15,11 @@ from core.logger import log_info, log_warning, log_error
 
 CONFIG_ROLE_SECTIONS = {
     "leader": {
-        "KITCHENSYNC": {"is_leader", "device_id", "debug", "enable_system_logging", "enable_audio"},
-        "DEFAULT": {"video_file", "video_driver", "sync_port", "tick_interval", "max_drift", "min_drift", "kp", "min_rate", "max_rate", "max_samples"},
+        "KITCHENSYNC": {"is_leader", "device_id", "debug", "enable_system_logging", "enable_audio", "audio_output", "enable_midi", "enable_osc", "enable_caching"},
+        "DEFAULT": {"video_file", "schedule_file", "video_driver", "sync_port", "tick_interval", "max_drift", "min_drift", "kp", "min_rate", "max_rate", "max_samples"},
     },
     "collaborator": {
-        "KITCHENSYNC": {"debug", "enable_system_logging", "enable_audio"},
+        "KITCHENSYNC": {"debug", "enable_system_logging", "enable_audio", "enable_caching"},
         "DEFAULT": {"device_id", "video_file", "video_driver", "midi_port", "sync_port"},
     },
 }
@@ -27,12 +27,19 @@ CONFIG_ROLE_SECTIONS = {
 EDITABLE_CONFIG_FIELDS = {
     "leader": [
         {"key": "video_file", "section": "DEFAULT", "type": "string", "label": "Video file", "default": "video.mp4"},
+        {"key": "schedule_file", "section": "DEFAULT", "type": "string", "label": "Schedule file", "default": "schedule.json"},
         {"key": "enable_audio", "section": "KITCHENSYNC", "type": "bool", "label": "Enable Audio", "default": True},
+        {"key": "audio_output", "section": "KITCHENSYNC", "type": "string", "label": "Audio Output", "default": "hdmi", "tooltip": "hdmi or headphone"},
+        {"key": "enable_midi", "section": "KITCHENSYNC", "type": "bool", "label": "Enable MIDI", "default": True},
+        {"key": "enable_caching", "section": "KITCHENSYNC", "type": "bool", "label": "Local Caching", "default": False, "tooltip": "Copy files from USB to local SD card before playback for better performance."},
         {"key": "debug", "section": "KITCHENSYNC", "type": "bool", "label": "Debug", "default": False},
         {"key": "tick_interval", "section": "DEFAULT", "type": "float", "label": "Sync Interval", "default": 0.1, "tooltip": "How often the leader sends sync packets (in seconds). Smaller is faster but uses more network/CPU."},
         {"key": "max_drift", "section": "DEFAULT", "type": "float", "label": "Max Drift", "default": 0.5, "tooltip": "Threshold (in seconds) for a hard seek. If the node is further away than this, it jumps to the leader time."},
         {"key": "min_drift", "section": "DEFAULT", "type": "float", "label": "Min Drift", "default": 0.01, "tooltip": "Threshold (in seconds) where speed adjustment begins. Drifts smaller than this are ignored for stability."},
-        {"key": "kp", "section": "DEFAULT", "type": "float", "label": "P-Gain", "default": 0.5, "tooltip": "The aggression of the speed correction. Higher values react faster but may cause visible speed jitter."},
+        {"key": "kp", "section": "DEFAULT", "type": "float", "label": "P-Gain", "default": 0.1, "tooltip": "The aggression of the speed correction. Higher values react faster but may cause visible speed jitter."},
+        {"key": "max_samples", "section": "DEFAULT", "type": "int", "label": "Max Samples", "default": 5, "tooltip": "Number of samples for drift averaging. Lower values react faster; higher values are smoother but add lag."},
+        {"key": "min_rate", "section": "DEFAULT", "type": "float", "label": "Min Rate", "default": 0.9, "tooltip": "Minimum playback speed adjustment (e.g. 0.9 = 90% speed)."},
+        {"key": "max_rate", "section": "DEFAULT", "type": "float", "label": "Max Rate", "default": 1.2, "tooltip": "Maximum playback speed adjustment (e.g. 1.2 = 120% speed)."},
         {"key": "enable_system_logging", "section": "KITCHENSYNC", "type": "bool", "label": "Verbose logging", "default": False},
     ],
     "collaborator": [
@@ -325,6 +332,13 @@ class ConfigManager:
                 values[key] = self.get(key, str(default) if default is not None else "", section=section)
         return values
 
+    def get_default_values(self, role: Optional[str] = None) -> Dict[str, Any]:
+        """Return the default values for editable fields."""
+        values: Dict[str, Any] = {}
+        for field in self.get_editable_fields(role):
+            values[field["key"]] = field.get("default")
+        return values
+
     def clean_and_save_config(
         self,
         target_file: str,
@@ -505,8 +519,8 @@ class ConfigManager:
 
     @property
     def kp(self) -> float:
-        """P-gain coefficient for speed adjustment (default 0.5)."""
-        return self.getfloat("kp", 0.5)
+        """P-gain coefficient for speed adjustment (default 0.1)."""
+        return self.getfloat("kp", 0.1)
 
     @property
     def min_rate(self) -> float:
@@ -515,15 +529,20 @@ class ConfigManager:
 
     @property
     def max_rate(self) -> float:
-        """Maximum playback rate (default 1.1)."""
-        return self.getfloat("max_rate", 1.1)
+        """Maximum playback rate (default 1.2)."""
+        return self.getfloat("max_rate", 1.2)
 
     @property
     def max_samples(self) -> int:
-        """Number of samples for drift averaging (default 10)."""
-        return self.getint("max_samples", 10)
+        """Number of samples for drift averaging (default 5)."""
+        return self.getint("max_samples", 5)
 
     @property
     def enable_audio(self) -> bool:
         """Check if audio playback is enabled (default: True)."""
         return self.getboolean("enable_audio", True)
+
+    @property
+    def enable_caching(self) -> bool:
+        """Check if local content caching is enabled (default: False)."""
+        return self.getboolean("enable_caching", False)

@@ -280,8 +280,17 @@ class GstDriver(VideoDriver):
         self.decoder_name = self._discover_active_decoder()
         if not self.decoder_name and self.decoder_candidates:
             self.decoder_name = self.decoder_candidates[-1]
+            
         if self.decoder_name:
-            log_info(f"Gst: Active decoder '{self.decoder_name}'")
+            if any(sw in self.decoder_name for sw in self._software_decoder_names()):
+                log_warning(
+                    f"Gst: PERFORMANCE WARNING: Using software decoder '{self.decoder_name}'. Sync may be unstable on Pi!"
+                )
+            else:
+                log_info(f"Gst: Active hardware decoder '{self.decoder_name}'")
+        else:
+            log_warning("Gst: Could not identify active decoder element")
+            
         return True
 
     def pause(self) -> bool:
@@ -359,14 +368,14 @@ class GstDriver(VideoDriver):
             
         return success
 
-    def get_position(self) -> float:
+    def get_position(self) -> Optional[float]:
         if not self.pipeline:
-            return 0.0
+            return None
         
         success, position = self.pipeline.query_position(Gst.Format.TIME)
         if success:
             return position / Gst.SECOND
-        return 0.0
+        return None
 
     def get_duration(self) -> float:
         if not self.pipeline:
@@ -407,4 +416,11 @@ class GstDriver(VideoDriver):
         info["hardware_accel_preferred"] = self.hardware_accel_preferred
         info["decoder"] = self.decoder_name or "unknown"
         info["pipeline_kind"] = self.pipeline_kind
+        
+        # Add human-readable hardware status
+        is_hw = False
+        if self.decoder_name:
+            is_hw = not any(sw in self.decoder_name for sw in self._software_decoder_names())
+            
+        info["is_hardware_accelerated"] = is_hw
         return info

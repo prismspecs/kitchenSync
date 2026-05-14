@@ -79,6 +79,7 @@ class CollaboratorPi:
 
         # Sync state
         self.last_sync_at = 0
+        self.active_leader_id = None
         self.video_start_time = None
         self.debug_sync_logging = self.config.debug_mode
         self.critical_window_logging = False
@@ -93,12 +94,32 @@ class CollaboratorPi:
         self.max_rate = self.config.max_rate
         self.video_path = None
 
+        # Initialize Debug Overlay
+        self.debug_overlay = None
+        if self.config.debug_mode:
+            from debug.native_overlay import NativeDebugManager
+            self.debug_overlay = NativeDebugManager(
+                self.config.device_id,
+                self.video_player,
+                self.midi_scheduler
+            )
+            self.debug_overlay.start()
+
     def _register_with_leader(self):
         """DEPRECATED: Registration is now handled by command_listener.send_registration"""
         pass
 
-    def _handle_sync(self, leader_time: float, received_at: float) -> None:
+    def _handle_sync(self, leader_time: float, received_at: float, leader_id: str = "unknown") -> None:
         """Handle incoming sync packets from leader"""
+        # Leader Locking: Only follow the first leader we see to prevent 
+        # cross-talk if multiple leaders are on the network.
+        if self.active_leader_id is None:
+            self.active_leader_id = leader_id
+            log_info(f"Locked onto leader: {leader_id}", component="sync")
+        elif self.active_leader_id != leader_id:
+            # Silently ignore other leaders
+            return
+
         self.last_sync_at = received_at
 
         if not self.system_state.is_running:
@@ -170,6 +191,8 @@ class CollaboratorPi:
             self._handle_config_request(msg, addr)
         elif cmd_type == "config_update":
             self._handle_config_update(msg, addr)
+        elif cmd_type == "config_reset":
+            self._handle_config_reset(msg, addr)
 
     def _message_targets_this_device(self, msg: dict) -> bool:
         """Return True if a control message is addressed to this device."""
@@ -236,6 +259,35 @@ class CollaboratorPi:
 
         self.command_listener.send_message(response, host=addr[0])
 
+    def _handle_config_reset(self, msg: dict, addr: tuple) -> None:
+        """Reset collaborator config to defaults."""
+        if not self._message_targets_this_device(msg):
+            return
+
+        response = {
+            "type": "config_update_result",
+            "device_id": self.config.device_id,
+            "role": "collaborator",
+            "config_path": self.config.get_config_path() or "collaborator_config.ini",
+        }
+
+        try:
+            defaults = self.config.get_default_values("collaborator")
+            config_path = self.config.get_config_path() or "collaborator_config.ini"
+            self.config.clean_and_save_config(config_path, defaults, role="collaborator")
+            
+            response.update(
+                {
+                    "status": "ok",
+                    "requires_restart": True,
+                    "values": self.config.get_editable_values("collaborator"),
+                }
+            )
+        except Exception as exc:
+            response.update({"status": "error", "error": str(exc)})
+
+        self.command_listener.send_message(response, host=addr[0])
+
     def _handle_start_command(self, msg: dict) -> None:
         """Initialize playback session from leader start command"""
         incoming_video = self.video_manager.find_video_file()
@@ -292,6 +344,13 @@ class CollaboratorPi:
             if new_max_samples != self.max_samples:
                 self.max_samples = new_max_samples
                 self.deviation_samples.clear()
+            
+            # Update audio preference from leader
+            leader_enable_audio = sync_params.get("enable_audio")
+            if leader_enable_audio is not None and hasattr(self.video_player, "enable_audio"):
+                if self.video_player.enable_audio != leader_enable_audio:
+                    log_info(f"Syncing audio preference with leader: {leader_enable_audio}", component="collaborator")
+                    self.video_player.enable_audio = leader_enable_audio
 
         # Find and load video
         self.video_path = incoming_video
@@ -413,6 +472,9 @@ class CollaboratorPi:
         """Clean up resources"""
         if self.system_state.is_running:
             self.stop_playback()
+
+        if self.debug_overlay:
+            self.debug_overlay.cleanup()
 
         self.video_player.cleanup()
         if self.midi_manager:
