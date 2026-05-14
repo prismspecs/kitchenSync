@@ -904,29 +904,29 @@ user_pref("browser.newtabpage.activity-stream.default.sites", "");
                     else:
                         info["recent_logs"] = "System log file not found"
 
-                    # Recent VLC logs - use efficient tailing (only last 10 lines)
-                    vlc_path = paths["vlc_main"]
-                    if vlc_path and os.path.exists(vlc_path):
-                        recent_lines = _tail_log_file(vlc_path, max_lines=10)
-                        info["vlc_logs"] = "\n".join(recent_lines)
-                        debug_log_info(f"Read {len(recent_lines)} lines from VLC log")
+                    # Recent player logs - use efficient tailing (only last 10 lines)
+                    player_path = paths["player_main"]
+                    if player_path and os.path.exists(player_path):
+                        recent_lines = _tail_log_file(player_path, max_lines=10)
+                        info["player_logs"] = "\n".join(recent_lines)
+                        debug_log_info(f"Read {len(recent_lines)} lines from player log")
                     else:
-                        info["vlc_logs"] = "VLC log file not found"
+                        info["player_logs"] = "Player log file not found"
 
                 except Exception as e:
                     log_error(f"Error reading log files: {e}")
                     info["recent_logs"] = f"Error reading logs: {e}"
-                    info["vlc_logs"] = f"Error reading logs: {e}"
+                    info["player_logs"] = f"Error reading logs: {e}"
             else:
                 # When logging is disabled, don't read or display logs
                 info["recent_logs"] = "Logging disabled for performance"
-                info["vlc_logs"] = "Logging disabled for performance"
+                info["player_logs"] = "Logging disabled for performance"
 
             # Generate log sections HTML conditionally
             if _ENABLE_SYSTEM_LOGGING:
                 # Ensure log contents are HTML-escaped before injecting into HTML
                 escaped_system = html.escape(info.get("recent_logs", "") or "")
-                escaped_vlc = html.escape(info.get("vlc_logs", "") or "")
+                escaped_player = html.escape(info.get("player_logs", "") or "")
 
                 info[
                     "log_sections_html"
@@ -937,8 +937,8 @@ user_pref("browser.newtabpage.activity-stream.default.sites", "");
                 </div>
 
                 <div class=\"log-section\">
-                    <h3>Recent VLC Log (Last 10 entries)</h3>
-                    <div class=\"log-content\">{escaped_vlc}</div>
+                    <h3>Recent Player Log (Last 10 entries)</h3>
+                    <div class=\"log-content\">{escaped_player}</div>
                 </div>
                 """
             else:
@@ -947,7 +947,7 @@ user_pref("browser.newtabpage.activity-stream.default.sites", "");
                 ] = """
                 <div class="info-section">
                     <h3>📈 Performance Mode</h3>
-                    <p>Logging disabled for optimal performance. Enable <code>enable_system_logging=true</code> and <code>enable_vlc_logging=true</code> in config to show logs.</p>
+                    <p>Logging disabled for optimal performance. Enable <code>enable_system_logging=true</code> and <code>enable_player_logging=true</code> in config to show logs.</p>
                 </div>
                 """
 

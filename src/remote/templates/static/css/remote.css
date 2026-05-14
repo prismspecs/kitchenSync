@@ -1,0 +1,63 @@
+body {
+    font-family: sans-serif;
+    font-size: 14px;
+    margin: 16px;
+    color: #111;
+    background: #fff;
+}
+h1, h2 {
+    margin: 0 0 12px 0;
+}
+.section {
+    border: 1px solid #999;
+    padding: 12px;
+    margin-bottom: 16px;
+}
+.row {
+    margin-bottom: 8px;
+}
+label {
+    display: inline-block;
+    min-width: 140px;
+    vertical-align: top;
+}
+input[type="text"], input[type="number"], select {
+    min-width: 280px;
+    padding: 4px;
+}
+button {
+    padding: 4px 10px;
+    margin-right: 8px;
+}
+table {
+    border-collapse: collapse;
+    width: 100%;
+}
+th, td {
+    border: 1px solid #999;
+    padding: 6px;
+    text-align: left;
+    vertical-align: top;
+}
+.status {
+    font-family: monospace;
+    margin-top: 8px;
+}
+.message {
+    color: #444;
+    font-size: 12px;
+    margin-top: 8px;
+}
+.error {
+    color: #900;
+}
+.ok {
+    color: #060;
+}
+video {
+    width: 100%;
+    max-width: 640px;
+    background: #000;
+    display: block;
+    margin-top: 12px;
+}

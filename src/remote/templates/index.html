@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>KitchenSync Remote</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="/static/css/remote.css">
+</head>
+<body>
+    <h1>KitchenSync Remote</h1>
+
+    <div class="section">
+        <h2>Cluster Control</h2>
+        <div class="row">
+            <label for="videoSelector">Video file</label>
+            <select id="videoSelector"></select>
+        </div>
+        <div class="row">
+            <button onclick="playCluster()">Play cluster</button>
+            <button onclick="stopCluster()">Stop all</button>
+        </div>
+        <div class="status" id="clusterStatus">Loading...</div>
+        <video id="preview" controls muted playsinline src="/video_file"></video>
+    </div>
+
+    <div class="section">
+        <h2>Device Config</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Device</th>
+                    <th>Role</th>
+                    <th>Network</th>
+                    <th>Status</th>
+                    <th>Config</th>
+                </tr>
+            </thead>
+            <tbody id="deviceRows"></tbody>
+        </table>
+    </div>
+
+    <datalist id="videoSuggestions"></datalist>
+
+    <script src="/static/js/remote.js"></script>
+</body>
+</html>

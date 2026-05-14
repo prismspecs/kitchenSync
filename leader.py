@@ -20,7 +20,7 @@ from config.manager import ConfigManager
 from video import get_video_driver
 from video.file_manager import VideoFileManager
 from networking.communication import SyncBroadcaster, CommandManager
-from core.schedule import Schedule
+from core.schedule import Schedule, ScheduleEditor
 from core.system_state import SystemState
 from core.logger import log_info, log_error, log_warning, enable_system_logging
 from ui.interface import CommandInterface, StatusDisplay

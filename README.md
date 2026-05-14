@@ -1,24 +1,29 @@
 # KitchenSync
 
-KitchenSync is a Raspberry Pi video-sync system for synchronized playback and protocol output across leader and collaborator nodes.
+KitchenSync is a Raspberry Pi video-sync system for synchronized playback and protocol output (MIDI, OSC) across leader and collaborator nodes.
 
 The active stack is:
-- GStreamer for video playback
-- Openbox/X11 for the display session
-- UDP broadcast for sync and control
-- USB-driven configuration and media discovery
-- Optional MIDI and OSC output
+- **GStreamer** for high-performance video playback
+- **Openbox/X11** for the display session
+- **UDP Broadcast** for time sync and cluster control
+- **USB-driven** configuration and media discovery
+- **MIDI/OSC** synchronized protocol output
 
-## Current Runtime Layout
+## Current Project Structure
 
-- `kitchensync.py`: boot-time entry point used by `kitchensync.service`
-- `leader.py`: leader runtime started by `kitchensync.py`
-- `collaborator.py`: collaborator runtime started by `kitchensync.py`
-- `setup_pi5.sh`: primary Raspberry Pi setup script
-- `setup.sh`: compatibility wrapper that delegates to `setup_pi5.sh`
+- `kitchensync.py`: Main boot-time entry point (handles USB mounting and role detection).
+- `leader.py`: Leader runtime (broadcasts time, manages schedule).
+- `collaborator.py`: Collaborator runtime (receives sync, adjusts playback speed).
+- `setup.sh`: Primary Raspberry Pi setup and provisioning script.
+- `src/`: Core implementation modules (networking, video, protocols, etc.).
+- `src/remote/`: Web-based remote controller and schedule editor.
+- `docs/`: Detailed guides for installation, testing, and MIDI control.
+- `arduino/`: Firmware for Arduino-based MIDI relay control.
+- `code_archive/`: Legacy scripts and tools for reference.
 
 ## Quick Start
 
+### 1. Installation
 ```bash
 git clone https://github.com/prismspecs/kitchenSync.git
 cd kitchenSync
@@ -26,34 +31,57 @@ cd kitchenSync
 sudo reboot
 ```
 
-After reboot, the system service launches `kitchensync.py`, which detects USB configuration and execs either `leader.py` or `collaborator.py`.
+After reboot, the `kitchensync.service` launches `kitchensync.py`, which detects USB configuration and starts either `leader.py` or `collaborator.py`.
 
-If you are testing from SSH on a text console, start the local X session before any `DISPLAY=:0` command:
+### 2. Manual Execution (For Debugging)
 
+If you are testing from SSH or a text console, ensure the local X session is running:
 ```bash
 ./tools/start_x.sh
 ```
 
-## USB Layout
+**Run Leader:**
+```bash
+./.venv/bin/python3 leader.py --config leader_config.ini --debug
+```
 
-Leader USB:
+**Run Collaborator:**
+```bash
+DISPLAY=:0 ./.venv/bin/python3 collaborator.py --config collaborator_config.ini --debug
+```
 
+**Run Remote Controller:**
+```bash
+./.venv/bin/python3 src/remote/controller.py
+```
+Available at `http://<pi-ip>:8080`
+
+## Documentation
+
+- [Installation Guide](docs/INSTALLATION.md) - OS setup and provisioning.
+- [Testing Guide](docs/TESTING.md) - Manual and automated testing procedures.
+- [MIDI Control Guide](docs/MIDI_CONTROL.md) - Using MIDI for relay and show control.
+- [Project Roadmap](docs/ROADMAP.md) - Future enhancements and architecture goals.
+
+## USB Drive Layout
+
+The system is designed for "plug-and-play" operation using USB drives.
+
+**Leader USB:**
 ```text
 kitchensync.ini
 test_video.mp4
-schedule.json
+schedule.json # optional, needed for sending MIDI, DMX, (etc.) data
 desktop-background.png   # optional
 ```
 
-Collaborator USB:
-
+**Collaborator USB:**
 ```text
 kitchensync.ini
-collaborator_video.mp4
+collaborator_video.mp4   # can be different from leader
 ```
 
 Example `kitchensync.ini`:
-
 ```ini
 [KITCHENSYNC]
 is_leader = true
@@ -63,72 +91,35 @@ video_file = test_video.mp4
 video_driver = gst
 ```
 
-## Manual Operation
+## Remote Control & Monitoring
+
+KitchenSync includes a web-based remote controller for cluster management:
 
 ```bash
-python3 kitchensync.py
-python3 leader.py --config leader_config.ini --debug
-DISPLAY=:0 python3 collaborator.py --config collaborator_config.ini --debug
+python3 src/remote/controller.py
 ```
+Available at `http://<pi-ip>:8080`
 
-## Hardware Acceleration
+## Hardware Acceleration (Pi 5)
 
-KitchenSync now prefers explicit GStreamer sinks instead of leaving sink choice entirely to `autovideosink`.
+KitchenSync prefers hardware-accelerated GStreamer sinks:
+- **X11/Openbox**: `glimagesink`
+- **KMS/DRM**: `kmssink`
 
-- With X11/Openbox, it prefers `glimagesink`, then `xvimagesink`
-- Without X11, it prefers `kmssink`
-- Only if those are unavailable does it fall back to `autovideosink`
-
-What can be verified from the repo:
-- The setup path configures X11/Openbox on Pi 5
-- The GStreamer driver prefers hardware-oriented sinks
-- Pi 5 Xorg is pinned to `/dev/dri/card1`
-
-What still requires runtime verification on the actual Pi:
-- Which sink GStreamer actually instantiated on that machine
-- Whether the active sink is using GPU/display hardware exactly as intended
-- Whether HEVC playback is using the Pi 5 stateless hardware decoder `v4l2slh265dec`
-
-For Pi 5 HEVC verification, the intended sequence is:
-
+To verify HEVC hardware decoding on a Pi 5:
 ```bash
-sudo apt update && sudo apt full-upgrade -y
-sudo rpi-eeprom-update -a
-sudo reboot
-cd ~/kitchenSync
-./tools/start_x.sh
-ffprobe -v error -select_streams v:0 -show_entries stream=codec_name,profile,pix_fmt,width,height -of json videos/test265.mp4
-DISPLAY=:0 XDG_SESSION_TYPE=x11 python3 tools/verify_gst_hwaccel.py --video videos/test265.mp4 --json
+DISPLAY=:0 python3 tools/verify_gst_hwaccel.py --video videos/test_hevc_clean.mp4 --json
 ```
 
-The successful HEVC decode signal is `"active_decoder": "v4l2slh265dec"`.
-The file sanity-check signal is `"video_stream": {"codec_name": "hevc", ...}`.
-
-At runtime, check the logs for a line like:
-
-```text
-Gst: Using hardware-preferred video sink 'glimagesink'
-```
-
-If the log says fallback sink or `autovideosink`, acceleration is not fully confirmed.
-
-## Project Structure
-
-```text
-src/                 Core implementation
-docs/                Setup and testing docs
-tests/               Automated regression and logic tests
-tools/               Simulator and helper tools
-arduino/             Active Arduino sketch
-code_archive/        Archived legacy and uncertain files
-```
+Successful decode signal: `"active_decoder": "v4l2slh265dec"`
 
 ## Testing
 
+Run the automated test suite:
 ```bash
-python3 -m unittest tests.test_core
-python3 -m unittest tests.test_networking
-python3 -m unittest tests.test_sync_regressions
+python3 -m unittest tests/test_core.py
+python3 -m unittest tests/test_networking.py
+python3 -m unittest tests/test_sync_regressions.py
 ```
 
-For distributed manual testing, use the commands in `docs/TESTING.md`.
+For distributed manual testing, use the commands in [docs/TESTING.md](docs/TESTING.md).

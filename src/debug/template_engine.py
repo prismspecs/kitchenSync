@@ -194,7 +194,7 @@ class DebugTemplateManager:
 
     def _escape_html(self, text):
         """Escape HTML characters in text"""
-        if not text or text == "No logs available" or text == "No VLC logs available":
+        if not text or text == "No logs available" or text == "No player logs available":
             return text
 
         # Basic HTML escaping

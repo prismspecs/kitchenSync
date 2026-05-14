@@ -129,8 +129,8 @@ def log_file_paths() -> Dict[str, str]:
     """Return paths to system-wide logs for user convenience."""
     return {
         "system": SYSTEM_LOG_PATH,
-        "vlc_main": os.path.join(LOG_DIR, "kitchensync_vlc.log"),
-        "vlc_stdout": os.path.join(LOG_DIR, "kitchensync_vlc_stdout.log"),
-        "vlc_stderr": os.path.join(LOG_DIR, "kitchensync_vlc_stderr.log"),
+        "player_main": os.path.join(LOG_DIR, "kitchensync_player.log"),
+        "player_stdout": os.path.join(LOG_DIR, "kitchensync_player_stdout.log"),
+        "player_stderr": os.path.join(LOG_DIR, "kitchensync_player_stderr.log"),
         "overlay_leader": os.path.join(LOG_DIR, "kitchensync_debug_leader-pi.txt"),
     }

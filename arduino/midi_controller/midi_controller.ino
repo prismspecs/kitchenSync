@@ -2,11 +2,12 @@
 #include <Adafruit_PWMServoDriver.h>
 #include <MIDI.h>
 #include <Wire.h>
+#include <SoftwareSerial.h>
 
 // --- Configuration ---
 const uint16_t PWM_FREQ = 200;
-const uint8_t MIDI_BASE_NOTE = 60;      // C4 is mapped to the first PWM channel
-const uint32_t MIDI_IDLE_OFF_MS = 5000; // Turn off a channel after 5 sec of inactivity
+const uint8_t MIDI_BASE_NOTE = 60;   // C4 is mapped to the first PWM channel
+const uint32_t SERIAL_BAUD = 115200; // High-speed baud rate for better performance
 
 // --- Pins ---
 const uint8_t PIN_LED_HEARTBEAT = 13;
@@ -14,94 +15,163 @@ const uint8_t PIN_LED_ACTIVITY = 12;
 
 // --- Globals ---
 const uint8_t CHANS_LEN = 16;
-uint32_t chans_last_trig_ms[CHANS_LEN];
 uint32_t last_input_rx_ms = 0;
+String serial_buffer = "";
 
 // --- Objects ---
 Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver();
-MIDI_CREATE_DEFAULT_INSTANCE();
+SoftwareSerial midiSerial(2, 3); // RX=2, TX=3 for MIDI
+MIDI_CREATE_INSTANCE(SoftwareSerial, midiSerial, MIDI);
 
 // --- Forward Declarations ---
 void on_midi_note_on(byte channel, byte pitch, byte velocity);
 void on_midi_note_off(byte channel, byte pitch, byte velocity);
 void pwm_set_from_pitch(byte pitch, byte velocity);
+void process_serial_input();
+void parse_serial_command(String command);
 
-void setup() {
+void setup()
+{
   pinMode(PIN_LED_HEARTBEAT, OUTPUT);
   pinMode(PIN_LED_ACTIVITY, OUTPUT);
-  
-  // Initialize MIDI
+
+  Serial.begin(SERIAL_BAUD);
+  serial_buffer.reserve(256); // Increased buffer size for rapid note bursts
+
+  // MIDI on SoftwareSerial (pins 2,3)
   MIDI.begin(MIDI_CHANNEL_OMNI);
   MIDI.setHandleNoteOn(on_midi_note_on);
   MIDI.setHandleNoteOff(on_midi_note_off);
-  
-  // Initialize PWM driver
+
   pwm.begin();
   pwm.setPWMFreq(PWM_FREQ);
-  
-  // Initialize all channels to off and reset timers
-  for (uint8_t i = 0; i < CHANS_LEN; i++) {
+
+  // Initialize all channels to off
+  for (uint8_t i = 0; i < CHANS_LEN; i++)
+  {
     pwm.setPWM(i, 0, 0);
-    chans_last_trig_ms[i] = millis();
   }
-  
-  // Flash both LEDs to indicate ready
-  digitalWrite(PIN_LED_HEARTBEAT, HIGH);
-  digitalWrite(PIN_LED_ACTIVITY, HIGH);
-  delay(500);
-  digitalWrite(PIN_LED_HEARTBEAT, LOW);
-  digitalWrite(PIN_LED_ACTIVITY, LOW);
 }
 
-void loop() {
-  // Heartbeat LED - always blinking to show system is alive
+void loop()
+{
+  // Blink LEDs for status
   digitalWrite(PIN_LED_HEARTBEAT, millis() % 2000 > 1000);
-  
-  // Activity LED - blinks when MIDI received
-  digitalWrite(PIN_LED_ACTIVITY, millis() - last_input_rx_ms < 100);
-  
-  // Process incoming MIDI messages
+  digitalWrite(PIN_LED_ACTIVITY, millis() - last_input_rx_ms < 50);
+
+  // Process incoming MIDI (on pins 2,3) and Serial messages
   MIDI.read();
-  
-  // Automatically turn off channels that have been idle for too long
-  uint32_t ms = millis();
-  for (uint8_t i = 0; i < CHANS_LEN; i++) {
-    if (chans_last_trig_ms[i] != 0 && (ms - chans_last_trig_ms[i] > MIDI_IDLE_OFF_MS)) {
-      pwm.setPWM(i, 0, 0);
-      chans_last_trig_ms[i] = 0; // Mark as off to prevent re-sending
-    }
-  }
+  process_serial_input();
 }
 
 // --- MIDI Callback Functions ---
-void on_midi_note_on(byte channel, byte pitch, byte velocity) {
+void on_midi_note_on(byte channel, byte pitch, byte velocity)
+{
   pwm_set_from_pitch(pitch, velocity);
 }
 
-void on_midi_note_off(byte channel, byte pitch, byte velocity) {
+void on_midi_note_off(byte channel, byte pitch, byte velocity)
+{
   pwm_set_from_pitch(pitch, 0);
 }
 
 // --- Core Logic ---
-void pwm_set_from_pitch(byte pitch, byte velocity) {
+void pwm_set_from_pitch(byte pitch, byte velocity)
+{
   last_input_rx_ms = millis(); // Update activity timer
-  
+
   // Map MIDI pitch to a PWM channel (0-15)
   int8_t chan = pitch - MIDI_BASE_NOTE;
-  if (chan < 0 || chan >= CHANS_LEN) {
+  if (chan < 0 || chan >= CHANS_LEN)
+  {
     return; // Ignore notes outside our target range (60-75)
   }
-  
+
   // Convert MIDI velocity (0-127) to PWM value (0-4095)
+  // Multiplying by 32 maps 127 to 4064, which is safely within the 12-bit range.
   uint16_t pwr = velocity * 32;
-  
+
   // Send the command to the PWM driver
   pwm.setPWM(chan, 0, pwr);
-  
-  // Update the idle timer for this channel
-  if (velocity > 0) {
-    chans_last_trig_ms[chan] = millis();
-  } else {
-    chans_last_trig_ms[chan] = 0; // Mark as off immediately
+}
+
+// --- Serial Input Handling ---
+void process_serial_input()
+{
+  // Read all available characters at once for better performance
+  while (Serial.available())
+  {
+    char c = Serial.read();
+    if (c == '\n' || c == '\r')
+    {
+      if (serial_buffer.length() > 0)
+      {
+        parse_serial_command(serial_buffer);
+        serial_buffer = ""; // Clear buffer for next command
+      }
+    }
+    else if (serial_buffer.length() < 250) // Prevent buffer overflow
+    {
+      serial_buffer += c;
+    }
+    else
+    {
+      // Buffer overflow - clear silently for performance
+      serial_buffer = "";
+    }
   }
+}
+
+void parse_serial_command(String command)
+{
+  command.trim();
+  command.toLowerCase();
+
+  // Check for simple format first: "60 127" (pitch velocity)
+  int spaceIndex = command.indexOf(' ');
+  if (spaceIndex > 0 && command.indexOf(' ', spaceIndex + 1) == -1)
+  {
+    // Simple two-parameter format
+    byte pitch = command.substring(0, spaceIndex).toInt();
+    byte velocity = command.substring(spaceIndex + 1).toInt();
+    pwm_set_from_pitch(pitch, velocity);
+    return;
+  }
+
+  // Split the command string into parts for full format
+  String parts[4];
+  int partIndex = 0;
+  int lastSpace = -1;
+
+  for (int i = 0; i < command.length() && partIndex < 4; i++)
+  {
+    if (command.charAt(i) == ' ')
+    {
+      parts[partIndex++] = command.substring(lastSpace + 1, i);
+      lastSpace = i;
+    }
+  }
+  parts[partIndex] = command.substring(lastSpace + 1);
+
+  // Fixed: Check for minimum required parts
+  if (partIndex < 3)
+  {
+    return; // Silently ignore invalid commands for performance
+  }
+
+  // parts[0] is command, parts[1] is channel, parts[2] is pitch, parts[3] is velocity
+  String cmd_type = parts[0];
+  // byte channel = parts[1].toInt(); // Channel is not used in your pwm_set_from_pitch logic
+  byte pitch = parts[2].toInt();
+  byte velocity = parts[3].toInt();
+
+  if (cmd_type == "noteon")
+  {
+    pwm_set_from_pitch(pitch, velocity);
+  }
+  else if (cmd_type == "noteoff")
+  {
+    pwm_set_from_pitch(pitch, 0);
+  }
+  // Silently ignore unknown commands for performance
 }

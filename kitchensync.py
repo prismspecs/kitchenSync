@@ -237,13 +237,21 @@ class KitchenSyncAutoStart:
 
     def _set_desktop_background(self) -> None:
         """Set desktop background if available"""
-        if not self.config.usb_mount_point:
-            return
+        background_path = None
+        
+        # Try USB first
+        if self.config.usb_mount_point:
+            usb_bg = os.path.join(self.config.usb_mount_point, "desktop-background.png")
+            if os.path.exists(usb_bg):
+                background_path = usb_bg
 
-        background_path = os.path.join(
-            self.config.usb_mount_point, "desktop-background.png"
-        )
-        if os.path.exists(background_path):
+        # Fallback to local assets
+        if not background_path:
+            local_bg = os.path.join(os.path.dirname(__file__), "src", "ui", "assets", "desktop-background.png")
+            if os.path.exists(local_bg):
+                background_path = local_bg
+
+        if background_path:
             try:
                 # Try different desktop environment commands
                 commands = [
