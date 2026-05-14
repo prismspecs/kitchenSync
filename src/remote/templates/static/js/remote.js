@@ -97,7 +97,7 @@ function renderConfigCell(device, videoOptions) {
 
 function renderState(state) {
     const selector = document.getElementById('videoSelector');
-    if (selector) {
+    if (selector && document.activeElement !== selector) {
         selector.innerHTML = (state.available_videos || []).map((video) => `
             <option value="${video}" ${video === state.current_video ? 'selected' : ''}>${video}</option>
         `).join('');
@@ -119,15 +119,38 @@ function renderState(state) {
 
     const rows = document.getElementById('deviceRows');
     if (rows) {
-        rows.innerHTML = state.devices.map((device) => `
-            <tr>
-                <td>${device.label}</td>
-                <td>${device.role}</td>
-                <td>${device.ip}</td>
-                <td>${device.status}</td>
-                <td>${renderConfigCell(device, state.available_videos || [])}</td>
-            </tr>
-        `).join('');
+        // We update the table cell by cell to avoid clobbering focused inputs
+        state.devices.forEach((device) => {
+            let row = document.getElementById(`row-${device.device_id}`);
+            if (!row) {
+                // Create row if it doesn't exist
+                row = document.createElement('tr');
+                row.id = `row-${device.device_id}`;
+                row.innerHTML = '<td></td><td></td><td></td><td></td><td class="config-cell"></td>';
+                rows.appendChild(row);
+            }
+
+            const cells = row.cells;
+            cells[0].textContent = device.label;
+            cells[1].textContent = device.role;
+            cells[2].textContent = device.ip;
+            cells[3].textContent = device.status;
+
+            const configCell = cells[4];
+            // Only update the config cell if no input inside it has focus
+            const hasFocus = configCell.contains(document.activeElement);
+            if (!hasFocus) {
+                configCell.innerHTML = renderConfigCell(device, state.available_videos || []);
+            }
+        });
+
+        // Remove rows for devices that are no longer in the state
+        const activeIds = new Set(state.devices.map(d => `row-${d.device_id}`));
+        Array.from(rows.children).forEach(row => {
+            if (!activeIds.has(row.id)) {
+                rows.removeChild(row);
+            }
+        });
     }
 }
 
@@ -159,4 +182,4 @@ async function refresh() {
 }
 
 refresh();
-setInterval(refresh, 1500);
+setInterval(refresh, 2000); // Relaxed refresh rate slightly
