@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 import json
 import os
-import shutil
 import sys
 import threading
 import time
@@ -41,6 +40,34 @@ config_snapshots: Dict[str, Dict[str, Any]] = {}
 config_messages: Dict[str, Dict[str, Any]] = {}
 
 TEMPLATE_DIR = Path(__file__).resolve().parent / "templates"
+
+
+def resolve_byte_range(range_header: str | None, file_size: int) -> tuple[int, int] | None:
+    if not range_header:
+        return None
+    if file_size <= 0 or not range_header.startswith("bytes="):
+        raise ValueError("Invalid range header")
+
+    raw_range = range_header[6:].split(",", 1)[0].strip()
+    start_text, separator, end_text = raw_range.partition("-")
+    if separator != "-":
+        raise ValueError("Invalid range header")
+
+    if start_text == "":
+        suffix_length = int(end_text)
+        if suffix_length <= 0:
+            raise ValueError("Invalid suffix range")
+        if suffix_length >= file_size:
+            return (0, file_size - 1)
+        return (file_size - suffix_length, file_size - 1)
+
+    start = int(start_text)
+    end = file_size - 1 if end_text == "" else int(end_text)
+
+    if start < 0 or start >= file_size or end < start:
+        raise ValueError("Unsatisfiable range")
+
+    return (start, min(end, file_size - 1))
 
 
 def list_available_videos() -> list[str]:
@@ -144,11 +171,53 @@ def build_ui_state() -> Dict[str, Any]:
 
 
 class RemoteHandler(BaseHTTPRequestHandler):
+    def log_message(self, format: str, *args) -> None:
+        if config.debug_mode or config.enable_system_logging:
+            super().log_message(format, *args)
+
     def _send_json(self, payload: Dict[str, Any], status: int = 200) -> None:
         self.send_response(status)
         self.send_header("Content-type", "application/json")
         self.end_headers()
         self.wfile.write(json.dumps(payload).encode())
+
+    def _send_file_range(self, file_path: Path) -> None:
+        file_size = file_path.stat().st_size
+        range_header = self.headers.get("Range")
+
+        try:
+            byte_range = resolve_byte_range(range_header, file_size)
+        except ValueError:
+            self.send_response(416)
+            self.send_header("Content-Range", f"bytes */{file_size}")
+            self.send_header("Accept-Ranges", "bytes")
+            self.end_headers()
+            return
+
+        start = 0
+        end = file_size - 1
+        status = 200
+        if byte_range is not None:
+            start, end = byte_range
+            status = 206
+
+        self.send_response(status)
+        self.send_header("Content-type", "video/mp4")
+        self.send_header("Content-Length", str(end - start + 1))
+        self.send_header("Accept-Ranges", "bytes")
+        if status == 206:
+            self.send_header("Content-Range", f"bytes {start}-{end}/{file_size}")
+        self.end_headers()
+
+        with open(file_path, "rb") as file_handle:
+            file_handle.seek(start)
+            remaining = end - start + 1
+            while remaining > 0:
+                chunk = file_handle.read(min(64 * 1024, remaining))
+                if not chunk:
+                    break
+                self.wfile.write(chunk)
+                remaining -= len(chunk)
 
     def _read_json_body(self) -> Dict[str, Any]:
         length = int(self.headers.get("Content-Length", "0"))
@@ -195,15 +264,8 @@ class RemoteHandler(BaseHTTPRequestHandler):
             if not video_path.exists():
                 self.send_error(404, "Video file not found")
                 return
-
-            self.send_response(200)
-            self.send_header("Content-type", "video/mp4")
-            self.send_header("Content-Length", str(video_path.stat().st_size))
-            self.send_header("Accept-Ranges", "bytes")
-            self.end_headers()
             try:
-                with open(video_path, "rb") as file_handle:
-                    shutil.copyfileobj(file_handle, self.wfile)
+                self._send_file_range(video_path)
             except (ConnectionResetError, BrokenPipeError):
                 pass
             except Exception as exc:

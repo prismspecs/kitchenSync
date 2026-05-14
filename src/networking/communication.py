@@ -270,13 +270,14 @@ class SyncReceiver:
 class CommandManager:
     """Handles command communication for leader"""
 
-    def __init__(self, control_port: int = 5006, broadcast_ip: Optional[str] = None):
+    def __init__(self, control_port: int = 5006, broadcast_ip: Optional[str] = None, debug_mode: bool = False):
         self.control_port = control_port
         self.broadcast_ip = broadcast_ip or _get_broadcast_address()
         self.control_sock = None
         self.is_running = False
         self.collaborators = {}
         self.message_handlers = {}
+        self.debug_mode = debug_mode
 
     def setup_socket(self) -> None:
         """Initialize command socket"""
