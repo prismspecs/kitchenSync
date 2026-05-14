@@ -9,18 +9,12 @@ echo "Starting KitchenSync Pi 5 Appliance Setup..."
 # 1. Install System Dependencies
 echo "Installing GStreamer and X11 dependencies..."
 sudo apt update
-sudo apt full-upgrade -y
 sudo apt install -y --no-install-recommends \
     xserver-xorg xinit openbox x11-xserver-utils xserver-xorg-legacy \
     gstreamer1.0-plugins-base gstreamer1.0-plugins-good \
     gstreamer1.0-plugins-bad gstreamer1.0-libav \
     gstreamer1.0-tools python3-gst-1.0 gir1.2-gst-plugins-base-1.0 \
-    unclutter udevil v4l-utils
-
-if command -v rpi-eeprom-update >/dev/null 2>&1; then
-    echo "Applying Raspberry Pi EEPROM updates if available..."
-    sudo rpi-eeprom-update -a || true
-fi
+    unclutter v4l-utils
 
 # 2. X Server Permissions & Legacy Mode
 echo "Configuring X Server permissions..."

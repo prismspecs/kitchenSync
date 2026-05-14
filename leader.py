@@ -275,6 +275,22 @@ class LeaderPi:
             self.html_debug.cleanup()
         log_info("Cleanup completed", component="leader")
 
+    def set_sync_param(self, param: str, value: str) -> None:
+        """Set a sync parameter live"""
+        try:
+            val = float(value)
+            if param == "tick_interval":
+                # Update config so next start packet reflects it
+                self.config.config["DEFAULT"]["tick_interval"] = str(val)
+                print(f"Sync interval set to {val}s")
+            elif hasattr(self.config, param):
+                self.config.config["DEFAULT"][param] = str(val)
+                print(f"Parameter {param} set to {val} (will be updated on next sync cycle)")
+            else:
+                print(f"Unknown parameter: {param}")
+        except ValueError:
+            print(f"Invalid value: {value}. Must be a number.")
+
 
 def main():
     parser = argparse.ArgumentParser(description="KitchenSync Leader Node")
@@ -334,20 +350,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-    def set_sync_param(self, param: str, value: str) -> None:
-        """Set a sync parameter live"""
-        try:
-            val = float(value)
-            if param == "tick_interval":
-                self.sync_broadcaster.tick_interval = max(0.02, min(val, 5.0))
-                # Update config so next start packet reflects it
-                self.config.config["DEFAULT"]["tick_interval"] = str(val)
-                print(f"Sync interval set to {val}s")
-            elif hasattr(self.config, param):
-                self.config.config["DEFAULT"][param] = str(val)
-                print(f"Parameter {param} set to {val} (will be updated on next sync cycle)")
-            else:
-                print(f"Unknown parameter: {param}")
-        except ValueError:
-            print(f"Invalid value: {value}. Must be a number.")
