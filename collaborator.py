@@ -81,7 +81,12 @@ class CollaboratorPi:
         self.in_critical_window = False
         self.debug_deviation_mode = False
         self.deviation_samples = []
-        self.max_samples = 10
+        self.max_samples = self.config.max_samples
+        self.max_drift = self.config.max_drift
+        self.min_drift = self.config.min_drift
+        self.kp = self.config.kp
+        self.min_rate = self.config.min_rate
+        self.max_rate = self.config.max_rate
         self.video_path = None
 
     def _register_with_leader(self):
@@ -134,15 +139,15 @@ class CollaboratorPi:
             median_dev = statistics.median(self.deviation_samples)
             
             # Hard seek if deviation is large (> 0.5s)
-            if abs(median_dev) > 0.5:
+            if abs(median_dev) > self.max_drift:
                 if self.debug_sync_logging:
                     log_warning(f" Large sync deviation: {median_dev:.3f}s. Seeking...", component="sync")
                 self.video_player.seek(leader_time)
                 self.deviation_samples.clear()
             # Fine-grained speed adjustment for smaller drifts
-            elif abs(median_dev) > 0.01:
-                new_rate = 1.0 - (median_dev * 0.5)
-                new_rate = max(0.9, min(1.1, new_rate))
+            elif abs(median_dev) > self.min_drift:
+                new_rate = 1.0 - (median_dev * self.kp)
+                new_rate = max(self.min_rate, min(self.max_rate, new_rate))
                 self.video_player.set_speed(new_rate)
             else:
                 self.video_player.set_speed(1.0)
@@ -239,7 +244,7 @@ class CollaboratorPi:
             current_position = self.video_player.get_position()
             if leader_time > 0 and current_position is not None:
                 deviation = current_position - leader_time
-                if abs(deviation) > 0.5:
+                if abs(deviation) > self.max_drift:
                     self.video_player.seek(leader_time)
                     log_info(
                         f"Duplicate start command; re-synced to {leader_time:.2f}s",
@@ -270,6 +275,19 @@ class CollaboratorPi:
             enable_system_logging(
                 self.config.enable_system_logging or self.config.debug_mode
             )
+
+        # Update sync parameters if provided by leader
+        sync_params = msg.get("sync_params", {})
+        if sync_params:
+            self.max_drift = sync_params.get("max_drift", self.max_drift)
+            self.min_drift = sync_params.get("min_drift", self.min_drift)
+            self.kp = sync_params.get("kp", self.kp)
+            self.min_rate = sync_params.get("min_rate", self.min_rate)
+            self.max_rate = sync_params.get("max_rate", self.max_rate)
+            new_max_samples = sync_params.get("max_samples", self.max_samples)
+            if new_max_samples != self.max_samples:
+                self.max_samples = new_max_samples
+                self.deviation_samples.clear()
 
         # Find and load video
         self.video_path = incoming_video
@@ -448,6 +466,19 @@ def main():
         # Start playback immediately if --auto is specified
         if args.auto:
             print(" Auto-start: Triggering playback immediately...")
+        # Update sync parameters if provided by leader
+        sync_params = msg.get("sync_params", {})
+        if sync_params:
+            self.max_drift = sync_params.get("max_drift", self.max_drift)
+            self.min_drift = sync_params.get("min_drift", self.min_drift)
+            self.kp = sync_params.get("kp", self.kp)
+            self.min_rate = sync_params.get("min_rate", self.min_rate)
+            self.max_rate = sync_params.get("max_rate", self.max_rate)
+            new_max_samples = sync_params.get("max_samples", self.max_samples)
+            if new_max_samples != self.max_samples:
+                self.max_samples = new_max_samples
+                self.deviation_samples.clear()
+
             # Find and load video
             collaborator.video_path = collaborator.video_manager.find_video_file()
             if collaborator.video_path:

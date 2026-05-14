@@ -165,6 +165,14 @@ class LeaderPi:
                 "schedule": self.schedule.get_cues(),
                 "start_time": self.system_state.start_time,
                 "debug_mode": self.config.debug_mode,
+                "sync_params": {
+                    "max_drift": self.config.max_drift,
+                    "min_drift": self.config.min_drift,
+                    "kp": self.config.kp,
+                    "min_rate": self.config.min_rate,
+                    "max_rate": self.config.max_rate,
+                    "max_samples": self.config.max_samples,
+                },
             }
             while self.system_state.is_running:
                 self.command_manager.send_command(start_command)
@@ -304,6 +312,7 @@ def main():
             interface.register_command("status", lambda: StatusDisplay.show_leader_status(
                 leader_instance.system_state, leader_instance.collaborators.get_collaborators(), leader_instance.schedule.get_cue_count()
             ), "Show system status")
+            interface.register_command("set", leader_instance.set_sync_param, "Set sync parameter (e.g. set tick_interval 0.05)")
             interface.register_command("cues", lambda: StatusDisplay.show_schedule_summary(
                 leader_instance.schedule.get_cues()
             ), "Show schedule summary")
@@ -320,3 +329,20 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+    def set_sync_param(self, param: str, value: str) -> None:
+        """Set a sync parameter live"""
+        try:
+            val = float(value)
+            if param == "tick_interval":
+                self.sync_broadcaster.tick_interval = max(0.02, min(val, 5.0))
+                # Update config so next start packet reflects it
+                self.config.config["DEFAULT"]["tick_interval"] = str(val)
+                print(f"Sync interval set to {val}s")
+            elif hasattr(self.config, param):
+                self.config.config["DEFAULT"][param] = str(val)
+                print(f"Parameter {param} set to {val} (will be updated on next sync cycle)")
+            else:
+                print(f"Unknown parameter: {param}")
+        except ValueError:
+            print(f"Invalid value: {value}. Must be a number.")

@@ -8,6 +8,7 @@
 
 ## Playback And Sync
 - [ ] Add runtime reporting for the active GStreamer sink in the debug overlay.
+- [ ] Implement a non-browser based debug overlay for the Collaborator (using a native toolkit like Tkinter or Pygame to avoid browser overhead).
 - [ ] Tune collaborator drift control after live hardware measurements.
 - [ ] Add a focused sync test that exercises repeated corrections with the mock driver.
 

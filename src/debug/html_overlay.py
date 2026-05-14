@@ -140,7 +140,7 @@ class HTMLDebugOverlay:
             system_info = self._get_system_info()
 
             # Render template
-            html_content = self.template_engine.render_debug_overlay(
+            html_content = self.template_manager.render_debug_overlay(
                 self.device_id, system_info
             )
 
@@ -558,7 +558,7 @@ user_pref("browser.newtabpage.activity-stream.default.sites", "");
 
             # Render using template system
             new_html_file = self.template_manager.render_debug_overlay(
-                self.pi_id, system_info
+                self.device_id, system_info
             )
 
             if new_html_file and os.path.exists(new_html_file):

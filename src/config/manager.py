@@ -16,7 +16,7 @@ from core.logger import log_info, log_warning, log_error
 CONFIG_ROLE_SECTIONS = {
     "leader": {
         "KITCHENSYNC": {"is_leader", "device_id", "debug", "enable_system_logging"},
-        "DEFAULT": {"video_file", "video_driver", "sync_port", "tick_interval"},
+        "DEFAULT": {"video_file", "video_driver", "sync_port", "tick_interval", "max_drift", "min_drift", "kp", "min_rate", "max_rate", "max_samples"},
     },
     "collaborator": {
         "KITCHENSYNC": {"debug", "enable_system_logging"},
@@ -26,53 +26,20 @@ CONFIG_ROLE_SECTIONS = {
 
 EDITABLE_CONFIG_FIELDS = {
     "leader": [
-        {
-            "key": "video_file",
-            "section": "DEFAULT",
-            "type": "string",
-            "label": "Video file",
-        },
-        {
-            "key": "debug",
-            "section": "KITCHENSYNC",
-            "type": "bool",
-            "label": "Debug",
-        },
-        {
-            "key": "enable_system_logging",
-            "section": "KITCHENSYNC",
-            "type": "bool",
-            "label": "Verbose logging",
-        },
+        {"key": "video_file", "section": "DEFAULT", "type": "string", "label": "Video file"},
+        {"key": "debug", "section": "KITCHENSYNC", "type": "bool", "label": "Debug"},
+        {"key": "tick_interval", "section": "DEFAULT", "type": "float", "label": "Sync Interval"},
+        {"key": "max_drift", "section": "DEFAULT", "type": "float", "label": "Max Drift"},
+        {"key": "min_drift", "section": "DEFAULT", "type": "float", "label": "Min Drift"},
+        {"key": "kp", "section": "DEFAULT", "type": "float", "label": "P-Gain"},
+        {"key": "enable_system_logging", "section": "KITCHENSYNC", "type": "bool", "label": "Verbose logging"},
     ],
     "collaborator": [
-        {
-            "key": "video_file",
-            "section": "DEFAULT",
-            "type": "string",
-            "label": "Video file",
-        },
-        {
-            "key": "midi_port",
-            "section": "DEFAULT",
-            "type": "int",
-            "label": "MIDI port",
-        },
-        {
-            "key": "debug",
-            "section": "KITCHENSYNC",
-            "type": "bool",
-            "label": "Debug",
-        },
-        {
-            "key": "enable_system_logging",
-            "section": "KITCHENSYNC",
-            "type": "bool",
-            "label": "Verbose logging",
-        },
+        {"key": "video_file", "section": "DEFAULT", "type": "string", "label": "Video file"},
+        {"key": "midi_port", "section": "DEFAULT", "type": "int", "label": "MIDI port"},
+        {"key": "debug", "section": "KITCHENSYNC", "type": "bool", "label": "Debug"},
     ],
 }
-
 
 class ConfigurationError(Exception):
     """Raised when configuration loading fails"""
@@ -482,6 +449,30 @@ class ConfigManager:
     def enable_system_logging(self) -> bool:
         """Check if system detailed logging is enabled"""
         return self.getboolean("enable_system_logging", False)
+        {
+            "key": "tick_interval",
+            "section": "DEFAULT",
+            "type": "float",
+            "label": "Sync Tick Interval",
+        },
+        {
+            "key": "max_drift",
+            "section": "DEFAULT",
+            "type": "float",
+            "label": "Max Drift (Hard Seek)",
+        },
+        {
+            "key": "min_drift",
+            "section": "DEFAULT",
+            "type": "float",
+            "label": "Min Drift (Fine Sync)",
+        },
+        {
+            "key": "kp",
+            "section": "DEFAULT",
+            "type": "float",
+            "label": "Sync P-Gain",
+        },
 
     @property
     def tick_interval(self) -> float:
@@ -492,3 +483,33 @@ class ConfigManager:
     def audio_output(self) -> str:
         """Get audio output selection (hdmi or headphone, default: hdmi)."""
         return self.get("audio_output", "hdmi")
+
+    @property
+    def max_drift(self) -> float:
+        """Threshold for hard seek in seconds (default 0.5)."""
+        return self.getfloat("max_drift", 0.5)
+
+    @property
+    def min_drift(self) -> float:
+        """Threshold for fine speed adjustment in seconds (default 0.01)."""
+        return self.getfloat("min_drift", 0.01)
+
+    @property
+    def kp(self) -> float:
+        """P-gain coefficient for speed adjustment (default 0.5)."""
+        return self.getfloat("kp", 0.5)
+
+    @property
+    def min_rate(self) -> float:
+        """Minimum playback rate (default 0.9)."""
+        return self.getfloat("min_rate", 0.9)
+
+    @property
+    def max_rate(self) -> float:
+        """Maximum playback rate (default 1.1)."""
+        return self.getfloat("max_rate", 1.1)
+
+    @property
+    def max_samples(self) -> int:
+        """Number of samples for drift averaging (default 10)."""
+        return self.getint("max_samples", 10)
