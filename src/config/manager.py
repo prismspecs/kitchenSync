@@ -449,8 +449,40 @@ class ConfigManager:
 
     @property
     def device_id(self) -> str:
-        """Get device identifier"""
-        return self.get("device_id", "unknown-pi")
+        """Get unique device identifier, with hardware-based fallback for clones."""
+        configured_id = self.get("device_id", "pi-unknown")
+        
+        # If the ID is the default or generic, try to make it unique via hardware
+        if configured_id in ["pi-unknown", "pi-001", "unknown-pi"]:
+            hw_id = self._get_hardware_id()
+            if hw_id:
+                return f"pi-{hw_id}"
+        
+        return configured_id
+
+    def _get_hardware_id(self) -> Optional[str]:
+        """Try to get a unique hardware ID (Pi Serial or MAC)."""
+        # 1. Try Pi Serial
+        try:
+            with open("/proc/cpuinfo", "r") as f:
+                for line in f:
+                    if line.startswith("Serial"):
+                        serial = line.split(":")[1].strip()
+                        if serial and serial != "0000000000000000":
+                            return serial[-6:] # Last 6 digits
+        except Exception:
+            pass
+
+        # 2. Try MAC address
+        try:
+            import uuid
+            mac = hex(uuid.getnode())[2:]
+            if mac:
+                return mac[-6:]
+        except Exception:
+            pass
+            
+        return None
 
     @property
     def video_file(self) -> str:

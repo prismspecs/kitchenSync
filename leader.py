@@ -25,7 +25,6 @@ from core.logger import log_info, log_error, log_warning, enable_system_logging
 from ui.interface import CommandInterface, StatusDisplay
 from ui.window_manager import hide_mouse_cursor
 from protocols.midi_handler import MidiManager, MidiScheduler
-from debug.html_overlay import HTMLDebugManager
 
 
 class LeaderPi:
@@ -73,12 +72,6 @@ class LeaderPi:
         if self.video_path:
             self.video_player.load(self.video_path)
             log_info(f"Video file loaded: {self.video_path}", component="leader")
-
-        # Debug Overlays
-        self.html_debug = None
-        if self.config.debug_mode:
-            self.html_debug = HTMLDebugManager("leader-pi", self.video_player, self.midi_scheduler)
-            self.html_debug.start()
 
         # Register remote control handlers
         self.command_manager.register_handler("remote_start", lambda msg, addr: self.start_system())
@@ -199,8 +192,6 @@ class LeaderPi:
         self.command_manager.stop_listening()
         if self.midi_manager:
             self.midi_manager.cleanup()
-        if self.html_debug:
-            self.html_debug.cleanup()
         log_info("Cleanup completed", component="leader")
 
     def set_sync_param(self, param: str, value: str) -> None:
