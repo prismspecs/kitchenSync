@@ -30,7 +30,7 @@ class CollaboratorPi:
         # Load configuration
         self.config = ConfigManager(config_file)
         enable_system_logging(
-            self.config.enable_system_logging or self.config.debug_mode
+            self.config.debug_mode
         )
 
         log_info(f"Starting KitchenSync Collaborator '{self.config.device_id}'", component="collaborator")
@@ -101,17 +101,6 @@ class CollaboratorPi:
         self._sync_lock = threading.Lock()
         self._sync_thread = None
         self._stop_sync_thread = threading.Event()
-
-        # Initialize Debug Overlay
-        self.debug_overlay = None
-        if self.config.debug_mode:
-            from debug.native_overlay import NativeDebugManager
-            self.debug_overlay = NativeDebugManager(
-                self.config.device_id,
-                self.video_player,
-                self.midi_scheduler
-            )
-            self.debug_overlay.start()
 
     def _handle_sync(self, leader_time: float, received_at: float, leader_id: str = "unknown") -> None:
         """Handle incoming sync packets from leader - LOW LATENCY ONLY"""
@@ -460,8 +449,6 @@ class CollaboratorPi:
         self.command_listener.stop_listening()
         if self.system_state.is_running:
             self.stop_playback()
-        if self.debug_overlay:
-            self.debug_overlay.cleanup()
         self.video_player.cleanup()
         if self.midi_manager:
             self.midi_manager.cleanup()
@@ -479,7 +466,6 @@ def main():
     try:
         collaborator = CollaboratorPi(args.config_file)
         if args.debug:
-            collaborator.config.debug_mode = True
             enable_system_logging(True)
         if args.debug_loop:
             collaborator.critical_window_logging = True
