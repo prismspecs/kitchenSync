@@ -292,6 +292,19 @@ class CommandManager:
         self.collaborators = {}
         self.message_handlers = {}
         self.debug_mode = debug_mode
+        
+        # Latency tracking
+        self._rtt_samples = {} # Dict[device_id, list]
+        self._ping_sent_at = {} # Dict[device_id, float]
+
+    def get_average_rtt(self) -> float:
+        """Calculate the average round-trip time across all collaborators."""
+        all_samples = []
+        for samples in self._rtt_samples.values():
+            all_samples.extend(samples)
+        if not all_samples:
+            return 0.0
+        return sum(all_samples) / len(all_samples)
 
     def setup_socket(self) -> None:
         """Initialize command socket"""
@@ -378,6 +391,7 @@ class CommandManager:
             if target_pi in self.collaborators:
                 ip = self.collaborators[target_pi]["ip"]
                 try:
+                    self._ping_sent_at[target_pi] = time.time()
                     self.control_sock.sendto(payload.encode(), (ip, self.control_port))
                     print(f"[NET] Sent {command['type']} directly to {target_pi} ({ip})")
                 except Exception:
@@ -386,6 +400,7 @@ class CommandManager:
             # Send to every registered IP directly for maximum reliability
             for device_id, info in self.collaborators.items():
                 try:
+                    self._ping_sent_at[device_id] = time.time()
                     self.control_sock.sendto(payload.encode(), (info["ip"], self.control_port))
                     print(f"[NET] Sent {command['type']} directly to {device_id} ({info['ip']})")
                 except Exception:
@@ -403,30 +418,38 @@ class CommandManager:
     def _handle_default_message(self, msg: Dict[str, Any], addr: tuple) -> None:
         """Handle default message types"""
         msg_type = msg.get("type")
+        device_id = msg.get("device_id")
+        if not device_id:
+            return
+
+        # RTT Calculation
+        if device_id in self._ping_sent_at:
+            rtt = time.time() - self._ping_sent_at[device_id]
+            if device_id not in self._rtt_samples:
+                self._rtt_samples[device_id] = []
+            self._rtt_samples[device_id].append(rtt)
+            if len(self._rtt_samples[device_id]) > 10:
+                self._rtt_samples[device_id].pop(0)
 
         if msg_type == "register":
-            device_id = msg.get("device_id")
-            if device_id:
-                self.collaborators[device_id] = {
-                    "ip": addr[0],
-                    "last_seen": time.time(),
-                    "status": msg.get("status", "unknown"),
-                    "video_file": msg.get("video_file", ""),
-                }
-                # print(f"Registered Pi: {device_id} at {addr[0]}")
+            self.collaborators[device_id] = {
+                "ip": addr[0],
+                "last_seen": time.time(),
+                "status": msg.get("status", "unknown"),
+                "video_file": msg.get("video_file", ""),
+            }
+            # print(f"Registered Pi: {device_id} at {addr[0]}")
 
         elif msg_type == "heartbeat":
-            device_id = msg.get("device_id")
-            if device_id:
-                self.collaborators[device_id] = {
-                    "ip": addr[0],
-                    "last_seen": time.time(),
-                    "status": msg.get("status", "ready"),
-                    "video_file": msg.get(
-                        "video_file",
-                        self.collaborators.get(device_id, {}).get("video_file", ""),
-                    ),
-                }
+            self.collaborators[device_id] = {
+                "ip": addr[0],
+                "last_seen": time.time(),
+                "status": msg.get("status", "ready"),
+                "video_file": msg.get(
+                    "video_file",
+                    self.collaborators.get(device_id, {}).get("video_file", ""),
+                ),
+            }
 
     def get_collaborators(self) -> Dict[str, Dict]:
         """Get current collaborator status"""

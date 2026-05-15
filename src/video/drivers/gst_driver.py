@@ -218,18 +218,25 @@ class GstDriver(VideoDriver):
 
     def _create_video_sink(self):
         """Create a hardware-optimized sink bin for the current runtime."""
-        if os.environ.get("DISPLAY"):
-            # Explicitly build a GL bin. This is MUCH more robust for Pi 5's 
-            # stateless decoder which outputs tiled DMA-bufs.
+        if os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"):
+            # Explicitly build a GL bin with a size hint to avoid 'tiny window'.
+            # We add a capsfilter to suggest a standard resolution.
             try:
-                # Using glupload and glcolorconvert ensures the hardware 
-                # decoder's output is correctly brought into the GL context.
-                bin_desc = "glupload ! glcolorconvert ! glimagesink name=sink"
+                bin_desc = "glupload ! glcolorconvert ! capsfilter caps=\"video/x-raw(memory:GLMemory), width=1280, height=720\" ! glimagesink name=sink"
                 sink_bin = Gst.parse_bin_from_description(bin_desc, True)
                 if sink_bin:
                     return sink_bin, "gl-optimized-bin"
             except Exception as e:
-                log_warning(f"Gst: Failed to create GL sink bin: {e}")
+                log_warning(f"Gst: Failed to create GL sink bin with caps: {e}")
+                
+            # Fallback to simple GL bin
+            try:
+                bin_desc = "glupload ! glcolorconvert ! glimagesink name=sink"
+                sink_bin = Gst.parse_bin_from_description(bin_desc, True)
+                if sink_bin:
+                    return sink_bin, "gl-optimized-bin"
+            except Exception:
+                pass
 
         for sink_name in self._preferred_sink_names():
             sink = Gst.ElementFactory.make(sink_name, "videosink")

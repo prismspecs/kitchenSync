@@ -115,7 +115,19 @@ class LeaderPi:
         # Start networking
         def media_time_provider():
             try:
-                return self.video_player.get_position()
+                base_time = self.video_player.get_position()
+                if base_time is None:
+                    return None
+                
+                # Automatic Latency Compensation
+                # RTT is round trip; one-way lag is roughly RTT / 2.
+                # By adding this to the broadcast time, we 'pre-advance' the packet
+                # so it arrives at the collaborator exactly when they should see that frame.
+                avg_rtt = self.command_manager.get_average_rtt()
+                if avg_rtt > 0:
+                    compensation = avg_rtt / 2.0
+                    return base_time + compensation
+                return base_time
             except Exception:
                 return None
 

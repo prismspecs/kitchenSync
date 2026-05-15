@@ -64,37 +64,40 @@ class WindowManager:
         if os.environ.get("XDG_SESSION_TYPE") == "wayland":
             return True
         
-        # Check if wlrctl is available and working
-        try:
-            result = subprocess.run(
-                ["wlrctl", "toplevel", "list"], 
-                capture_output=True, 
-                timeout=2
-            )
-            if result.returncode == 0:
-                return True
-        except (FileNotFoundError, subprocess.TimeoutExpired):
-            pass
+        # Only check wlrctl if it actually exists to avoid Errno 2 spam
+        if shutil.which("wlrctl"):
+            try:
+                result = subprocess.run(
+                    ["wlrctl", "toplevel", "list"], 
+                    capture_output=True, 
+                    timeout=2
+                )
+                if result.returncode == 0:
+                    return True
+            except Exception:
+                pass
         
         return False
 
     def list_windows(self) -> List[str]:
         """List all windows"""
         try:
-            if self.is_wayland:
+            if self.is_wayland and shutil.which("wlrctl"):
                 result = subprocess.run(
                     ["wlrctl", "toplevel", "list"],
                     capture_output=True,
                     text=True,
                     timeout=5
                 )
-            else:
+            elif not self.is_wayland and shutil.which("wmctrl"):
                 result = subprocess.run(
                     ["wmctrl", "-l"],
                     capture_output=True,
                     text=True,
                     timeout=5
                 )
+            else:
+                return [] # No window management tools available
             
             if result.returncode == 0:
                 return result.stdout.strip().split("\n")
