@@ -5,6 +5,7 @@ Receives time sync from the Leader and adjusts local playback.
 """
 
 import sys
+import os
 import time
 import argparse
 import signal

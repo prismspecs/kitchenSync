@@ -5,6 +5,7 @@ Coordinates playback, broadcasts time sync, and manages collaborators.
 """
 
 import sys
+import os
 import socket
 import threading
 import time
