@@ -204,14 +204,21 @@ class SyncReceiver:
             self.setup_socket()
 
         def listen_loop():
-            # Use a shorter timeout to allow checking is_running
+            # Set a high buffer size for the socket to avoid OS-level drops
+            try:
+                self.sync_sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 1024 * 128)
+            except Exception:
+                pass
+
+            # Use a shorter timeout for responsive shutdown
             self.sync_sock.settimeout(0.5)
             
             while self.is_running:
                 try:
-                    # 1. Block on the first packet to avoid busy-waiting
+                    # 1. Block on the first packet (lowest CPU)
                     try:
                         data, addr = self.sync_sock.recvfrom(1024)
+                        received_at = time.time()
                     except socket.timeout:
                         continue
                     except (socket.error, OSError):
@@ -219,14 +226,15 @@ class SyncReceiver:
                             break
                         continue
                     
-                    # 2. Drain the buffer to find the NEWEST packet
-                    # This prevents "buffer bloat" if processing is slower than broadcast rate
+                    # 2. Aggressively drain the buffer to find the NEWEST packet
+                    # This eliminates 'buffer bloat' latency.
                     self.sync_sock.setblocking(False)
                     packets_drained = 0
                     while self.is_running:
                         try:
                             new_data, new_addr = self.sync_sock.recvfrom(1024)
                             data, addr = new_data, new_addr
+                            received_at = time.time() # Update to the arrival time of the newest packet
                             packets_drained += 1
                         except (socket.error, BlockingIOError):
                             break
@@ -234,44 +242,40 @@ class SyncReceiver:
                     if not self.is_running:
                         break
                         
-                    self.sync_sock.settimeout(0.5) # Restore timeout (implies setblocking(True) with timeout)
+                    # Restore blocking mode with timeout
+                    self.sync_sock.setblocking(True)
+                    self.sync_sock.settimeout(0.5)
 
                     msg = json.loads(data.decode())
 
                     if msg.get("type") == "sync":
-                        self.last_sync_time = time.time()
+                        self.last_sync_time = received_at
                         leader_time = msg.get("time", 0)
                         leader_id = msg.get("leader_id", "unknown")
-                        time_source = msg.get("source", "unknown")
-                        duration = msg.get("duration")
 
                         if self.sync_callback:
                             try:
-                                # Pass leader_time, receive timestamp, and leader_id
+                                # Execute callback with high precision timestamp
+                                # Note: the callback SHOULD NOT block this thread.
                                 try:
-                                    self.sync_callback(leader_time, self.last_sync_time, leader_id)
+                                    self.sync_callback(leader_time, received_at, leader_id)
                                 except TypeError:
-                                    # Fallback for callbacks expecting two or one args
-                                    try:
-                                        self.sync_callback(leader_time, self.last_sync_time)
-                                    except TypeError:
-                                        self.sync_callback(leader_time)
+                                    self.sync_callback(leader_time, received_at)
                                         
-                                # Log diagnostic info if system logging is enabled and we drained packets
-                                if packets_drained > 0:
+                                if packets_drained > 5:
                                     log_info(
-                                        f"Sync: Drained {packets_drained} stale packets from buffer",
+                                        f"Sync: Drained {packets_drained} stale packets (Critical latency recovered)",
                                         component="sync",
                                     )
 
-                            except Exception as e:
-                                pass # Callback error should not stop the loop
+                            except Exception:
+                                pass # Avoid stopping loop on user callback error
 
                 except json.JSONDecodeError:
                     continue
-                except Exception as e:
+                except Exception:
                     if self.is_running:
-                        pass  # Ignore sync listener errors
+                        pass
 
         thread = threading.Thread(target=listen_loop, daemon=True)
         thread.start()

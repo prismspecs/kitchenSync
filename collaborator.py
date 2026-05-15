@@ -96,6 +96,12 @@ class CollaboratorPi:
         self.startup_sync_count = 0
         self.FAST_SYNC_THRESHOLD = 5  # Number of initial packets to bypass filter
 
+        # Sync Decoupling
+        self._latest_sync_state = None
+        self._sync_lock = threading.Lock()
+        self._sync_thread = None
+        self._stop_sync_thread = threading.Event()
+
         # Initialize Debug Overlay
         self.debug_overlay = None
         if self.config.debug_mode:
@@ -107,57 +113,65 @@ class CollaboratorPi:
             )
             self.debug_overlay.start()
 
-    def _register_with_leader(self):
-        """DEPRECATED: Registration is now handled by command_listener.send_registration"""
-        pass
-
     def _handle_sync(self, leader_time: float, received_at: float, leader_id: str = "unknown") -> None:
-        """Handle incoming sync packets from leader"""
-        # Leader Locking: Only follow the first leader we see to prevent 
-        # cross-talk if multiple leaders are on the network.
+        """Handle incoming sync packets from leader - LOW LATENCY ONLY"""
+        # Leader Locking
         if self.active_leader_id is None:
             self.active_leader_id = leader_id
             log_info(f"Locked onto leader: {leader_id}", component="sync")
         elif self.active_leader_id != leader_id:
-            # Silently ignore other leaders
             return
 
         self.last_sync_at = received_at
 
         if not self.system_state.is_running:
-            if self.debug_sync_logging:
-                log_info(f"Received sync while idle: {leader_time:.3f}s", component="sync")
             return
 
-        # Compensate for network and processing latency
-        # 'received_at' is when the packet hit the network listener.
-        # 'leader_time' was the leader's position at that instant.
-        processing_latency = time.time() - received_at
-        adjusted_leader_time = leader_time + processing_latency
-        
-        # Update system time and maintain sync
-        self.system_state.current_time = adjusted_leader_time
+        # Thread-safe update of the latest sync state
+        with self._sync_lock:
+            self._latest_sync_state = (leader_time, received_at)
 
-        # Process MIDI cues (safe no-op if no schedule)
-        if self.midi_scheduler:
-            self.midi_scheduler.process_cues(adjusted_leader_time)
+    def _sync_processor_loop(self) -> None:
+        """High-frequency loop to process stored sync state and adjust playback"""
+        log_info("Sync processor thread started", component="sync")
+        while not self._stop_sync_thread.is_set():
+            try:
+                self._process_sync_tick()
+            except Exception as e:
+                log_error(f"Sync processor error: {e}")
+            
+            # Run at 20Hz (every 50ms) for high-precision correction
+            time.sleep(0.05)
 
-        # Check for critical sync window (only if enabled via --debug_loop)
-        if self.critical_window_logging:
-            self._update_critical_window_status(adjusted_leader_time)
+    def _process_sync_tick(self) -> None:
+        """Perform one tick of sync logic based on the latest stored state"""
+        state = None
+        with self._sync_lock:
+            state = self._latest_sync_state
 
-        # Maintain video sync
-        self._maintain_video_sync(adjusted_leader_time)
+        if state and self.system_state.is_running:
+            leader_time, received_at = state
+            
+            # 1. Compensate for processing/network latency
+            processing_latency = time.time() - received_at
+            adjusted_leader_time = leader_time + processing_latency
+            
+            # 2. Update shared state
+            self.system_state.current_time = adjusted_leader_time
+            
+            # 3. Process MIDI (Non-blocking)
+            if self.midi_scheduler:
+                self.midi_scheduler.process_cues(adjusted_leader_time)
+            
+            # 4. Adjust Video
+            self._maintain_video_sync(adjusted_leader_time)
 
     def _maintain_video_sync(self, leader_time: float) -> None:
-        """Calculate drift and adjust playback speed"""
-        if not self.video_player.is_playing:
+        """Calculate drift and adjust playback speed - FAST VERSION"""
+        if not self.video_player.is_playing or getattr(self.video_player, "is_seeking", False):
             return
 
-        # Don't try to sync while the player is already seeking
-        if getattr(self.video_player, "is_seeking", False):
-            return
-
+        # Query position (Now instantaneous due to background polling in GstDriver)
         video_pos = self.video_player.get_position()
         if video_pos is None:
             return
@@ -173,7 +187,6 @@ class CollaboratorPi:
             self.deviation_samples.pop(0)
 
         # "Instant Lock" for startup or after a large seek
-        # Bypass the median filter for the first few packets to settle immediately
         use_immediate = self.startup_sync_count < self.FAST_SYNC_THRESHOLD
         
         if len(self.deviation_samples) >= self.max_samples or use_immediate:
@@ -183,23 +196,16 @@ class CollaboratorPi:
             else:
                 median_dev = statistics.median(self.deviation_samples)
             
-            # Tiered Seeking:
-            # 1. Huge drift (> 2s): KEY_UNIT seek (fast, snaps to keyframe)
+            # Tiered correction
             if abs(median_dev) > 2.0:
-                if self.debug_sync_logging:
-                    log_warning(f" Huge sync deviation: {median_dev:.3f}s. Fast seeking...", component="sync")
+                log_warning(f" Huge sync deviation: {median_dev:.3f}s. Fast seeking...", component="sync")
                 self.video_player.seek(leader_time, accurate=False)
                 self.deviation_samples.clear()
                 self.startup_sync_count = 0 # Re-trigger instant lock
-            
-            # 2. Moderate drift (> max_drift): ACCURATE seek (precise)
             elif abs(median_dev) > self.max_drift:
-                if self.debug_sync_logging:
-                    log_warning(f" Sync deviation: {median_dev:.3f}s. Precise seeking...", component="sync")
+                log_warning(f" Sync deviation: {median_dev:.3f}s. Precise seeking...", component="sync")
                 self.video_player.seek(leader_time, accurate=True)
                 self.deviation_samples.clear()
-            
-            # 3. Small drift (> min_drift): Speed adjustment (seamless)
             elif abs(median_dev) > self.min_drift:
                 new_rate = 1.0 - (median_dev * self.kp)
                 new_rate = max(self.min_rate, min(self.max_rate, new_rate))
@@ -214,7 +220,7 @@ class CollaboratorPi:
         if cmd_type == "start":
             self._handle_start_command(msg)
         elif cmd_type == "stop":
-            self._handle_stop_command()
+            self.stop_playback()
         elif cmd_type == "schedule_update":
             self._handle_schedule_update(msg, addr)
         elif cmd_type == "config_request":
@@ -320,32 +326,25 @@ class CollaboratorPi:
 
     def _handle_start_command(self, msg: dict) -> None:
         """Initialize playback session from leader start command"""
-        incoming_video = self.video_manager.find_video_file()
+        leader_file = msg.get("video_file")
+        local_video = self.video_manager.find_video_file()
+        local_name = Path(local_video).name if local_video else None
 
-        # If already playing the same content, just re-sync position instead of
-        # doing a disruptive restart. The simulator resends start every 2s for
-        # late joiners, so this is the common case.
-        if self.system_state.is_running and incoming_video == self.video_path:
+        if leader_file and local_name and leader_file != local_name:
+            log_error(f"CONTENT MISMATCH: Leader is playing '{leader_file}', but I have '{local_name}'", component="collaborator")
+        
+        if self.system_state.is_running and local_video == self.video_path:
+            # Already playing same content: check for large drift
             leader_time = self.system_state.current_time
             current_position = self.video_player.get_position()
             if leader_time > 0 and current_position is not None:
                 deviation = current_position - leader_time
                 if abs(deviation) > self.max_drift:
                     self.video_player.seek(leader_time)
-                    log_info(
-                        f"Duplicate start command; re-synced to {leader_time:.2f}s",
-                        component="collaborator",
-                    )
-                elif self.debug_sync_logging:
-                    log_info(
-                        f"Duplicate start command ignored; drift {deviation:+.3f}s",
-                        component="collaborator",
-                    )
             return
 
-        log_info("Start command received, initializing playback...", component="collaborator")
+        log_info(f"Start command received for {leader_file}", component="collaborator")
         if self.system_state.is_running:
-            log_warning("Video file changed; restarting playback.", component="collaborator")
             self.stop_playback()
 
         # Load schedule
@@ -353,16 +352,7 @@ class CollaboratorPi:
         if self.midi_scheduler:
             self.midi_scheduler.load_schedule(schedule)
 
-        # Override debug mode if leader specifies it
-        leader_debug_mode = msg.get("debug_mode", False)
-        if leader_debug_mode and not self.config.debug_mode:
-            self.config.config["KITCHENSYNC"]["debug"] = "true"
-            self.debug_sync_logging = True
-            enable_system_logging(
-                self.config.enable_system_logging or self.config.debug_mode
-            )
-
-        # Update sync parameters if provided by leader
+        # Update sync parameters
         sync_params = msg.get("sync_params", {})
         if sync_params:
             self.max_drift = sync_params.get("max_drift", self.max_drift)
@@ -374,80 +364,62 @@ class CollaboratorPi:
             if new_max_samples != self.max_samples:
                 self.max_samples = new_max_samples
                 self.deviation_samples.clear()
-            
-            # Update audio preference from leader
-            leader_enable_audio = sync_params.get("enable_audio")
-            if leader_enable_audio is not None and hasattr(self.video_player, "enable_audio"):
-                if self.video_player.enable_audio != leader_enable_audio:
-                    log_info(f"Syncing audio preference with leader: {leader_enable_audio}", component="collaborator")
-                    self.video_player.enable_audio = leader_enable_audio
 
-        # Find and load video
-        self.video_path = incoming_video
+        self.video_path = local_video
         if self.video_path:
             self.video_player.load(self.video_path)
-            log_info(f"Loaded video: {self.video_path}", component="collaborator")
             self.start_playback()
         else:
-            log_error("No video file found for playback!", component="collaborator")
-
-    def _handle_stop_command(self) -> None:
-        """Stop playback as requested by leader"""
-        self.stop_playback()
-        log_info("Stopped by leader command", component="collaborator")
+            log_error("No video file found!", component="collaborator")
 
     def _handle_schedule_update(self, msg: dict, addr: tuple) -> None:
         """Handle schedule update from leader"""
         schedule = msg.get("schedule", [])
         if self.midi_scheduler:
             self.midi_scheduler.load_schedule(schedule)
-        print(f"Updated schedule: {len(schedule)} cues")
 
     def start_playback(self) -> None:
-        """Start video and MIDI playback"""
+        """Start video playback"""
         log_info("Starting playback...", component="collaborator")
-
-        # Start system state
         self.system_state.start_session()
         self.video_start_time = time.time()
+        
+        # Start sync processor thread
+        self._stop_sync_thread.clear()
+        self._sync_thread = threading.Thread(target=self._sync_processor_loop, daemon=True)
+        self._sync_thread.start()
 
-        # Start video playback first
         if self.video_path:
-            log_info("Starting video...", component="video")
             self.video_player.play()
-
-        # Start MIDI playback with video duration for looping
+        
         video_duration = self.video_player.get_duration()
         if self.midi_scheduler:
             self.midi_scheduler.start_playback(self.system_state.start_time, video_duration)
-
+            
         log_info("Playback started", component="collaborator")
 
     def stop_playback(self) -> None:
-        """Stop video and MIDI playback"""
+        """Stop video playback"""
         log_info("Stopping playback...", component="collaborator")
+        
+        # Stop sync thread
+        self._stop_sync_thread.set()
+        if self._sync_thread:
+            self._sync_thread.join(timeout=0.2)
+            self._sync_thread = None
 
-        # Stop video
         self.video_player.stop()
-
-        # Stop MIDI
         if self.midi_scheduler:
             self.midi_scheduler.stop_playback()
-
-        # Stop system state
         self.system_state.stop_session()
-
-        # Reset video state
         self.video_start_time = None
         self.deviation_samples.clear()
-
         log_info("Playback stopped", component="collaborator")
 
     def _update_critical_window_status(self, leader_time: float) -> None:
         """Update critical sync logging window status"""
         if not self.video_player.is_playing:
-            if self.in_critical_window:
-                self.in_critical_window = False
+            self.in_critical_window = False
             return
 
         duration = self.video_player.get_duration()
@@ -455,7 +427,6 @@ class CollaboratorPi:
         if not duration or duration <= 0 or video_position is None:
             return
 
-        # 5 seconds before end or 5 seconds after start
         is_near_end = video_position > (duration - 5.0)
         is_near_start = video_position < 5.0
 
@@ -468,137 +439,56 @@ class CollaboratorPi:
 
     def run(self) -> None:
         """Main execution loop"""
-        # Check for X server
-        import os
-        import subprocess
-        x_running = False
-        try:
-            # Simple check if xset can query the display
-            subprocess.run(["xset", "q"], check=True, capture_output=True, env={"DISPLAY": os.environ.get("DISPLAY", ":0")})
-            x_running = True
-            hide_mouse_cursor()
-        except Exception:
-            log_warning("X Server not detected on DISPLAY " + os.environ.get("DISPLAY", ":0") + ". Video will not be visible!", component="collaborator")
-
-        log_info(f" Collaborator {self.config.device_id} started successfully!", component="collaborator")
-        print(f"Collaborator '{self.config.device_id}' ready. Waiting for leader...")
-        print("Press Ctrl+C to exit")
+        hide_mouse_cursor()
+        log_info(f"Collaborator {self.config.device_id} ready.", component="collaborator")
 
         self.command_listener.start_listening()
         self.sync_receiver.start_listening()
-
-        # Send an initial registration immediately
         self.command_listener.send_registration(self.config.device_id, self.config.video_file)
 
         try:
             while True:
-                # Send periodic heartbeat to keep registration alive
                 self.command_listener.send_heartbeat(self.config.device_id)
                 time.sleep(5)
         except KeyboardInterrupt:
-            # Main entry point for Ctrl+C
             self.cleanup()
 
     def cleanup(self) -> None:
         """Clean up resources"""
-        log_info("Cleaning up resources...", component="collaborator")
-        
-        # 1. Stop networking immediately to prevent new packets from triggering callbacks
-        if hasattr(self, "sync_receiver") and self.sync_receiver:
-            log_info("Stopping sync receiver...", component="collaborator")
-            self.sync_receiver.stop_listening()
-        
-        if hasattr(self, "command_listener") and self.command_listener:
-            log_info("Stopping command listener...", component="collaborator")
-            self.command_listener.stop_listening()
-
-        # 2. Stop playback
+        log_info("Cleaning up...", component="collaborator")
+        self.sync_receiver.stop_listening()
+        self.command_listener.stop_listening()
         if self.system_state.is_running:
             self.stop_playback()
-
-        # 3. Stop debug overlay
         if self.debug_overlay:
-            log_info("Stopping debug overlay...", component="collaborator")
             self.debug_overlay.cleanup()
-
-        # 4. Cleanup video player
-        log_info("Cleaning up video player...", component="collaborator")
         self.video_player.cleanup()
-
-        # 5. Cleanup MIDI
         if self.midi_manager:
-            log_info("Cleaning up MIDI...", component="collaborator")
             self.midi_manager.cleanup()
-            
         log_info("Cleanup completed", component="collaborator")
 
 
 def main():
     parser = argparse.ArgumentParser(description="KitchenSync Collaborator Node")
     parser.add_argument("--config", dest="config_file", help="Path to config file")
-    parser.add_argument(
-        "--debug", action="store_true", help="Enable verbose sync logging"
-    )
-    parser.add_argument(
-        "--debug_loop",
-        action="store_true",
-        help="Enable critical window sync logging (looping behavior)",
-    )
-    parser.add_argument(
-        "--debug_deviation",
-        action="store_true",
-        help="Print raw deviation between leader and collaborator video positions to the console",
-    )
-    parser.add_argument(
-        "--auto",
-        action="store_true",
-        help="Start playback immediately without waiting for leader command",
-    )
+    parser.add_argument("--debug", action="store_true", help="Enable debug mode")
+    parser.add_argument("--debug_loop", action="store_true", help="Enable critical window sync logging")
+    parser.add_argument("--debug_deviation", action="store_true", help="Print raw deviation")
     args = parser.parse_args()
 
     try:
         collaborator = CollaboratorPi(args.config_file)
-
-        # Override debug mode if specified
         if args.debug:
-            collaborator.config.config["KITCHENSYNC"]["debug"] = "true"
-            collaborator.debug_sync_logging = True
+            collaborator.config.debug_mode = True
             enable_system_logging(True)
-            print(" Debug mode: ENABLED (via command line)")
-            print(" Sync debug logging: ENABLED")
-
-        # Enable critical window sync logging if specified
         if args.debug_loop:
             collaborator.critical_window_logging = True
-            print(" Loop debug mode: ENABLED (via command line)")
-            print(
-                " Critical window sync logging: ENABLED (5s before video end to 5s after restart)"
-            )
-
-        # Enable debug deviation mode if specified
         if args.debug_deviation:
             collaborator.debug_deviation_mode = True
-            print(" Debug deviation mode: ENABLED (prints raw deviation)")
-
-        # Start playback immediately if --auto is specified
-        if args.auto:
-            print(" Auto-start: Triggering playback immediately...")
-
-            # Find and load video
-            collaborator.video_path = collaborator.video_manager.find_video_file()
-            if collaborator.video_path:
-                collaborator.video_player.load(collaborator.video_path)
-                collaborator.start_playback()
-            else:
-                log_error("Auto-start failed: No video file found.")
-
+            
         collaborator.run()
-    except KeyboardInterrupt:
-        print("\nExiting...")
     except Exception as e:
         print(f"Fatal error: {e}")
-        import traceback
-        traceback.print_exc()
         sys.exit(1)
 
 

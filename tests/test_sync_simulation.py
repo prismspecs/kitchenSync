@@ -67,6 +67,7 @@ class SyncSimulationTest(unittest.TestCase):
             for i in range(500):
                 leader_time = i * 0.1
                 collab._handle_sync(leader_time, current_t, "leader-001")
+                collab._process_sync_tick()
                 
                 drifts.append(collab.video_player.get_position() - leader_time)
                 
@@ -97,6 +98,7 @@ class SyncSimulationTest(unittest.TestCase):
             for i in range(50):
                 leader_time = i * 0.1
                 collab._handle_sync(leader_time, current_t, "leader-001")
+                collab._process_sync_tick()
                 drifts.append(collab.video_player.get_position() - leader_time)
                 
                 current_t += 0.1
@@ -128,6 +130,7 @@ class SyncSimulationTest(unittest.TestCase):
             for i in range(100):
                 leader_time = i * 0.1
                 collab._handle_sync(leader_time, current_t, "leader-001")
+                collab._process_sync_tick()
                 drifts.append(collab.video_player.get_position() - leader_time)
                 
                 current_t += 0.1

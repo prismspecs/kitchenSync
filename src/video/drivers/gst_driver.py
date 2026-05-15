@@ -46,9 +46,41 @@ class GstDriver(VideoDriver):
         self.pipeline_kind = "playbin"
         self.is_seeking = False
         
+        # Position polling
+        self._cached_position = 0.0
+        self._last_poll_time = 0.0
+        self._stop_polling = threading.Event()
+        self._poll_thread = None
+
         # MainLoop for GStreamer bus messages
         self.loop = None
         self.loop_thread = None
+
+    def _position_poll_worker(self):
+        """Background thread to poll position without blocking the main loop."""
+        while not self._stop_polling.is_set():
+            try:
+                if self.pipeline and self.state == PlayerState.PLAYING and not self.is_seeking:
+                    success, pos = self.pipeline.query_position(Gst.Format.TIME)
+                    if success:
+                        self._cached_position = pos / Gst.SECOND
+                        self._last_poll_time = time.time()
+            except Exception:
+                pass
+            time.sleep(0.01) # 100Hz polling
+
+    def _start_polling(self):
+        if self._poll_thread and self._poll_thread.is_alive():
+            return
+        self._stop_polling.clear()
+        self._poll_thread = threading.Thread(target=self._position_poll_worker, daemon=True)
+        self._poll_thread.start()
+
+    def _stop_polling_worker(self):
+        self._stop_polling.set()
+        if self._poll_thread:
+            self._poll_thread.join(timeout=0.1)
+            self._poll_thread = None
 
     def _hardware_decoder_names(self):
         return [
@@ -219,8 +251,14 @@ class GstDriver(VideoDriver):
         if not self.enable_audio:
             # Flag 1 << 1 is GST_PLAY_FLAG_AUDIO
             self.pipeline.set_property("flags", self.pipeline.get_property("flags") & ~(1 << 1))
+            # Also set audio-sink to fakesink to be doubly sure no audio device is touched
+            fakesink = Gst.ElementFactory.make("fakesink", "audiofakesink")
+            if fakesink:
+                self.pipeline.set_property("audio-sink", fakesink)
             log_info("Gst: Audio output disabled by configuration")
         else:
+            # On Pi, sometimes playbin fails if the default audio sink is busy or missing.
+            # Using autoaudiosink is generally safe, but we can be explicit.
             log_info("Gst: Audio output enabled")
 
         sink, sink_name = self._create_video_sink()
@@ -266,7 +304,25 @@ class GstDriver(VideoDriver):
         elif t == Gst.MessageType.ERROR:
             err, debug = message.parse_error()
             log_error(f"Gst Error: {err.message}")
-            self.state = PlayerState.ERROR
+            
+            # Heuristic: If we get a device or stream error while audio is enabled, 
+            # it's very likely the audio sink failing.
+            if self.enable_audio and ("device" in err.message.lower() or "format" in err.message.lower()):
+                log_warning("Gst: Critical error detected; attempting to restart WITHOUT audio.", component="video")
+                self.enable_audio = False
+                # We need to restart the load in a thread to avoid bus deadlocks
+                threading.Thread(target=self._restart_minimal, daemon=True).start()
+            else:
+                self.state = PlayerState.ERROR
+
+    def _restart_minimal(self):
+        """Restart the pipeline with minimal settings after a crash."""
+        path = self.video_path
+        if path:
+            self.stop()
+            time.sleep(0.5)
+            self.load(path)
+            self.play()
 
     def _is_ready(self) -> bool:
         """Check if the pipeline is in a state that allows queries and seeks."""
@@ -287,6 +343,7 @@ class GstDriver(VideoDriver):
             return False
             
         self.state = PlayerState.PLAYING
+        self._start_polling()
         
         # Wait up to 100ms (reduced from 500ms) for the pipeline to reach PAUSED/PLAYING
         self.pipeline.get_state(0.1 * Gst.SECOND)
@@ -319,6 +376,7 @@ class GstDriver(VideoDriver):
             self.pipeline.set_state(Gst.State.NULL)
             self.state = PlayerState.STOPPED
             self.is_seeking = False
+            self._stop_polling_worker()
 
     def seek(self, seconds: float, accurate: bool = True) -> bool:
         """
@@ -346,6 +404,10 @@ class GstDriver(VideoDriver):
             Gst.SeekType.SET, nanos,
             Gst.SeekType.NONE, -1
         )
+        if success:
+            # Update cache immediately to prevent extrapolation jumps
+            self._cached_position = seconds
+            self._last_poll_time = time.time()
         return success
 
     def set_speed(self, rate: float) -> bool:
@@ -398,13 +460,22 @@ class GstDriver(VideoDriver):
         return success
 
     def get_position(self) -> Optional[float]:
+        if not self.pipeline:
+            return None
+            
+        if self.state != PlayerState.PLAYING or self.is_seeking:
+            return self._cached_position
+            
+        # Fast non-blocking query using cache + extrapolation
+        elapsed = time.time() - self._last_poll_time
+        return self._cached_position + (elapsed * self.current_rate)
+
+    def get_position_raw(self) -> Optional[int]:
+        """Query position in nanoseconds directly."""
         if not self._is_ready():
             return None
-        
         success, position = self.pipeline.query_position(Gst.Format.TIME)
-        if success:
-            return position / Gst.SECOND
-        return None
+        return position if success else None
 
     def get_duration(self) -> float:
         if not self._is_ready():

@@ -6,6 +6,6 @@ from .interface import (
 )
 
 __all__ = [
-    'CommandInterface', 'StatusDisplay', 'ProgressDisplay', 
-    'ErrorDisplay', 'MenuInterface'
+    "CommandInterface", "StatusDisplay", "ProgressDisplay", 
+    "ErrorDisplay", "MenuInterface"
 ]

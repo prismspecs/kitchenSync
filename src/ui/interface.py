@@ -81,7 +81,7 @@ class StatusDisplay:
 
     @staticmethod
     def show_leader_status(
-        system_state: Any, collaborators: Dict[str, Dict], schedule_count: int
+        system_state: Any, collaborators: Dict[str, Dict], schedule_count: int = 0
     ) -> None:
         """Display leader status"""
         print("\n=== KitchenSync Leader Status ===")
@@ -93,15 +93,12 @@ class StatusDisplay:
                 f"Elapsed time: {elapsed:.2f} seconds ({system_state.get_formatted_time()})"
             )
 
-        print(f"\nConnected Collaborator Pis: {len(collaborators)}")
+        print(f"\nConnected Collaborators: {len(collaborators)}")
         for device_id, info in collaborators.items():
             status = "ONLINE" if info.get("online", False) else "OFFLINE"
-            last_seen = info.get("last_seen_seconds", 0)
             print(
-                f"  {device_id}: {info.get('ip', 'unknown')} - {status} (last seen {last_seen:.1f}s ago)"
+                f"  {device_id}: {info.get('ip', 'unknown')} - {status}"
             )
-
-        print(f"\nSchedule: {schedule_count} cues")
 
     @staticmethod
     def show_collaborator_status(
@@ -116,51 +113,7 @@ class StatusDisplay:
         print(f"Status: {'RUNNING' if is_running else 'READY'}")
 
         if sync_stats:
-            print(f"Sync quality: {sync_stats.get('sync_quality', 'Unknown')}")
             print(f"Average drift: {sync_stats.get('average_drift', 0):.3f}s")
-            print(f"Sync samples: {sync_stats.get('sample_count', 0)}")
-
-    @staticmethod
-    def show_schedule_summary(schedule_cues: list) -> None:
-        """Display schedule summary"""
-        if not schedule_cues:
-            print("  (empty)")
-            return
-
-        # Group by type
-        type_counts = {}
-        for cue in schedule_cues:
-            cue_type = cue.get("type", "unknown")
-            type_counts[cue_type] = type_counts.get(cue_type, 0) + 1
-
-        for cue_type, count in type_counts.items():
-            print(f"  {cue_type}: {count} cues")
-
-        # Show first few and last few cues
-        if len(schedule_cues) <= 6:
-            for i, cue in enumerate(schedule_cues):
-                print(f"  {i+1}. {StatusDisplay._format_cue(cue)}")
-        else:
-            for i in range(3):
-                print(f"  {i+1}. {StatusDisplay._format_cue(schedule_cues[i])}")
-            print("  ...")
-            for i in range(len(schedule_cues) - 3, len(schedule_cues)):
-                print(f"  {i+1}. {StatusDisplay._format_cue(schedule_cues[i])}")
-
-    @staticmethod
-    def _format_cue(cue: Dict[str, Any]) -> str:
-        """Format a cue for display"""
-        cue_type = cue.get("type", "unknown")
-        time_val = cue.get("time", 0)
-
-        if cue_type == "note_on":
-            return f"Time {time_val}s - Note {cue.get('note', 0)} ON (vel:{cue.get('velocity', 0)}, ch:{cue.get('channel', 1)})"
-        elif cue_type == "note_off":
-            return f"Time {time_val}s - Note {cue.get('note', 0)} OFF (ch:{cue.get('channel', 1)})"
-        elif cue_type == "control_change":
-            return f"Time {time_val}s - CC {cue.get('control', 0)}={cue.get('value', 0)} (ch:{cue.get('channel', 1)})"
-        else:
-            return f"Time {time_val}s - Unknown type: {cue_type}"
 
 
 class ProgressDisplay:
@@ -174,7 +127,6 @@ class ProgressDisplay:
         self, current_time: float, total_time: float, additional_info: str = ""
     ) -> None:
         """Show progress bar and timing"""
-        # Throttle display updates to avoid spam
         import time
 
         if time.time() - self.last_display_time < 1.0:
