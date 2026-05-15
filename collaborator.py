@@ -320,7 +320,11 @@ class CollaboratorPi:
         local_name = Path(local_video).name if local_video else None
 
         if leader_file and local_name and leader_file != local_name:
-            log_error(f"CONTENT MISMATCH: Leader is playing '{leader_file}', but I have '{local_name}'", component="collaborator")
+            log_error("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!", component="collaborator")
+            log_error(f"CONTENT MISMATCH DETECTED", component="collaborator")
+            log_error(f"Leader is playing: {leader_file}", component="collaborator")
+            log_error(f"I am playing:      {local_name} ({os.path.abspath(local_video)})", component="collaborator")
+            log_error("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!", component="collaborator")
         
         if self.system_state.is_running and local_video == self.video_path:
             # Already playing same content: check for large drift

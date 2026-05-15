@@ -70,8 +70,12 @@ class LeaderPi:
         # Find video file
         self.video_path = self.video_manager.find_video_file()
         if self.video_path:
+            abs_path = os.path.abspath(self.video_path)
             self.video_player.load(self.video_path)
-            log_info(f"Video file loaded: {self.video_path}", component="leader")
+            log_info(f"Leader Playing: {abs_path}", component="leader")
+            log_info(f"Video file basename (broadcasted): {Path(self.video_path).name}", component="leader")
+        else:
+            log_error("No video file found in leader search paths!", component="leader")
 
         # Register remote control handlers
         self.command_manager.register_handler("remote_start", lambda msg, addr: self.start_system())
@@ -226,7 +230,7 @@ def main():
     try:
         leader_instance = LeaderPi(args.config_file)
         if args.debug:
-            leader_instance.config.debug_mode = True
+            enable_system_logging(True)
 
         if args.auto:
             leader_instance.start_system()

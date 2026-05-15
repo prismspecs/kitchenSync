@@ -132,6 +132,16 @@ class GstDriver(VideoDriver):
         log_info(
             f"Gst: Re-prioritized decoders and sinks for hardware path: {', '.join(available_hw)}"
         )
+        self._list_available_decoders()
+
+    def _list_available_decoders(self):
+        """Log all available video decoders for diagnostics."""
+        factories = Gst.ElementFactory.list_get_elements(
+            Gst.ELEMENT_FACTORY_TYPE_DECODER | Gst.ELEMENT_FACTORY_TYPE_MEDIA_VIDEO,
+            Gst.Rank.NONE
+        )
+        names = [f.get_name() for f in factories]
+        log_info(f"Gst: System decoders found: {', '.join(names)}")
 
     def _discover_active_decoder(self):
         """Return the active decoder element name if one is present in the pipeline."""
@@ -300,7 +310,13 @@ class GstDriver(VideoDriver):
             log_info("Gst: End of stream reached, looping...")
             self.seek(0)
         elif t == Gst.MessageType.ASYNC_DONE:
-            self.is_seeking = False
+            # Seek complete. Add a tiny grace period to allow hardware to settle
+            def clear_seeking():
+                time.sleep(0.2)
+                self.is_seeking = False
+                log_info("Gst: Seek operation settled")
+            
+            threading.Thread(target=clear_seeking, daemon=True).start()
         elif t == Gst.MessageType.ERROR:
             err, debug = message.parse_error()
             log_error(f"Gst Error: {err.message}")
@@ -385,6 +401,7 @@ class GstDriver(VideoDriver):
         accurate=False: Uses KEY_UNIT flag (fast, snaps to keyframe)
         """
         if not self._is_ready():
+            log_warning("Gst: Seek failed - pipeline not ready")
             return False
         
         # Convert seconds to nanoseconds
@@ -397,6 +414,9 @@ class GstDriver(VideoDriver):
             flags |= Gst.SeekFlags.KEY_UNIT
         
         self.is_seeking = True
+        # Do NOT update _cached_position here. 
+        # Let the poll thread or the next valid query pick up the REAL new position.
+        
         success = self.pipeline.seek(
             self.current_rate,
             Gst.Format.TIME, 
@@ -404,10 +424,13 @@ class GstDriver(VideoDriver):
             Gst.SeekType.SET, nanos,
             Gst.SeekType.NONE, -1
         )
-        if success:
-            # Update cache immediately to prevent extrapolation jumps
-            self._cached_position = seconds
-            self._last_poll_time = time.time()
+        
+        if not success:
+            self.is_seeking = False
+            log_error(f"Gst: Seek to {seconds:.3f}s FAILED")
+        else:
+            log_info(f"Gst: Seek to {seconds:.3f}s initiated (accurate={accurate})")
+            
         return success
 
     def set_speed(self, rate: float) -> bool:
