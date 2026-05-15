@@ -7,6 +7,7 @@ Handles MIDI output and scheduling
 
 import time
 import glob
+import bisect
 from typing import List, Dict, Any, Set, Optional
 from core.logger import log_info, log_warning, log_error
 
@@ -142,11 +143,13 @@ class SerialMidiOut:
             try:
                 self.ser.write(cmd.encode("utf-8"))
                 # Reduced delay to 5ms for faster communication with improved Arduino buffering
-                print(f"Serial MIDI Sent: {cmd.strip()}")
+                # print(f"Serial MIDI Sent: {cmd.strip()}")
             except Exception as e:
-                print(f"Serial MIDI send failed: {e}")
+                # log_error(f"Serial MIDI send failed: {e}", component="midi")
+                pass
         else:
-            print(f"[MOCK] Would send to Arduino: {cmd.strip()}")
+            # print(f"[MOCK] Would send to Arduino: {cmd.strip()}")
+            pass
 
 
 class MidiError(Exception):
@@ -289,10 +292,17 @@ class MidiScheduler:
         self.last_effective_time: Optional[float] = (
             None  # Fire cues only as time advances
         )
+        self._next_cue_index = 0
 
-    def reset(self):
+    def reset(self, seek_time: Optional[float] = None):
         """Reset triggered cues for fresh playback or loop."""
         self.triggered_cues.clear()
+        self._next_cue_index = 0
+
+        # If resetting to a specific time, find the correct starting index
+        if seek_time is not None and self.schedule:
+            times = [cue.get("time", 0) for cue in self.schedule]
+            self._next_cue_index = bisect.bisect_left(times, seek_time)
 
         # Clear Arduino state and serial buffers when looping
         if (
@@ -300,10 +310,8 @@ class MidiScheduler:
             and self.midi_manager.use_serial
             and hasattr(self.midi_manager.midi_out, "flush_buffers")
         ):
-
-            print(" Resetting Arduino state for loop...")
+            # print(" Resetting Arduino state for loop...")
             self.midi_manager.midi_out.flush_buffers()
-            # self.midi_manager.midi_out.send_reset_command()
 
         # After a reset (loop or seek), treat the next tick as a fresh start
         self.previous_playback_time = None
@@ -313,7 +321,8 @@ class MidiScheduler:
         """Load MIDI schedule"""
         self.schedule = sorted(schedule, key=lambda x: x.get("time", 0))
         self.triggered_cues.clear()
-        print(f" Loaded MIDI schedule with {len(self.schedule)} cues")
+        self._next_cue_index = 0
+        log_info(f"Loaded MIDI schedule with {len(self.schedule)} cues", component="midi")
 
     def start_playback(
         self, start_time: float, video_duration: Optional[float] = None
@@ -326,18 +335,18 @@ class MidiScheduler:
         self.previous_playback_time = None
         self.last_effective_time = None
         self.reset()
-        print(" Started MIDI playback")
+        log_info("Started MIDI playback", component="midi")
 
     def stop_playback(self) -> None:
         """Stop MIDI playback"""
         self.is_running = False
         self.start_time = None
         self.previous_playback_time = None  # Reset to prevent comparison issues
-        print(" Stopped MIDI playback")
+        log_info("Stopped MIDI playback", component="midi")
 
     def process_cues(self, current_time: float) -> None:
-        """Process MIDI cues for current time with robust single loop detection"""
-        if not self.is_running or self.start_time is None:
+        """Process MIDI cues for current time with optimized pointer-based iteration"""
+        if not self.is_running or self.start_time is None or not self.schedule:
             return
 
         # Validate current_time parameter
@@ -346,19 +355,15 @@ class MidiScheduler:
 
         playback_time = current_time
 
-        # Robust loop detection: handle both monotonic time and VLC reset-to-zero behavior
+        # Robust loop detection
         loop_detected = False
         regression_detected = (
             self.previous_playback_time is not None
             and playback_time + 0.5 < self.previous_playback_time
         )
 
-        # Compute effective_time based on duration availability
         if self.video_duration is not None and self.video_duration > 0:
-            # Duration known: use modulus for effective time
             effective_time = playback_time % self.video_duration
-
-            # Detect loop either by regression or by computed loop index
             if regression_detected:
                 loop_detected = True
                 self.loop_count += 1
@@ -368,7 +373,6 @@ class MidiScheduler:
                     loop_detected = True
                     self.loop_count = computed_loop
         else:
-            # Duration unknown: treat raw playback_time as effective time and rely on regression detection
             effective_time = playback_time
             if regression_detected:
                 loop_detected = True
@@ -377,46 +381,51 @@ class MidiScheduler:
         if loop_detected:
             self.reset()
             log_info(f"MIDI schedule loop #{self.loop_count} started", component="midi")
-            # After reset, skip firing on this exact tick to avoid backfill
             self.previous_playback_time = playback_time
             self.last_effective_time = effective_time
             return
 
-        # On first tick after a reset/seek/start, initialize and skip firing to avoid backfill
+        # Handle backward jumps (seeks) without full loop
+        if self.last_effective_time is not None and effective_time < self.last_effective_time:
+            self.reset(effective_time)
+            self.last_effective_time = effective_time
+            self.previous_playback_time = playback_time
+            return
+
+        # On first tick, initialize
         if self.last_effective_time is None:
             self.last_effective_time = effective_time
             self.previous_playback_time = playback_time
+            # Find starting index for immediate start
+            times = [cue.get("time", 0) for cue in self.schedule]
+            self._next_cue_index = bisect.bisect_left(times, effective_time)
             return
 
-        # Process cues only as time advances beyond the last effective time
-        # Normal forward case
-        if effective_time >= self.last_effective_time:
-            for cue in self.schedule:
-                cue_time = cue.get("time", 0)
-                if self.last_effective_time < cue_time <= effective_time:
-                    # Auto-detect type for proper cue ID generation
-                    cue_type = cue.get("type")
-                    if not cue_type:
-                        velocity = cue.get("velocity", 0)
-                        cue_type = "note_on" if velocity > 0 else "note_off"
+        # Process cues from the current pointer
+        while self._next_cue_index < len(self.schedule):
+            cue = self.schedule[self._next_cue_index]
+            cue_time = cue.get("time", 0)
+            
+            if cue_time <= effective_time:
+                # Trigger cue
+                cue_type = cue.get("type")
+                if not cue_type:
+                    velocity = cue.get("velocity", 0)
+                    cue_type = "note_on" if velocity > 0 else "note_off"
 
-                    cue_id = f"{cue_time}_{cue_type}_{cue.get('note', 0)}_{cue.get('channel', 1)}"
+                cue_id = f"{cue_time}_{cue_type}_{cue.get('note', 0)}_{cue.get('channel', 1)}"
 
-                    if cue_id not in self.triggered_cues:
-                        self.midi_manager.send_cue_message(cue)
-                        self.triggered_cues.add(cue_id)
-                        loop_info = (
-                            f" (Loop #{self.loop_count})" if self.loop_count > 0 else ""
-                        )
-                        print(
-                            f" MIDI at {cue_time}s: {cue.get('type', 'unknown')} Ch{cue.get('channel', 1)} Note{cue.get('note', 0)} Vel{cue.get('velocity', 0)}{loop_info}"
-                        )
-        else:
-            # This indicates a backward time jump (seek or glitch) without explicit reset.
-            # Clear triggered cues to allow correct re-triggering from the new position.
-            self.triggered_cues.clear()
+                if cue_id not in self.triggered_cues:
+                    self.midi_manager.send_cue_message(cue)
+                    self.triggered_cues.add(cue_id)
+                    # Only log if specifically debugging; otherwise too noisy
+                    # log_info(f"MIDI at {cue_time}s: {cue_type}", component="midi")
+                
+                self._next_cue_index += 1
+            else:
+                # Cues are sorted, so we can stop here
+                break
 
-        # Update trackers for next iteration
         self.last_effective_time = effective_time
         self.previous_playback_time = playback_time
 

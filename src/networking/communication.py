@@ -9,6 +9,7 @@ import socket
 import threading
 import time
 from typing import Callable, Optional, Dict, Any
+from core.logger import log_info
 
 
 UDP_MAX_DATAGRAM_SIZE = 65535
@@ -94,12 +95,12 @@ class SyncBroadcaster:
                     try:
                         if self.time_provider is not None:
                             provided_time = self.time_provider()
-                            current_time = (
-                                float(provided_time)
-                                if provided_time is not None
-                                else (time.time() - self.start_time)
-                            )
-                            time_source = "media"
+                            if provided_time is not None:
+                                current_time = float(provided_time)
+                                time_source = "media"
+                            else:
+                                current_time = time.time() - self.start_time
+                                time_source = "wall"
                         else:
                             current_time = time.time() - self.start_time
                             time_source = "wall"
@@ -203,9 +204,38 @@ class SyncReceiver:
             self.setup_socket()
 
         def listen_loop():
+            # Use a shorter timeout to allow checking is_running
+            self.sync_sock.settimeout(0.5)
+            
             while self.is_running:
                 try:
-                    data, addr = self.sync_sock.recvfrom(1024)
+                    # 1. Block on the first packet to avoid busy-waiting
+                    try:
+                        data, addr = self.sync_sock.recvfrom(1024)
+                    except socket.timeout:
+                        continue
+                    except (socket.error, OSError):
+                        if not self.is_running:
+                            break
+                        continue
+                    
+                    # 2. Drain the buffer to find the NEWEST packet
+                    # This prevents "buffer bloat" if processing is slower than broadcast rate
+                    self.sync_sock.setblocking(False)
+                    packets_drained = 0
+                    while self.is_running:
+                        try:
+                            new_data, new_addr = self.sync_sock.recvfrom(1024)
+                            data, addr = new_data, new_addr
+                            packets_drained += 1
+                        except (socket.error, BlockingIOError):
+                            break
+                    
+                    if not self.is_running:
+                        break
+                        
+                    self.sync_sock.settimeout(0.5) # Restore timeout (implies setblocking(True) with timeout)
+
                     msg = json.loads(data.decode())
 
                     if msg.get("type") == "sync":
@@ -227,20 +257,15 @@ class SyncReceiver:
                                     except TypeError:
                                         self.sync_callback(leader_time)
                                         
-                                # Log diagnostic info if system logging is enabled
-                                try:
-                                    from core.logger import log_info
-
+                                # Log diagnostic info if system logging is enabled and we drained packets
+                                if packets_drained > 0:
                                     log_info(
-                                        f"Sync received: {leader_time:.3f}s from {time_source} "
-                                        f"(duration: {duration:.1f}s if known)",
+                                        f"Sync: Drained {packets_drained} stale packets from buffer",
                                         component="sync",
                                     )
-                                except ImportError:
-                                    pass  # Logger not available
-                            except TypeError:
-                                # Backward compatibility: callbacks expecting one arg
-                                self.sync_callback(leader_time)
+
+                            except Exception as e:
+                                pass # Callback error should not stop the loop
 
                 except json.JSONDecodeError:
                     continue

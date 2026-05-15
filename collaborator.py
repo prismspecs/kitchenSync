@@ -496,19 +496,40 @@ class CollaboratorPi:
                 self.command_listener.send_heartbeat(self.config.device_id)
                 time.sleep(5)
         except KeyboardInterrupt:
+            # Main entry point for Ctrl+C
             self.cleanup()
 
     def cleanup(self) -> None:
         """Clean up resources"""
+        log_info("Cleaning up resources...", component="collaborator")
+        
+        # 1. Stop networking immediately to prevent new packets from triggering callbacks
+        if hasattr(self, "sync_receiver") and self.sync_receiver:
+            log_info("Stopping sync receiver...", component="collaborator")
+            self.sync_receiver.stop_listening()
+        
+        if hasattr(self, "command_listener") and self.command_listener:
+            log_info("Stopping command listener...", component="collaborator")
+            self.command_listener.stop_listening()
+
+        # 2. Stop playback
         if self.system_state.is_running:
             self.stop_playback()
 
+        # 3. Stop debug overlay
         if self.debug_overlay:
+            log_info("Stopping debug overlay...", component="collaborator")
             self.debug_overlay.cleanup()
 
+        # 4. Cleanup video player
+        log_info("Cleaning up video player...", component="collaborator")
         self.video_player.cleanup()
+
+        # 5. Cleanup MIDI
         if self.midi_manager:
+            log_info("Cleaning up MIDI...", component="collaborator")
             self.midi_manager.cleanup()
+            
         log_info("Cleanup completed", component="collaborator")
 
 
