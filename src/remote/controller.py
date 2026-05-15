@@ -25,7 +25,7 @@ class ClusterState:
     duration: float = 0.0
     master_start_time: float = 0.0
     is_master: bool = False
-    current_video: str = "test_video.mp4"
+    current_video: str = ""
 
 
 LOCAL_LEADER_ID = "remote-leader"
@@ -92,8 +92,17 @@ def list_available_schedules() -> list[str]:
 
 def update_runtime_from_config() -> None:
     enable_system_logging(config.enable_system_logging or config.debug_mode)
-    if config.video_file:
-        cluster_state.current_video = os.path.basename(config.video_file)
+    
+    available = list_available_videos()
+    configured_basename = os.path.basename(config.video_file) if config.video_file else ""
+    
+    if configured_basename in available:
+        cluster_state.current_video = configured_basename
+    elif available:
+        cluster_state.current_video = available[0]
+        log_info(f"Configured video '{configured_basename}' not found. Falling back to '{available[0]}'", component="remote")
+    else:
+        log_warning("No videos found in 'videos/' directory.", component="remote")
 
 
 def build_config_snapshot(device_id: str, role: str, manager: ConfigManager) -> Dict[str, Any]:
@@ -211,8 +220,18 @@ class RemoteHandler(BaseHTTPRequestHandler):
             start, end = byte_range
             status = 206
 
+        # Dynamic MIME type
+        mime_type = "video/mp4"
+        ext = file_path.suffix.lower()
+        if ext == ".mov":
+            mime_type = "video/quicktime"
+        elif ext == ".mkv":
+            mime_type = "video/x-matroska"
+        elif ext == ".webm":
+            mime_type = "video/webm"
+
         self.send_response(status)
-        self.send_header("Content-type", "video/mp4")
+        self.send_header("Content-type", mime_type)
         self.send_header("Content-Length", str(end - start + 1))
         self.send_header("Accept-Ranges", "bytes")
         if status == 206:
@@ -270,6 +289,10 @@ class RemoteHandler(BaseHTTPRequestHandler):
             return
 
         if path.startswith("/video_file"):
+            if not cluster_state.current_video:
+                self.send_error(404, "No video selected")
+                return
+                
             video_path = Path("videos") / cluster_state.current_video
             if not video_path.exists():
                 self.send_error(404, "Video file not found")

@@ -26,10 +26,15 @@ async function stopCluster() {
 }
 
 async function changeVideo(filename) {
+    if (filename === currentPreviewVideo) return;
     await fetch('/api/video?file=' + encodeURIComponent(filename), { method: 'POST' });
+    
+    currentPreviewVideo = filename;
     const preview = document.getElementById('preview');
-    preview.src = '/video_file?t=' + Date.now();
-    preview.load();
+    if (preview) {
+        preview.src = '/video_file?t=' + Date.now();
+        preview.load();
+    }
 }
 
 async function seekCluster(seconds) {
@@ -109,8 +114,8 @@ function renderConfigCell(device, videoOptions, scheduleOptions) {
         </form>
     `;
 }
-
 let initialLoadDone = false;
+let currentPreviewVideo = null;
 
 function renderState(state) {
     const selector = document.getElementById('videoSelector');
@@ -120,17 +125,21 @@ function renderState(state) {
         `).join('');
         selector.onchange = () => changeVideo(selector.value);
 
-        // If this is the first time we've loaded the state, or if the current video
-        // changed on the backend, ensure the preview matches.
-        if (!initialLoadDone && state.available_videos?.length) {
+        // Load preview only when we have a valid video and it's either the first load
+        // or the selected video has changed on the backend.
+        if (state.current_video && state.current_video !== currentPreviewVideo) {
             const preview = document.getElementById('preview');
-            if (preview && !preview.src.includes('/video_file')) {
-                preview.src = '/video_file?t=' + Date.now();
+            if (preview) {
+                // If it's the very first load, we don't need a cache buster unless we want to be safe
+                const buster = initialLoadDone ? '?t=' + Date.now() : '';
+                preview.src = '/video_file' + buster;
                 preview.load();
             }
+            currentPreviewVideo = state.current_video;
             initialLoadDone = true;
         }
     }
+
 
     const suggestions = document.getElementById('videoSuggestions');
     if (suggestions) {
