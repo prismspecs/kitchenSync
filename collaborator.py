@@ -93,6 +93,8 @@ class CollaboratorPi:
         self.min_rate = self.config.min_rate
         self.max_rate = self.config.max_rate
         self.video_path = None
+        self.startup_sync_count = 0
+        self.FAST_SYNC_THRESHOLD = 5  # Number of initial packets to bypass filter
 
         # Initialize Debug Overlay
         self.debug_overlay = None
@@ -152,6 +154,10 @@ class CollaboratorPi:
         if not self.video_player.is_playing:
             return
 
+        # Don't try to sync while the player is already seeking
+        if getattr(self.video_player, "is_seeking", False):
+            return
+
         video_pos = self.video_player.get_position()
         if video_pos is None:
             return
@@ -166,16 +172,34 @@ class CollaboratorPi:
         if len(self.deviation_samples) > self.max_samples:
             self.deviation_samples.pop(0)
 
-        if len(self.deviation_samples) >= self.max_samples:
-            median_dev = statistics.median(self.deviation_samples)
+        # "Instant Lock" for startup or after a large seek
+        # Bypass the median filter for the first few packets to settle immediately
+        use_immediate = self.startup_sync_count < self.FAST_SYNC_THRESHOLD
+        
+        if len(self.deviation_samples) >= self.max_samples or use_immediate:
+            if use_immediate:
+                median_dev = deviation
+                self.startup_sync_count += 1
+            else:
+                median_dev = statistics.median(self.deviation_samples)
             
-            # Hard seek if deviation is large (> 0.5s)
-            if abs(median_dev) > self.max_drift:
+            # Tiered Seeking:
+            # 1. Huge drift (> 2s): KEY_UNIT seek (fast, snaps to keyframe)
+            if abs(median_dev) > 2.0:
                 if self.debug_sync_logging:
-                    log_warning(f" Large sync deviation: {median_dev:.3f}s. Seeking...", component="sync")
-                self.video_player.seek(leader_time)
+                    log_warning(f" Huge sync deviation: {median_dev:.3f}s. Fast seeking...", component="sync")
+                self.video_player.seek(leader_time, accurate=False)
                 self.deviation_samples.clear()
-            # Fine-grained speed adjustment for smaller drifts
+                self.startup_sync_count = 0 # Re-trigger instant lock
+            
+            # 2. Moderate drift (> max_drift): ACCURATE seek (precise)
+            elif abs(median_dev) > self.max_drift:
+                if self.debug_sync_logging:
+                    log_warning(f" Sync deviation: {median_dev:.3f}s. Precise seeking...", component="sync")
+                self.video_player.seek(leader_time, accurate=True)
+                self.deviation_samples.clear()
+            
+            # 3. Small drift (> min_drift): Speed adjustment (seamless)
             elif abs(median_dev) > self.min_drift:
                 new_rate = 1.0 - (median_dev * self.kp)
                 new_rate = max(self.min_rate, min(self.max_rate, new_rate))

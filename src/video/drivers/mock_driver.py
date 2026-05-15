@@ -43,7 +43,7 @@ class MockVideoDriver(VideoDriver):
         self.state = PlayerState.STOPPED
         self.current_pos = 0.0
 
-    def seek(self, seconds: float) -> bool:
+    def seek(self, seconds: float, accurate: bool = True) -> bool:
         self.current_pos = seconds
         if self.state == PlayerState.PLAYING:
             self.start_time = time.time() - (self.current_pos / self.rate)

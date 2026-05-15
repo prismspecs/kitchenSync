@@ -44,6 +44,7 @@ class GstDriver(VideoDriver):
         self.decoder_name = None
         self.decoder_candidates = []
         self.pipeline_kind = "playbin"
+        self.is_seeking = False
         
         # MainLoop for GStreamer bus messages
         self.loop = None
@@ -260,6 +261,8 @@ class GstDriver(VideoDriver):
         if t == Gst.MessageType.EOS:
             log_info("Gst: End of stream reached, looping...")
             self.seek(0)
+        elif t == Gst.MessageType.ASYNC_DONE:
+            self.is_seeking = False
         elif t == Gst.MessageType.ERROR:
             err, debug = message.parse_error()
             log_error(f"Gst Error: {err.message}")
@@ -315,10 +318,13 @@ class GstDriver(VideoDriver):
         if self.pipeline:
             self.pipeline.set_state(Gst.State.NULL)
             self.state = PlayerState.STOPPED
+            self.is_seeking = False
 
-    def seek(self, seconds: float) -> bool:
+    def seek(self, seconds: float, accurate: bool = True) -> bool:
         """
-        Perform a precise, accurate seek.
+        Perform a seek.
+        accurate=True: Uses ACCURATE flag (slow, precise)
+        accurate=False: Uses KEY_UNIT flag (fast, snaps to keyframe)
         """
         if not self._is_ready():
             return False
@@ -326,11 +332,17 @@ class GstDriver(VideoDriver):
         # Convert seconds to nanoseconds
         nanos = int(seconds * Gst.SECOND)
         
-        # Use ACCURATE for sync seeks to avoid keyframe snapping
+        flags = Gst.SeekFlags.FLUSH
+        if accurate:
+            flags |= Gst.SeekFlags.ACCURATE
+        else:
+            flags |= Gst.SeekFlags.KEY_UNIT
+        
+        self.is_seeking = True
         success = self.pipeline.seek(
             self.current_rate,
             Gst.Format.TIME, 
-            Gst.SeekFlags.FLUSH | Gst.SeekFlags.ACCURATE, 
+            flags, 
             Gst.SeekType.SET, nanos,
             Gst.SeekType.NONE, -1
         )
@@ -433,6 +445,7 @@ class GstDriver(VideoDriver):
         info["hardware_accel_preferred"] = self.hardware_accel_preferred
         info["decoder"] = self.decoder_name or "unknown"
         info["pipeline_kind"] = self.pipeline_kind
+        info["is_seeking"] = self.is_seeking
         
         # Add human-readable hardware status
         is_hw = False
