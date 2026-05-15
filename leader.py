@@ -106,6 +106,9 @@ class LeaderPi:
             log_info("Starting video playback...", component="video")
             try:
                 self.video_player.play()
+                # If we are on a desktop with a display, try to make it fullscreen
+                if os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"):
+                    self.video_player.set_fullscreen(True)
             except Exception as e:
                 log_error(f"Exception starting video playback: {e}", component="leader")
 

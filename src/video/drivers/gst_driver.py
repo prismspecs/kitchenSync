@@ -523,7 +523,38 @@ class GstDriver(VideoDriver):
         return self.state
 
     def set_fullscreen(self, enabled: bool) -> None:
-        pass
+        """Attempt to make the video window fullscreen using window management tools."""
+        if not enabled:
+            return
+
+        def fullscreen_task():
+            try:
+                from ui.window_manager import WindowManager
+                wm = WindowManager()
+                
+                # Wait for the GStreamer window to appear. 
+                # Common titles: "player", "OpenGL Renderer", or the filename.
+                search_terms = ["OpenGL Renderer", "player", "GStreamer"]
+                if self.video_path:
+                    search_terms.append(os.path.basename(self.video_path))
+                
+                window_id = wm.wait_for_window(search_terms, timeout=5)
+                
+                if window_id:
+                    log_info(f"Gst: Found video window '{window_id}', applying fullscreen...")
+                    if wm.is_wayland:
+                        # For Wayland, we try to focus/maximize if tool supports it
+                        subprocess.run(["wlrctl", "toplevel", "focus", window_id], check=False)
+                    else:
+                        # For X11, wmctrl can set fullscreen state directly
+                        subprocess.run(["wmctrl", "-ir", window_id, "-b", "add,fullscreen"], check=False)
+                else:
+                    log_warning("Gst: Could not find video window to apply fullscreen")
+            except Exception as e:
+                log_error(f"Gst: Fullscreen error: {e}")
+
+        # Run in background to not block the pipeline startup
+        threading.Thread(target=fullscreen_task, daemon=True).start()
 
     def cleanup(self) -> None:
         self.stop()
