@@ -91,59 +91,44 @@ class SyncBroadcaster:
         def broadcast_loop():
             while self.is_running:
                 if self.start_time:
-                    # Prefer media clock if provided; otherwise use wall clock since start
                     try:
+                        current_time = None
+                        time_source = "wall"
+                        
                         if self.time_provider is not None:
                             provided_time = self.time_provider()
                             if provided_time is not None:
                                 current_time = float(provided_time)
                                 time_source = "media"
-                            else:
-                                current_time = time.time() - self.start_time
-                                time_source = "wall"
-                        else:
+                        
+                        if current_time is None:
                             current_time = time.time() - self.start_time
                             time_source = "wall"
-                    except Exception:
-                        current_time = time.time() - self.start_time
-                        time_source = "wall"
-                    # Include optional duration for diagnostics
-                    try:
-                        leader_duration = (
-                            float(self.duration_provider())
-                            if self.duration_provider is not None
-                            else None
-                        )
-                    except Exception:
+
+                        # Include optional duration for diagnostics
                         leader_duration = None
+                        if self.duration_provider:
+                            try:
+                                leader_duration = float(self.duration_provider())
+                            except Exception:
+                                pass
 
-                    payload = json.dumps(
-                        {
-                            "type": "sync",
-                            "time": current_time,
-                            "leader_id": self.leader_id,
-                            "source": time_source,
-                            "duration": leader_duration,
-                        }
-                    )
+                        payload = json.dumps(
+                            {
+                                "type": "sync",
+                                "time": current_time,
+                                "leader_id": self.leader_id,
+                                "source": time_source,
+                                "duration": leader_duration,
+                                "sent_at": time.time(),
+                            }
+                        )
 
-                    try:
                         self.sync_sock.sendto(
                             payload.encode(), (self.broadcast_ip, self.sync_port)
                         )
-                        # Log diagnostic info if system logging is enabled
-                        try:
-                            from core.logger import log_info
-
-                            log_info(
-                                f"Sync broadcast: {current_time:.3f}s from {time_source} "
-                                f"(duration: {leader_duration:.1f}s if known)",
-                                component="sync",
-                            )
-                        except ImportError:
-                            pass  # Logger not available
-                    except Exception as e:
-                        pass  # Ignore broadcast errors
+                    except Exception:
+                        pass
 
                 time.sleep(self.tick_interval)
 

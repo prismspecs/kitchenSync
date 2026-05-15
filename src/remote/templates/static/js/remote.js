@@ -161,6 +161,16 @@ function renderState(state) {
             `Status: ${state.status} | Time: ${state.video_pos.toFixed(2)}s | Duration: ${state.duration.toFixed(2)}s | Video: ${state.current_video}`;
     }
 
+    // Sync Preview Video
+    const preview = document.getElementById('preview');
+    if (preview && state.status === 'RUNNING' && !preview.paused && !preview.seeking) {
+        const dev = preview.currentTime - state.video_pos;
+        if (Math.abs(dev) > 0.25) {
+            console.log(`Syncing preview (dev: ${dev.toFixed(3)}s)`);
+            preview.currentTime = state.video_pos;
+        }
+    }
+
     const rows = document.getElementById('deviceRows');
     if (rows) {
         // We update the table cell by cell to avoid clobbering focused inputs

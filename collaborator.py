@@ -86,7 +86,7 @@ class CollaboratorPi:
         self.in_critical_window = False
         self.debug_deviation_mode = False
         self.deviation_samples = []
-        self.max_samples = self.config.max_samples
+        self.max_samples = 3  # Reduced for lower phase lag
         self.max_drift = self.config.max_drift
         self.min_drift = self.config.min_drift
         self.kp = self.config.kp
@@ -94,7 +94,7 @@ class CollaboratorPi:
         self.max_rate = self.config.max_rate
         self.video_path = None
         self.startup_sync_count = 0
-        self.FAST_SYNC_THRESHOLD = 5  # Number of initial packets to bypass filter
+        self.FAST_SYNC_THRESHOLD = 3  # Lower threshold for faster lock
 
         # Sync Decoupling
         self._latest_sync_state = None
@@ -102,7 +102,7 @@ class CollaboratorPi:
         self._sync_thread = None
         self._stop_sync_thread = threading.Event()
 
-    def _handle_sync(self, leader_time: float, received_at: float, leader_id: str = "unknown") -> None:
+    def _handle_sync(self, leader_time: float, received_at: float, leader_id: str = "unknown", sent_at: float = None) -> None:
         """Handle incoming sync packets from leader - LOW LATENCY ONLY"""
         # Leader Locking
         if self.active_leader_id is None:
@@ -118,7 +118,7 @@ class CollaboratorPi:
 
         # Thread-safe update of the latest sync state
         with self._sync_lock:
-            self._latest_sync_state = (leader_time, received_at)
+            self._latest_sync_state = (leader_time, received_at, sent_at)
 
     def _sync_processor_loop(self) -> None:
         """High-frequency loop to process stored sync state and adjust playback"""
@@ -139,7 +139,7 @@ class CollaboratorPi:
             state = self._latest_sync_state
 
         if state and self.system_state.is_running:
-            leader_time, received_at = state
+            leader_time, received_at, sent_at = state
             
             # 1. Compensate for processing/network latency
             processing_latency = time.time() - received_at
