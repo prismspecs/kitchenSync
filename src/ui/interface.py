@@ -69,7 +69,7 @@ class CommandInterface:
             pass
         finally:
             self.running = False
-            print(f"\n👋 Goodbye from {self.app_name}!")
+            print(f"\nGoodbye from {self.app_name}!")
 
     def stop(self) -> None:
         """Stop the command interface"""
@@ -170,24 +170,24 @@ class ErrorDisplay:
     @staticmethod
     def show_error(message: str, details: str = "") -> None:
         """Display error message"""
-        print(f"❌ ERROR: {message}")
+        print(f"ERROR: {message}")
         if details:
             print(f"   Details: {details}")
 
     @staticmethod
     def show_warning(message: str) -> None:
         """Display warning message"""
-        print(f"️  WARNING: {message}")
+        print(f"WARNING: {message}")
 
     @staticmethod
     def show_info(message: str) -> None:
         """Display info message"""
-        print(f"ℹ️  INFO: {message}")
+        print(f"INFO: {message}")
 
     @staticmethod
     def show_success(message: str) -> None:
         """Display success message"""
-        print(f" SUCCESS: {message}")
+        print(f"SUCCESS: {message}")
 
 
 class MenuInterface:

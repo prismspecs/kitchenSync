@@ -121,12 +121,11 @@ class LeaderPi:
                 
                 # Automatic Latency Compensation
                 if self.config.enable_latency_compensation:
-                    # RTT is round trip; one-way lag is roughly RTT / 2.
-                    # By adding this to the broadcast time, we 'pre-advance' the packet
-                    # so it arrives at the collaborator exactly when they should see that frame.
+                    # RTT is round trip; multiplier adjusts for one-way and jitter.
+                    # By adding this to the broadcast time, we 'pre-advance' the packet.
                     avg_rtt = self.command_manager.get_average_rtt()
                     if avg_rtt > 0:
-                        compensation = avg_rtt / 2.0
+                        compensation = avg_rtt * self.config.latency_factor
                         return base_time + compensation
                 
                 return base_time

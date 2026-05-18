@@ -16,7 +16,7 @@ from core.logger import log_info, log_warning, log_error
 CONFIG_ROLE_SECTIONS = {
     "leader": {
         "KITCHENSYNC": {"is_leader", "device_id", "debug", "enable_system_logging", "enable_audio", "audio_output", "enable_midi", "enable_osc", "enable_caching", "enable_latency_compensation"},
-        "DEFAULT": {"video_file", "schedule_file", "video_driver", "sync_port", "tick_interval", "max_drift", "min_drift", "kp", "min_rate", "max_rate", "max_samples"},
+        "DEFAULT": {"video_file", "schedule_file", "video_driver", "sync_port", "tick_interval", "latency_factor", "max_drift", "min_drift", "kp", "min_rate", "max_rate", "max_samples"},
     },
     "collaborator": {
         "KITCHENSYNC": {"debug", "enable_system_logging", "enable_audio", "enable_caching"},
@@ -35,6 +35,7 @@ EDITABLE_CONFIG_FIELDS = {
         {"key": "debug", "section": "KITCHENSYNC", "type": "bool", "label": "Debug", "default": False},
         {"key": "tick_interval", "section": "DEFAULT", "type": "float", "label": "Sync Interval", "default": 0.05, "tooltip": "How often the leader sends sync packets (in seconds). Smaller is faster but uses more network/CPU."},
         {"key": "enable_latency_compensation", "section": "KITCHENSYNC", "type": "bool", "label": "Latency Compensation", "default": True, "tooltip": "Automatically advance sync clock based on network RTT to eliminate follower lag."},
+        {"key": "latency_factor", "section": "DEFAULT", "type": "float", "label": "Latency Factor", "default": 0.5, "tooltip": "Multiplier for RTT compensation. 0.5 = RTT/2 (one-way estimate). Lower this if leader is behind followers."},
         {"key": "max_drift", "section": "DEFAULT", "type": "float", "label": "Max Drift", "default": 0.5, "tooltip": "Threshold (in seconds) for a hard seek. If the node is further away than this, it jumps to the leader time."},
         {"key": "min_drift", "section": "DEFAULT", "type": "float", "label": "Min Drift", "default": 0.01, "tooltip": "Threshold (in seconds) where speed adjustment begins. Drifts smaller than this are ignored for stability."},
         {"key": "kp", "section": "DEFAULT", "type": "float", "label": "P-Gain", "default": 0.1, "tooltip": "The aggression of the speed correction. Higher values react faster but may cause visible speed jitter."},
@@ -579,6 +580,11 @@ class ConfigManager:
     def enable_latency_compensation(self) -> bool:
         """Check if automatic RTT latency compensation is enabled (default: True)."""
         return self.getboolean("enable_latency_compensation", True)
+
+    @property
+    def latency_factor(self) -> float:
+        """Multiplier for RTT compensation (default: 0.5)."""
+        return self.getfloat("latency_factor", 0.5)
 
     @property
     def enable_caching(self) -> bool:

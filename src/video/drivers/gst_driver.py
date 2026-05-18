@@ -219,30 +219,60 @@ class GstDriver(VideoDriver):
     def _create_video_sink(self):
         """Create a hardware-optimized sink bin for the current runtime."""
         if os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"):
-            # Explicitly build a GL bin with a size hint to avoid 'tiny window'.
-            # We add a capsfilter to suggest a standard resolution.
-            try:
-                bin_desc = "glupload ! glcolorconvert ! capsfilter caps=\"video/x-raw(memory:GLMemory), width=1280, height=720\" ! glimagesink name=sink"
-                sink_bin = Gst.parse_bin_from_description(bin_desc, True)
-                if sink_bin:
-                    return sink_bin, "gl-optimized-bin"
-            except Exception as e:
-                log_warning(f"Gst: Failed to create GL sink bin with caps: {e}")
-                
-            # Fallback to simple GL bin
+            # Simple bin with a name we can find in the window manager
             try:
                 bin_desc = "glupload ! glcolorconvert ! glimagesink name=sink"
                 sink_bin = Gst.parse_bin_from_description(bin_desc, True)
                 if sink_bin:
+                    # Start window management task
+                    self._start_window_management_task()
                     return sink_bin, "gl-optimized-bin"
-            except Exception:
-                pass
+            except Exception as e:
+                log_warning(f"Gst: Failed to create GL sink bin: {e}")
 
         for sink_name in self._preferred_sink_names():
             sink = Gst.ElementFactory.make(sink_name, "videosink")
             if sink:
+                self._start_window_management_task()
                 return sink, sink_name
         return None, None
+
+    def _start_window_management_task(self):
+        """Launch a background thread to find and resize the video window."""
+        def window_task():
+            try:
+                from ui.window_manager import WindowManager
+                wm = WindowManager()
+                
+                # Sane defaults for desktop
+                target_w, target_h = 1280, 720
+                
+                # Potential window titles
+                search_terms = ["OpenGL Renderer", "player", "GStreamer"]
+                if self.video_path:
+                    search_terms.append(os.path.basename(self.video_path))
+                
+                # Wait for window
+                window_id = wm.wait_for_window(search_terms, timeout=8)
+                if window_id:
+                    log_info(f"Gst: Managing video window '{window_id}'")
+                    
+                    # 1. Basic Resize (Desktop large window)
+                    if not wm.is_wayland:
+                        # Move to 100,100 and set size
+                        subprocess.run(["wmctrl", "-ir", window_id, "-e", f"0,100,100,{target_w},{target_h}"], check=False)
+                    
+                    # 2. Check if we should go full screen
+                    # For now, we'll try to maximize if on desktop
+                    if not wm.is_wayland:
+                        # subprocess.run(["wmctrl", "-ir", window_id, "-b", "add,maximized_vert,maximized_horz"], check=False)
+                        pass
+                else:
+                    log_warning("Gst: Could not identify video window for resizing")
+            except Exception as e:
+                log_error(f"Gst: Window management error: {e}")
+
+        threading.Thread(target=window_task, daemon=True).start()
 
     def load(self, video_path: str) -> bool:
         if not os.path.exists(video_path):
