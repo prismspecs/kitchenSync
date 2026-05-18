@@ -12,7 +12,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from networking.communication import CommandListener
+from networking.communication import CommandListener, CommandManager
 
 
 class TestCommandListener(unittest.TestCase):
@@ -61,6 +61,27 @@ class TestCommandListener(unittest.TestCase):
             self.assertEqual(received["msg"]["schedule"], schedule)
         finally:
             listener.stop_listening()
+
+
+class TestCommandManagerLatency(unittest.TestCase):
+    def test_rtt_is_recorded_from_pong_only(self):
+        manager = CommandManager()
+        manager._ping_sent_at["collab-1"] = time.monotonic() - 0.05
+
+        manager._handle_default_message(
+            {"type": "heartbeat", "device_id": "collab-1", "status": "ready"},
+            ("127.0.0.1", 5006),
+        )
+        self.assertEqual(manager.get_average_rtt(), 0.0)
+
+        manager._ping_sent_at["collab-1"] = time.monotonic() - 0.05
+        manager._handle_default_message(
+            {"type": "pong", "device_id": "collab-1"},
+            ("127.0.0.1", 5006),
+        )
+
+        self.assertGreater(manager.get_average_rtt(), 0.0)
+        self.assertLess(manager.get_average_rtt(), 0.5)
 
 
 if __name__ == "__main__":

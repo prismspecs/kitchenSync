@@ -256,6 +256,11 @@ class CollaboratorPi:
             self._handle_start_command(msg)
         elif cmd_type == "stop":
             self.stop_playback()
+        elif cmd_type == "ping":
+            self.command_listener.send_message(
+                {"type": "pong", "device_id": self.config.device_id},
+                host=addr[0],
+            )
         elif cmd_type == "schedule_update":
             self._handle_schedule_update(msg, addr)
         elif cmd_type == "config_request":

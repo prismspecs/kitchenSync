@@ -3,11 +3,13 @@
 import sys
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from remote.controller import resolve_byte_range
+from remote import controller
+from remote.controller import compute_latency_compensation, resolve_byte_range
 
 
 class TestRemoteController(unittest.TestCase):
@@ -32,6 +34,52 @@ class TestRemoteController(unittest.TestCase):
             with self.subTest(range_header=range_header):
                 with self.assertRaises(ValueError):
                     resolve_byte_range(range_header, 1000)
+
+    def test_compute_latency_compensation_respects_toggle(self):
+        self.assertEqual(compute_latency_compensation(0.040, True, 0.5), 0.020)
+        self.assertEqual(compute_latency_compensation(0.040, False, 0.5), 0.0)
+        self.assertEqual(compute_latency_compensation(0.0, True, 0.5), 0.0)
+
+    def test_build_ui_state_includes_latency_metrics(self):
+        fake_command_manager = type(
+            "FakeCommandManager",
+            (),
+            {
+                "get_collaborators": lambda self: {
+                    "collab-1": {
+                        "ip": "10.0.0.2",
+                        "status": "ready",
+                        "online": True,
+                        "video_file": "clip.mp4",
+                    }
+                },
+                "get_average_rtt": lambda self: 0.040,
+                "get_device_average_rtt": lambda self, device_id: 0.025 if device_id == "collab-1" else 0.0,
+            },
+        )()
+
+        with patch.object(controller, "command_manager", fake_command_manager), patch.object(
+            controller,
+            "config",
+            type(
+                "FakeConfig",
+                (),
+                {
+                    "enable_latency_compensation": True,
+                    "latency_factor": 0.5,
+                },
+            )(),
+        ), patch.object(controller, "refresh_local_snapshot", lambda: None), patch.object(
+            controller,
+            "list_available_videos",
+            lambda: ["clip.mp4"],
+        ), patch.object(controller, "list_available_schedules", lambda: []):
+            state = controller.build_ui_state()
+
+        self.assertEqual(state["latency"]["avg_rtt_ms"], 40.0)
+        self.assertEqual(state["latency"]["compensation_ms"], 20.0)
+        collaborator = next(device for device in state["devices"] if device["device_id"] == "collab-1")
+        self.assertEqual(collaborator["latency_ms"], 25.0)
 
 
 if __name__ == "__main__":

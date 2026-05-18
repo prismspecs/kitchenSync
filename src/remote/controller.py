@@ -39,6 +39,13 @@ sync_broadcaster.leader_id = LOCAL_LEADER_ID
 config_snapshots: Dict[str, Dict[str, Any]] = {}
 config_messages: Dict[str, Dict[str, Any]] = {}
 
+
+def compute_latency_compensation(avg_rtt: float, enabled: bool, latency_factor: float) -> float:
+    """Return the leader sync pre-advance in seconds."""
+    if not enabled or avg_rtt <= 0:
+        return 0.0
+    return avg_rtt * latency_factor
+
 TEMPLATE_DIR = Path(__file__).resolve().parent / "templates"
 
 
@@ -149,6 +156,12 @@ def store_config_message(payload: Dict[str, Any]) -> None:
 def build_ui_state() -> Dict[str, Any]:
     refresh_local_snapshot()
     collaborators = command_manager.get_collaborators()
+    avg_rtt = command_manager.get_average_rtt()
+    compensation = compute_latency_compensation(
+        avg_rtt,
+        config.enable_latency_compensation,
+        config.latency_factor,
+    )
 
     if not cluster_state.is_playing:
         current_status = "Stopped"
@@ -165,6 +178,7 @@ def build_ui_state() -> Dict[str, Any]:
             "ip": "localhost",
             "status": "leading" if cluster_state.is_master else "ready",
             "online": True,
+            "latency_ms": round(avg_rtt * 1000, 1) if avg_rtt > 0 else None,
             "config": config_snapshots.get(LOCAL_LEADER_ID),
             "message": config_messages.get(LOCAL_LEADER_ID),
         }
@@ -191,6 +205,9 @@ def build_ui_state() -> Dict[str, Any]:
                 "status": info.get("status", "unknown"),
                 "online": info.get("online", False),
                 "video_file": info.get("video_file", ""),
+                "latency_ms": round(command_manager.get_device_average_rtt(device_id) * 1000, 1)
+                if command_manager.get_device_average_rtt(device_id) > 0
+                else None,
                 "config": config_snapshots.get(device_id),
                 "message": config_messages.get(device_id),
             }
@@ -203,6 +220,11 @@ def build_ui_state() -> Dict[str, Any]:
         "is_playing": cluster_state.is_playing,
         "is_master": cluster_state.is_master,
         "current_video": cluster_state.current_video,
+        "latency": {
+            "enabled": config.enable_latency_compensation,
+            "avg_rtt_ms": round(avg_rtt * 1000, 1) if avg_rtt > 0 else None,
+            "compensation_ms": round(compensation * 1000, 1),
+        },
         "available_videos": list_available_videos(),
         "available_schedules": list_available_schedules(),
         "devices": devices,
@@ -495,12 +517,18 @@ def start_remote():
     )
 
     sync_broadcaster.setup_socket()
+    command_manager.start_latency_probing()
 
     def master_clock():
         last_broadcast = 0.0
         while True:
             if cluster_state.is_master and cluster_state.is_playing:
                 cluster_state.video_pos = time.time() - cluster_state.master_start_time
+                compensation = compute_latency_compensation(
+                    command_manager.get_average_rtt(),
+                    config.enable_latency_compensation,
+                    config.latency_factor,
+                )
 
                 if time.time() - last_broadcast > 2.0:
                     start_cmd = {
@@ -524,7 +552,7 @@ def start_remote():
                 sync_packet = json.dumps(
                     {
                         "type": "sync",
-                        "time": cluster_state.video_pos,
+                        "time": cluster_state.video_pos + compensation,
                         "leader_id": sync_broadcaster.leader_id,
                         "source": "wall",
                         "sent_at": time.time(),

@@ -222,8 +222,12 @@ function renderState(state) {
 
     const clusterStatus = document.getElementById('clusterStatus');
     if (clusterStatus) {
+        const latency = state.latency || {};
+        const latencyText = latency.enabled
+            ? ` | RTT: ${latency.avg_rtt_ms ?? 'n/a'}ms | Compensation: ${latency.compensation_ms ?? 0}ms`
+            : ' | RTT compensation: off';
         clusterStatus.textContent =
-            `Status: ${state.status} | Time: ${state.video_pos.toFixed(2)}s | Video: ${state.current_video}`;
+            `Status: ${state.status} | Time: ${state.video_pos.toFixed(2)}s | Video: ${state.current_video}${latencyText}`;
     }
 
     // Sync Preview Video
@@ -249,7 +253,9 @@ function renderState(state) {
             const cells = row.cells;
             cells[0].textContent = device.label;
             cells[1].textContent = device.role;
-            cells[2].textContent = device.ip;
+            cells[2].textContent = device.latency_ms != null
+                ? `${device.ip} | RTT ${device.latency_ms}ms`
+                : device.ip;
             cells[3].textContent = `${device.status} (${device.online ? 'Online' : 'Offline'})`;
 
             const configCell = cells[4];

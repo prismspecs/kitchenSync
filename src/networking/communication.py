@@ -297,6 +297,7 @@ class CommandManager:
         # Latency tracking
         self._rtt_samples = {} # Dict[device_id, list]
         self._ping_sent_at = {} # Dict[device_id, float]
+        self._latency_probe_thread = None
 
     def get_average_rtt(self) -> float:
         """Calculate the average round-trip time across all collaborators."""
@@ -306,6 +307,30 @@ class CommandManager:
         if not all_samples:
             return 0.0
         return sum(all_samples) / len(all_samples)
+
+    def get_device_average_rtt(self, device_id: str) -> float:
+        """Return the average RTT for a specific collaborator."""
+        samples = self._rtt_samples.get(device_id, [])
+        if not samples:
+            return 0.0
+        return sum(samples) / len(samples)
+
+    def get_device_last_rtt(self, device_id: str) -> float:
+        """Return the most recent RTT for a specific collaborator."""
+        samples = self._rtt_samples.get(device_id, [])
+        if not samples:
+            return 0.0
+        return samples[-1]
+
+    def _record_rtt_sample(self, device_id: str, rtt: float) -> None:
+        """Store a bounded RTT sample for a collaborator."""
+        if rtt < 0.0 or rtt > 2.0:
+            return
+        if device_id not in self._rtt_samples:
+            self._rtt_samples[device_id] = []
+        self._rtt_samples[device_id].append(rtt)
+        if len(self._rtt_samples[device_id]) > 10:
+            self._rtt_samples[device_id].pop(0)
 
     def setup_socket(self) -> None:
         """Initialize command socket"""
@@ -374,6 +399,22 @@ class CommandManager:
         """Register a message handler"""
         self.message_handlers[message_type] = handler
 
+    def start_latency_probing(self, interval: float = 2.0) -> None:
+        """Periodically measure collaborator RTT using explicit ping/pong messages."""
+        if self._latency_probe_thread and self._latency_probe_thread.is_alive():
+            return
+
+        def probe_loop():
+            while self.is_running:
+                try:
+                    self.send_ping()
+                except Exception:
+                    pass
+                time.sleep(interval)
+
+        self._latency_probe_thread = threading.Thread(target=probe_loop, daemon=True)
+        self._latency_probe_thread.start()
+
     def _ensure_send_socket(self) -> None:
         """Ensure a socket is available for sending commands."""
         if self.control_sock is None:
@@ -416,6 +457,30 @@ class CommandManager:
         except Exception:
             pass
 
+    def send_ping(self, target_pi: Optional[str] = None) -> None:
+        """Send an explicit latency probe to one or all registered collaborators."""
+        self._ensure_send_socket()
+        ping = {"type": "ping", "sent_at": time.time()}
+        targets = []
+
+        if target_pi:
+            info = self.collaborators.get(target_pi)
+            if info:
+                targets.append((target_pi, info["ip"]))
+        else:
+            targets = [
+                (device_id, info["ip"])
+                for device_id, info in self.collaborators.items()
+                if info.get("online", True)
+            ]
+
+        for device_id, ip in targets:
+            try:
+                self._ping_sent_at[device_id] = time.monotonic()
+                self.control_sock.sendto(json.dumps(ping).encode(), (ip, self.control_port))
+            except Exception:
+                self._ping_sent_at.pop(device_id, None)
+
     def _handle_default_message(self, msg: Dict[str, Any], addr: tuple) -> None:
         """Handle default message types"""
         msg_type = msg.get("type")
@@ -423,14 +488,11 @@ class CommandManager:
         if not device_id:
             return
 
-        # RTT Calculation
-        if device_id in self._ping_sent_at:
-            rtt = time.time() - self._ping_sent_at[device_id]
-            if device_id not in self._rtt_samples:
-                self._rtt_samples[device_id] = []
-            self._rtt_samples[device_id].append(rtt)
-            if len(self._rtt_samples[device_id]) > 10:
-                self._rtt_samples[device_id].pop(0)
+        if msg_type == "pong":
+            sent_at = self._ping_sent_at.pop(device_id, None)
+            if sent_at is not None:
+                self._record_rtt_sample(device_id, time.monotonic() - sent_at)
+            return
 
         if msg_type == "register":
             self.collaborators[device_id] = {
