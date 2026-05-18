@@ -310,8 +310,6 @@ function renderState(state) {
                 <div class="device-summary-line device-summary-status ${getStatusClass(device)}">${escapeHtml(statusText)}</div>
                 <div class="device-summary-line device-summary-role">${escapeHtml(device.role)}</div>
                 <div class="device-summary-line device-summary-ip">${escapeHtml(device.ip)}${latencyText ? ` <span class="device-summary-latency">${escapeHtml(latencyText)}</span>` : ''}</div>
-                <div class="device-summary-meta">
-                </div>
             `;
 
             const configCell = cells[1];

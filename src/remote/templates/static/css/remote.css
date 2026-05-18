@@ -31,6 +31,7 @@ video {
 table {
     width: 100%;
     border-collapse: collapse;
+    table-layout: fixed;
 }
 
 th, td {
@@ -41,7 +42,13 @@ th, td {
 }
 
 .device-summary-cell {
-    min-width: 220px;
+    width: 32%;
+    min-width: 200px;
+}
+
+.config-cell {
+    width: 68%;
+    min-width: 320px;
 }
 
 .device-summary-primary {
@@ -67,10 +74,6 @@ th, td {
 
 .device-summary-latency {
     margin-left: 8px;
-}
-
-.device-summary-meta {
-    min-height: 0;
 }
 
 .status-ready {
@@ -257,6 +260,14 @@ select {
     }
     .left-pane, .right-pane {
         width: 100%;
+    }
+    table {
+        table-layout: auto;
+    }
+    .device-summary-cell,
+    .config-cell {
+        width: auto;
+        min-width: 0;
     }
     .row {
         flex-direction: column;
