@@ -381,12 +381,12 @@ class GstDriver(VideoDriver):
             self.load(path)
             self.play()
 
-    def _is_ready(self) -> bool:
+    def _is_ready(self, timeout_ms: int = 0) -> bool:
         """Check if the pipeline is in a state that allows queries and seeks."""
         if not self.pipeline:
             return False
-        # Use a short timeout (0) to check current state without blocking
-        success, current, _ = self.pipeline.get_state(0)
+        # Wait up to timeout_ms for a valid state
+        success, current, _ = self.pipeline.get_state(timeout_ms * Gst.MSECOND)
         return success != Gst.StateChangeReturn.FAILURE and current >= Gst.State.PAUSED
 
     def play(self) -> bool:
@@ -404,8 +404,8 @@ class GstDriver(VideoDriver):
         self._last_poll_time = time.time() # Reset poll time to current to avoid extrapolation explosion
         self._start_polling()
         
-        # Wait up to 100ms (reduced from 500ms) for the pipeline to reach PAUSED/PLAYING
-        self.pipeline.get_state(0.1 * Gst.SECOND)
+        # Wait up to 1s for the pipeline to reach PAUSED/PLAYING (important for Pi hardware)
+        self.pipeline.get_state(1.0 * Gst.SECOND)
         
         self.decoder_name = self._discover_active_decoder()
         if not self.decoder_name and self.decoder_candidates:
@@ -443,7 +443,7 @@ class GstDriver(VideoDriver):
         accurate=True: Uses ACCURATE flag (slow, precise)
         accurate=False: Uses KEY_UNIT flag (fast, snaps to keyframe)
         """
-        if not self._is_ready():
+        if not self._is_ready(timeout_ms=500):
             log_warning("Gst: Seek failed - pipeline not ready")
             return False
         
