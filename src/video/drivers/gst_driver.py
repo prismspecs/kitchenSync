@@ -400,6 +400,8 @@ class GstDriver(VideoDriver):
             return False
             
         self.state = PlayerState.PLAYING
+        self._cached_position = 0.0
+        self._last_poll_time = time.time() # Reset poll time to current to avoid extrapolation explosion
         self._start_polling()
         
         # Wait up to 100ms (reduced from 500ms) for the pipeline to reach PAUSED/PLAYING
@@ -531,7 +533,14 @@ class GstDriver(VideoDriver):
             return self._cached_position
             
         # Fast non-blocking query using cache + extrapolation
+        if self._last_poll_time <= 0:
+            return self._cached_position
+
         elapsed = time.time() - self._last_poll_time
+        # Cap extrapolation to avoid runaway values if poll thread hangs
+        if elapsed > 1.0:
+            return self._cached_position
+            
         return self._cached_position + (elapsed * self.current_rate)
 
     def get_position_raw(self) -> Optional[int]:

@@ -106,6 +106,8 @@ def update_runtime_from_config() -> None:
 
 
 def build_config_snapshot(device_id: str, role: str, manager: ConfigManager) -> Dict[str, Any]:
+    # We use a hash or just the values to detect real changes if we want to be fancy,
+    # but for now, we just ensure we don't clobber 'updated_at' on every poll.
     return {
         "device_id": device_id,
         "role": role,
@@ -117,9 +119,10 @@ def build_config_snapshot(device_id: str, role: str, manager: ConfigManager) -> 
 
 
 def refresh_local_snapshot() -> Dict[str, Any]:
-    snapshot = build_config_snapshot(LOCAL_LEADER_ID, "leader", config)
-    config_snapshots[LOCAL_LEADER_ID] = snapshot
-    return snapshot
+    # Only rebuild if not exists or explicitly needed
+    if LOCAL_LEADER_ID not in config_snapshots:
+        config_snapshots[LOCAL_LEADER_ID] = build_config_snapshot(LOCAL_LEADER_ID, "leader", config)
+    return config_snapshots[LOCAL_LEADER_ID]
 
 
 def store_config_message(payload: Dict[str, Any]) -> None:
@@ -127,6 +130,7 @@ def store_config_message(payload: Dict[str, Any]) -> None:
     if not device_id:
         return
 
+    # Update snapshot values but keep track of when they actually arrived
     existing_snapshot = config_snapshots.get(device_id, {})
     config_snapshots[device_id] = {**existing_snapshot, **payload, "updated_at": time.time()}
     config_messages[device_id] = {
@@ -144,7 +148,7 @@ def build_ui_state() -> Dict[str, Any]:
     if not cluster_state.is_playing:
         current_status = "Stopped"
     elif not cluster_state.is_master:
-        current_status = "Disconnected"
+        current_status = "Syncing"
     else:
         current_status = "Leading"
 
@@ -405,7 +409,10 @@ class RemoteHandler(BaseHTTPRequestHandler):
                 }
                 config.clean_and_save_config("leader_config.ini", filtered_updates, role="leader")
                 update_runtime_from_config()
-                refresh_local_snapshot()
+                
+                # FORCE a fresh snapshot to reflect new values immediately
+                config_snapshots[LOCAL_LEADER_ID] = build_config_snapshot(LOCAL_LEADER_ID, "leader", config)
+                
                 config_messages[LOCAL_LEADER_ID] = {
                     "status": "ok",
                     "requires_restart": False,
