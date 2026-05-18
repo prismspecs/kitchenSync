@@ -135,6 +135,7 @@ class LeaderPi:
 
         self.sync_broadcaster.set_time_provider(media_time_provider)
         self.sync_broadcaster.set_duration_provider(self.video_player.get_duration)
+        self.sync_broadcaster.leader_id = self.config.device_id
         self.sync_broadcaster.start_broadcasting(self.system_state.start_time)
 
         # Start MIDI playback
@@ -149,6 +150,7 @@ class LeaderPi:
                 "video_file": Path(self.video_path).name if self.video_path else None,
                 "schedule": self.schedule.get_cues(),
                 "start_time": self.system_state.start_time,
+                "leader_id": self.config.device_id,
                 "debug_mode": self.config.debug_mode,
                 "sync_params": {
                     "max_drift": self.config.max_drift,
@@ -160,9 +162,14 @@ class LeaderPi:
                     "enable_audio": self.config.enable_audio,
                 },
             }
+            # Send immediately on start
+            self.command_manager.send_command(start_command)
+            
+            # Then much slower re-broadcast for late joiners
             while self.system_state.is_running:
-                self.command_manager.send_command(start_command)
-                time.sleep(2.0)
+                time.sleep(10.0)
+                if self.system_state.is_running:
+                    self.command_manager.send_command(start_command)
 
         threading.Thread(target=start_broadcast_loop, daemon=True).start()
 

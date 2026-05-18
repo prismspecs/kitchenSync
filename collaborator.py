@@ -317,6 +317,7 @@ class CollaboratorPi:
     def _handle_start_command(self, msg: dict) -> None:
         """Initialize playback session from leader start command"""
         leader_file = msg.get("video_file")
+        leader_id = msg.get("leader_id")
         local_video = self.video_manager.find_video_file()
         local_name = Path(local_video).name if local_video else None
 
@@ -327,12 +328,23 @@ class CollaboratorPi:
             log_error(f"I am playing:      {local_name} ({os.path.abspath(local_video)})", component="collaborator")
             log_error("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!", component="collaborator")
         
+        # Lock or re-lock to leader
+        if leader_id:
+            if self.active_leader_id != leader_id:
+                log_info(f"Sync: Switching leader to {leader_id}", component="sync")
+                self.active_leader_id = leader_id
+
         if self.system_state.is_running and local_video == self.video_path:
             # Already playing same content.
             # Just reset sync state to force a fresh 'instant lock' on the next sync packet.
             log_info("Start command received while running; resetting sync state...", component="collaborator")
             self.startup_sync_count = 0
             self.deviation_samples.clear()
+            
+            # Update sync parameters even if already running
+            sync_params = msg.get("sync_params", {})
+            if sync_params:
+                self._update_sync_params(sync_params)
             return
 
         log_info(f"Start command received for {leader_file}", component="collaborator")
@@ -347,15 +359,7 @@ class CollaboratorPi:
         # Update sync parameters
         sync_params = msg.get("sync_params", {})
         if sync_params:
-            self.max_drift = sync_params.get("max_drift", self.max_drift)
-            self.min_drift = sync_params.get("min_drift", self.min_drift)
-            self.kp = sync_params.get("kp", self.kp)
-            self.min_rate = sync_params.get("min_rate", self.min_rate)
-            self.max_rate = sync_params.get("max_rate", self.max_rate)
-            new_max_samples = sync_params.get("max_samples", self.max_samples)
-            if new_max_samples != self.max_samples:
-                self.max_samples = new_max_samples
-                self.deviation_samples.clear()
+            self._update_sync_params(sync_params)
 
         self.video_path = local_video
         if self.video_path:
@@ -363,6 +367,18 @@ class CollaboratorPi:
             self.start_playback()
         else:
             log_error("No video file found!", component="collaborator")
+
+    def _update_sync_params(self, params: dict) -> None:
+        """Update sync parameters from message"""
+        self.max_drift = params.get("max_drift", self.max_drift)
+        self.min_drift = params.get("min_drift", self.min_drift)
+        self.kp = params.get("kp", self.kp)
+        self.min_rate = params.get("min_rate", self.min_rate)
+        self.max_rate = params.get("max_rate", self.max_rate)
+        new_max_samples = params.get("max_samples", self.max_samples)
+        if new_max_samples != self.max_samples:
+            self.max_samples = new_max_samples
+            self.deviation_samples.clear()
 
     def _handle_schedule_update(self, msg: dict, addr: tuple) -> None:
         """Handle schedule update from leader"""

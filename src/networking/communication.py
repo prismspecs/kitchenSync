@@ -60,7 +60,7 @@ class SyncBroadcaster:
         except Exception:
             self.tick_interval = 0.1
         self.broadcast_ip = broadcast_ip or _get_broadcast_address()
-        self.leader_id = "leader-001"
+        self.leader_id = "leader-pi"
         self.is_running = False
         self.start_time = None
         self.sync_sock = None
