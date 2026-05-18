@@ -275,7 +275,7 @@ class CollaboratorPi:
                 {
                     "status": "ok",
                     "requires_restart": any(
-                        key in updates for key in {"video_file", "midi_port"}
+                        key in updates for key in {"midi_port"}
                     ),
                     "values": self.config.get_editable_values("collaborator"),
                 }
@@ -318,15 +318,6 @@ class CollaboratorPi:
         """Initialize playback session from leader start command"""
         leader_file = msg.get("video_file")
         leader_id = msg.get("leader_id")
-        local_video = self.video_manager.find_video_file()
-        local_name = Path(local_video).name if local_video else None
-
-        if leader_file and local_name and leader_file != local_name:
-            log_error("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!", component="collaborator")
-            log_error(f"CONTENT MISMATCH DETECTED", component="collaborator")
-            log_error(f"Leader is playing: {leader_file}", component="collaborator")
-            log_error(f"I am playing:      {local_name} ({os.path.abspath(local_video)})", component="collaborator")
-            log_error("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!", component="collaborator")
         
         # Lock or re-lock to leader
         if leader_id:
@@ -334,7 +325,14 @@ class CollaboratorPi:
                 log_info(f"Sync: Switching leader to {leader_id}", component="sync")
                 self.active_leader_id = leader_id
 
-        if self.system_state.is_running and local_video == self.video_path:
+        # Find the specific file the leader is playing
+        local_video_path = self.video_manager.find_video_file(target_file=leader_file)
+        
+        if not local_video_path:
+            log_error(f"Sync: Could not find leader's video file: {leader_file}", component="collaborator")
+            return
+
+        if self.system_state.is_running and local_video_path == self.video_path:
             # Already playing same content.
             # Just reset sync state to force a fresh 'instant lock' on the next sync packet.
             log_info("Start command received while running; resetting sync state...", component="collaborator")
@@ -348,6 +346,11 @@ class CollaboratorPi:
             return
 
         log_info(f"Start command received for {leader_file}", component="collaborator")
+        
+        # If we are here, we need to load a new file (or start for the first time)
+        self.video_path = local_video_path
+        self.video_player.load(self.video_path)
+        log_info(f"Collaborator Loading: {os.path.abspath(self.video_path)}", component="collaborator")
         if self.system_state.is_running:
             self.stop_playback()
 
