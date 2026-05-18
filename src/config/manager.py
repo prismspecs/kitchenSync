@@ -26,7 +26,7 @@ CONFIG_ROLE_SECTIONS = {
 
 EDITABLE_CONFIG_FIELDS = {
     "leader": [
-        {"key": "video_file", "section": "DEFAULT", "type": "string", "label": "Video file", "default": "video.mp4"},
+        {"key": "video_file", "section": "DEFAULT", "type": "string", "label": "Video file", "default": "videos/sync_test.mp4"},
         {"key": "schedule_file", "section": "DEFAULT", "type": "string", "label": "Schedule file", "default": "schedule.json"},
         {"key": "enable_audio", "section": "KITCHENSYNC", "type": "bool", "label": "Enable Audio", "default": True},
         {"key": "audio_output", "section": "KITCHENSYNC", "type": "string", "label": "Audio Output", "default": "hdmi", "tooltip": "hdmi or headphone"},
@@ -45,7 +45,7 @@ EDITABLE_CONFIG_FIELDS = {
         {"key": "enable_system_logging", "section": "KITCHENSYNC", "type": "bool", "label": "Verbose logging", "default": False},
     ],
     "collaborator": [
-        {"key": "video_file", "section": "DEFAULT", "type": "string", "label": "Video file", "default": "video.mp4"},
+        {"key": "video_file", "section": "DEFAULT", "type": "string", "label": "Video file", "default": "videos/sync_test.mp4"},
         {"key": "enable_audio", "section": "KITCHENSYNC", "type": "bool", "label": "Enable Audio", "default": True},
         {"key": "midi_port", "section": "DEFAULT", "type": "int", "label": "MIDI port", "default": 0},
         {"key": "debug", "section": "KITCHENSYNC", "type": "bool", "label": "Debug", "default": False},

@@ -96,8 +96,13 @@ def update_runtime_from_config() -> None:
     available = list_available_videos()
     configured_basename = os.path.basename(config.video_file) if config.video_file else ""
     
+    # Priority 1: Configured file
     if configured_basename in available:
         cluster_state.current_video = configured_basename
+    # Priority 2: sync_test.mp4
+    elif "sync_test.mp4" in available:
+        cluster_state.current_video = "sync_test.mp4"
+    # Priority 3: First available
     elif available:
         cluster_state.current_video = available[0]
         log_info(f"Configured video '{configured_basename}' not found. Falling back to '{available[0]}'", component="remote")

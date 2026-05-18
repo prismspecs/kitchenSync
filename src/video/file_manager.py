@@ -31,7 +31,7 @@ class VideoFileManager:
 
     def __init__(
         self,
-        configured_file: str = "video.mp4",
+        configured_file: str = "videos/sync_test.mp4",
         usb_mount_point: Optional[str] = None,
         cache_dir: Optional[str] = None,
     ):
