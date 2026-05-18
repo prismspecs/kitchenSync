@@ -96,7 +96,7 @@ class CollaboratorPi:
         self.video_path = None
         self.active_session_key = None
         self.startup_sync_count = 0
-        self.FAST_SYNC_THRESHOLD = 3  # Lower threshold for faster lock
+        self.FAST_SYNC_THRESHOLD = 10  # Increased to allow more initial samples
         self._settle_until = 0  # Timestamp until which we ignore hard seeks
 
         # Sync Decoupling
@@ -232,7 +232,7 @@ class CollaboratorPi:
                 self.video_player.seek(leader_time, accurate=False)
                 self.deviation_samples.clear()
                 self.startup_sync_count = 0 # Re-trigger instant lock
-                self._settle_until = now + 1.5 # Wait 1.5s for buffers to settle
+                self._settle_until = now + 2.5 # Wait 2.5s for buffers to settle (increased)
             elif abs(median_dev) > self.max_drift:
                 log_warning(f" Sync deviation: {median_dev:.3f}s. Precise seeking...", component="sync")
                 self.video_player.seek(leader_time, accurate=True)
