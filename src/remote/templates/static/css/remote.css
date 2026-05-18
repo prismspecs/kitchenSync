@@ -58,6 +58,15 @@ th, td {
     gap: 8px;
 }
 
+.bool-row {
+    justify-content: flex-start;
+    gap: 8px;
+}
+
+.bool-row .field-label {
+    min-width: 0;
+}
+
 .field-label {
     display: inline-flex;
     align-items: center;
@@ -198,6 +207,11 @@ select {
     .row {
         flex-direction: column;
         align-items: stretch;
+    }
+    .bool-row {
+        flex-direction: row;
+        align-items: center;
+        justify-content: flex-start;
     }
     .field-label {
         min-width: 0;

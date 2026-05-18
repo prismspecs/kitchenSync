@@ -77,7 +77,7 @@ function renderField(deviceId, field, value, videoOptions, scheduleOptions) {
     
     if (field.type === 'bool') {
         return `
-            <div class="row">
+            <div class="row bool-row">
                 <label for="${fieldId}" class="field-label">${escapeHtml(field.label)}${tooltip}</label>
                 <input id="${fieldId}" data-key="${field.key}" type="checkbox" ${safeValue ? 'checked' : ''}>
             </div>

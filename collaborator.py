@@ -364,6 +364,7 @@ class CollaboratorPi:
     def _handle_start_command(self, msg: dict) -> None:
         """Initialize playback session from leader start command"""
         leader_file = msg.get("video_file")
+        configured_file = getattr(getattr(self, "config", None), "video_file", None)
         leader_id = msg.get("leader_id")
         leader_start_time = msg.get("start_time")
         active_leader_id = getattr(self, "active_leader_id", None)
@@ -374,11 +375,23 @@ class CollaboratorPi:
                 log_info(f"Sync: Switching leader to {leader_id}", component="sync")
                 self.active_leader_id = leader_id
 
-        # Find the specific file the leader is playing
-        local_video_path = self.video_manager.find_video_file(target_file=leader_file)
+        # Collaborators can intentionally use a different local video than the leader.
+        target_file = configured_file or leader_file
+        local_video_path = self.video_manager.find_video_file(target_file=target_file)
+
+        if not local_video_path and configured_file and leader_file:
+            configured_name = Path(configured_file).name
+            leader_name = Path(leader_file).name
+            if configured_name != leader_name:
+                log_warning(
+                    f"Configured collaborator video '{configured_file}' not found; falling back to leader video '{leader_file}'",
+                    component="collaborator",
+                )
+                local_video_path = self.video_manager.find_video_file(target_file=leader_file)
         
         if not local_video_path:
-            log_error(f"Sync: Could not find leader's video file: {leader_file}", component="collaborator")
+            missing_file = target_file or leader_file or configured_file
+            log_error(f"Sync: Could not find collaborator video file: {missing_file}", component="collaborator")
             return
 
         # Compare base filenames to avoid infinite loops caused by absolute vs relative path strings
