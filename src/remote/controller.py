@@ -170,7 +170,18 @@ def build_ui_state() -> Dict[str, Any]:
         }
     ]
 
-    for device_id, info in collaborators.items():
+    known_collaborator_ids = set(collaborators)
+    known_collaborator_ids.update(
+        device_id
+        for device_id, snapshot in config_snapshots.items()
+        if device_id != LOCAL_LEADER_ID and snapshot.get("role") == "collaborator"
+    )
+    known_collaborator_ids.update(
+        device_id for device_id in config_messages if device_id != LOCAL_LEADER_ID
+    )
+
+    for device_id in sorted(known_collaborator_ids):
+        info = collaborators.get(device_id, {})
         devices.append(
             {
                 "device_id": device_id,

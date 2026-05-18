@@ -457,7 +457,7 @@ class CommandManager:
         current_time = time.time()
         for device_id, info in self.collaborators.items():
             last_seen = current_time - info["last_seen"]
-            info["online"] = last_seen < 5
+            info["online"] = last_seen < 15
         return self.collaborators
 
 

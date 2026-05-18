@@ -53,6 +53,11 @@ th, td {
     justify-content: space-between;
 }
 
+.control-buttons {
+    justify-content: flex-start;
+    gap: 8px;
+}
+
 .field-label {
     display: inline-flex;
     align-items: center;
@@ -80,7 +85,7 @@ select {
 }
 
 .config-panel {
-    border: 1px solid #000;
+    border: none;
     overflow: visible;
 }
 
@@ -91,7 +96,7 @@ select {
     align-items: center;
     justify-content: space-between;
     gap: 12px;
-    padding: 5px;
+    padding: 0 0 5px;
 }
 
 .config-panel summary::-webkit-details-marker {
@@ -108,7 +113,7 @@ select {
 }
 
 .config-panel form {
-    padding: 5px;
+    padding: 0;
 }
 
 .config-meta {
@@ -133,10 +138,10 @@ select {
     width: 18px;
     height: 18px;
     border-radius: 50%;
-    border: 1px solid #000;
-    background: #fff;
-    color: #000;
-    font-size: 12px;
+    border: 1px solid #a0a0a0;
+    background: #dcdcdc;
+    color: #4a4a4a;
+    font-size: 11px;
     font-weight: 700;
 }
 
@@ -148,11 +153,12 @@ select {
     min-width: 220px;
     max-width: 320px;
     padding: 8px 10px;
-    border: 1px solid #000;
+    border: 1px solid #888;
     background: #fff;
     color: #000;
     font-size: 12px;
     line-height: 1.35;
+    border-radius: 6px;
     opacity: 0;
     pointer-events: none;
     transition: opacity 120ms ease;

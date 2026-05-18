@@ -309,6 +309,7 @@ class CollaboratorPi:
         try:
             config_path = self.config.get_config_path() or "collaborator_config.ini"
             self.config.clean_and_save_config(config_path, updates, role="collaborator")
+            self.config = ConfigManager(config_path)
             enable_system_logging(
                 self.config.enable_system_logging or self.config.debug_mode
             )
@@ -346,6 +347,7 @@ class CollaboratorPi:
             defaults = self.config.get_default_values("collaborator")
             config_path = self.config.get_config_path() or "collaborator_config.ini"
             self.config.clean_and_save_config(config_path, defaults, role="collaborator")
+            self.config = ConfigManager(config_path)
             
             response.update(
                 {
