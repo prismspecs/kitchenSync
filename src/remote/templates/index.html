@@ -19,6 +19,7 @@
                 <div class="row control-buttons">
                     <button onclick="playCluster()">Play cluster</button>
                     <button onclick="stopCluster()">Stop all</button>
+                    <button onclick="assignVideoToAllCollaborators()">Assign video to all</button>
                 </div>
                 <div class="status" id="clusterStatus">Loading...</div>
                 <video id="preview" controls muted playsinline loop></video>
@@ -31,10 +32,7 @@
                 <table>
                     <thead>
                         <tr>
-                            <th>Device</th>
-                            <th>Role</th>
-                            <th>Network</th>
-                            <th>Status</th>
+                            <th>Device Summary</th>
                             <th>Config</th>
                         </tr>
                     </thead>
@@ -47,6 +45,6 @@
     <datalist id="videoSuggestions"></datalist>
     <datalist id="scheduleSuggestions"></datalist>
 
-    <script src="/static/js/remote.js?v=7"></script>
+    <script src="/static/js/remote.js?v=8"></script>
 </body>
 </html>

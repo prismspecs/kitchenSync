@@ -2,6 +2,7 @@ const requestedConfigs = new Set();
 const lastSaveAt = new Map();
 const draftConfigValues = new Map();
 const openConfigPanels = new Set();
+let latestState = null;
 
 async function postJson(path, payload) {
     const response = await fetch(path, {
@@ -25,6 +26,32 @@ async function stopCluster() {
     const preview = document.getElementById('preview');
     preview.pause();
     preview.currentTime = 0;
+}
+
+async function assignVideoToAllCollaborators() {
+    const selector = document.getElementById('videoSelector');
+    const selectedVideo = selector?.value;
+    if (!selectedVideo || !latestState) {
+        return;
+    }
+
+    const collaborators = (latestState.devices || []).filter((device) => device.role === 'collaborator');
+    if (!collaborators.length) {
+        return;
+    }
+
+    await Promise.all(collaborators.map(async (device) => {
+        const draftValues = draftConfigValues.get(device.device_id) || {};
+        draftConfigValues.set(device.device_id, { ...draftValues, video_file: selectedVideo });
+        lastSaveAt.set(device.device_id, Date.now() / 1000);
+        await postJson('/api/config/save', {
+            device_id: device.device_id,
+            role: 'collaborator',
+            updates: { video_file: selectedVideo },
+        });
+    }));
+
+    setTimeout(refresh, 500);
 }
 
 async function changeVideo(filename) {
@@ -55,6 +82,27 @@ function escapeHtml(value) {
         .replaceAll('>', '&gt;')
         .replaceAll('"', '&quot;')
         .replaceAll("'", '&#39;');
+}
+
+function getStatusClass(device) {
+    if (!device.online) {
+        return 'status-offline';
+    }
+
+    const status = String(device.status || '').toLowerCase();
+    if (status === 'ready') {
+        return 'status-ready';
+    }
+    if (status === 'leading') {
+        return 'status-leading';
+    }
+    if (status === 'syncing') {
+        return 'status-syncing';
+    }
+    if (status === 'unknown') {
+        return 'status-unknown';
+    }
+    return 'status-generic';
 }
 
 function renderTooltip(field) {
@@ -186,6 +234,7 @@ let initialLoadDone = false;
 let currentPreviewVideo = null;
 
 function renderState(state) {
+    latestState = state;
     const selector = document.getElementById('videoSelector');
     if (selector && document.activeElement !== selector) {
         selector.innerHTML = (state.available_videos || []).map((video) => `
@@ -246,19 +295,26 @@ function renderState(state) {
             if (!row) {
                 row = document.createElement('tr');
                 row.id = `row-${device.device_id}`;
-                row.innerHTML = '<td></td><td></td><td></td><td></td><td class="config-cell"></td>';
                 rows.appendChild(row);
             }
 
-            const cells = row.cells;
-            cells[0].textContent = device.label;
-            cells[1].textContent = device.role;
-            cells[2].textContent = device.latency_ms != null
-                ? `${device.ip} | RTT ${device.latency_ms}ms`
-                : device.ip;
-            cells[3].textContent = `${device.status} (${device.online ? 'Online' : 'Offline'})`;
+            if (row.cells.length !== 2) {
+                row.innerHTML = '<td class="device-summary-cell"></td><td class="config-cell"></td>';
+            }
 
-            const configCell = cells[4];
+            const cells = row.cells;
+            const latencyText = device.latency_ms != null ? `RTT ${device.latency_ms}ms` : null;
+            const statusText = `${device.status} (${device.online ? 'Online' : 'Offline'})`;
+            cells[0].innerHTML = `
+                <div class="device-summary-primary">${escapeHtml(device.label)}</div>
+                <div class="device-summary-line device-summary-status ${getStatusClass(device)}">${escapeHtml(statusText)}</div>
+                <div class="device-summary-line device-summary-role">${escapeHtml(device.role)}</div>
+                <div class="device-summary-line device-summary-ip">${escapeHtml(device.ip)}${latencyText ? ` <span class="device-summary-latency">${escapeHtml(latencyText)}</span>` : ''}</div>
+                <div class="device-summary-meta">
+                </div>
+            `;
+
+            const configCell = cells[1];
             
             const snapshotTime = device.config?.updated_at || 0;
             const saveTime = lastSaveAt.get(device.device_id) || 0;

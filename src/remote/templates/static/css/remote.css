@@ -40,6 +40,60 @@ th, td {
     vertical-align: top;
 }
 
+.device-summary-cell {
+    min-width: 220px;
+}
+
+.device-summary-primary {
+    font-weight: 700;
+    margin-bottom: 4px;
+}
+
+.device-summary-line {
+    font-size: 12px;
+    line-height: 1.35;
+    margin-bottom: 2px;
+}
+
+.device-summary-status {
+    font-weight: 600;
+}
+
+.device-summary-role,
+.device-summary-ip,
+.device-summary-latency {
+    color: #333;
+}
+
+.device-summary-latency {
+    margin-left: 8px;
+}
+
+.device-summary-meta {
+    min-height: 0;
+}
+
+.status-ready {
+    color: #2f6f44;
+}
+
+.status-leading {
+    color: #1f5ea8;
+}
+
+.status-syncing {
+    color: #9a6b00;
+}
+
+.status-offline {
+    color: #8a3b3b;
+}
+
+.status-unknown,
+.status-generic {
+    color: #555;
+}
+
 .status {
     padding: 10px 0;
     font-weight: bold;
