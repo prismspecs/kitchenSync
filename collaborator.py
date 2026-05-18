@@ -332,7 +332,11 @@ class CollaboratorPi:
             log_error(f"Sync: Could not find leader's video file: {leader_file}", component="collaborator")
             return
 
-        if self.system_state.is_running and local_video_path == self.video_path:
+        # Compare base filenames to avoid infinite loops caused by absolute vs relative path strings
+        current_playing_name = Path(self.video_path).name if self.video_path else None
+        new_video_name = Path(local_video_path).name
+
+        if self.system_state.is_running and current_playing_name == new_video_name:
             # Already playing same content.
             # Just reset sync state to force a fresh 'instant lock' on the next sync packet.
             log_info("Start command received while running; resetting sync state...", component="collaborator")
