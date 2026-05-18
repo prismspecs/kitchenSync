@@ -1,8 +1,8 @@
 body {
-    font-family: "Inter", "Segoe UI", sans-serif;
+    font-family: sans-serif;
     margin: 20px;
-    background: #f6f2e8;
-    color: #1d1b19;
+    background: #fff;
+    color: #000;
 }
 
 main {
@@ -23,31 +23,21 @@ main {
     margin-bottom: 30px;
 }
 
-h1, h2 {
-    color: #2a241d;
-}
-
 video {
     width: 100%;
-    border: 1px solid #b8ad9a;
-    background: #000;
+    border: 1px solid #000;
 }
 
 table {
     width: 100%;
     border-collapse: collapse;
-    background: #fffdf9;
 }
 
 th, td {
-    border: 1px solid #d6ccb9;
-    padding: 8px;
+    border: 1px solid #000;
+    padding: 5px;
     text-align: left;
     vertical-align: top;
-}
-
-th {
-    background: #efe7d8;
 }
 
 .status {
@@ -67,7 +57,6 @@ th {
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    font-weight: 600;
     min-width: 150px;
 }
 
@@ -80,29 +69,10 @@ input[type="number"],
 select {
     flex: 1;
     min-width: 0;
-    padding: 8px 10px;
-    border: 1px solid #cbbfa9;
-    border-radius: 8px;
+    padding: 2px 4px;
+    border: 1px solid #000;
     background: #fff;
-    color: #1d1b19;
-}
-
-input[type="checkbox"] {
-    width: 18px;
-    height: 18px;
-}
-
-button {
-    padding: 8px 12px;
-    border: 1px solid #a88e61;
-    border-radius: 999px;
-    background: #d9c39b;
-    color: #2a241d;
-    cursor: pointer;
-}
-
-button:hover {
-    background: #e5cfaa;
+    color: #000;
 }
 
 .actions-row {
@@ -110,9 +80,7 @@ button:hover {
 }
 
 .config-panel {
-    border: 1px solid #d6ccb9;
-    border-radius: 12px;
-    background: #fffcf6;
+    border: 1px solid #000;
     overflow: visible;
 }
 
@@ -123,9 +91,7 @@ button:hover {
     align-items: center;
     justify-content: space-between;
     gap: 12px;
-    padding: 10px 12px;
-    font-weight: 700;
-    color: #2a241d;
+    padding: 5px;
 }
 
 .config-panel summary::-webkit-details-marker {
@@ -134,7 +100,6 @@ button:hover {
 
 .config-panel summary::after {
     content: "+";
-    font-size: 18px;
     line-height: 1;
 }
 
@@ -143,13 +108,11 @@ button:hover {
 }
 
 .config-panel form {
-    padding: 0 12px 12px;
+    padding: 5px;
 }
 
 .config-meta {
-    color: #7a6a55;
     font-size: 12px;
-    font-weight: 500;
 }
 
 .tooltip {
@@ -170,11 +133,11 @@ button:hover {
     width: 18px;
     height: 18px;
     border-radius: 50%;
-    background: #2f6fed;
-    color: #fff;
+    border: 1px solid #000;
+    background: #fff;
+    color: #000;
     font-size: 12px;
     font-weight: 700;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
 }
 
 .tooltip-bubble {
@@ -185,13 +148,11 @@ button:hover {
     min-width: 220px;
     max-width: 320px;
     padding: 8px 10px;
-    border-radius: 10px;
-    background: #2a241d;
-    color: #fffdf8;
+    border: 1px solid #000;
+    background: #fff;
+    color: #000;
     font-size: 12px;
-    font-weight: 500;
     line-height: 1.35;
-    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
     opacity: 0;
     pointer-events: none;
     transition: opacity 120ms ease;
@@ -206,24 +167,19 @@ button:hover {
 .message {
     font-size: 12px;
     margin: 5px 0;
-    padding: 6px 8px;
-    border-radius: 8px;
-    display: inline-block;
+    display: block;
 }
 
 .message.error {
-    color: #7b1f1f;
-    background: #f7d8d8;
+    color: red;
 }
 
 .message.ok {
-    color: #215a25;
-    background: #dff1df;
+    color: green;
 }
 
 .message.info {
-    color: #1f4f7b;
-    background: #ddecf7;
+    color: #333;
 }
 
 @media (max-width: 800px) {
