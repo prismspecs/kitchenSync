@@ -86,40 +86,138 @@ class TestGstDriverSetSpeed(unittest.TestCase):
         self.assertEqual(sink_names[:2], ["kmssink", "glimagesink"])
 
 
-class TestCollaboratorDuplicateStart(unittest.TestCase):
-    def test_duplicate_start_ignores_small_drift(self):
+class TestCollaboratorStartHandling(unittest.TestCase):
+    def test_duplicate_running_start_same_session_is_ignored(self):
         dummy = SimpleNamespace(
-            system_state=SimpleNamespace(is_running=True, current_time=12.0),
+            system_state=SimpleNamespace(is_running=True),
             video_path="videos/test_video.mp4",
+            active_session_key=("leader-1", "test_video.mp4", 100.0),
             video_manager=SimpleNamespace(find_video_file=MagicMock(return_value="videos/test_video.mp4")),
-            video_player=SimpleNamespace(
-                get_position=MagicMock(return_value=12.2),
-                seek=MagicMock(),
-            ),
-            debug_sync_logging=False,
-            max_drift=0.5,
+            video_player=SimpleNamespace(load=MagicMock(), get_duration=MagicMock(return_value=10.0)),
+            stop_playback=MagicMock(),
+            start_playback=MagicMock(),
+            _update_sync_params=MagicMock(),
         )
 
-        collaborator.CollaboratorPi._handle_start_command(dummy, {"type": "start"})
-
-        dummy.video_player.seek.assert_not_called()
-
-    def test_duplicate_start_resyncs_large_drift(self):
-        dummy = SimpleNamespace(
-            system_state=SimpleNamespace(is_running=True, current_time=12.0),
-            video_path="videos/test_video.mp4",
-            video_manager=SimpleNamespace(find_video_file=MagicMock(return_value="videos/test_video.mp4")),
-            video_player=SimpleNamespace(
-                get_position=MagicMock(return_value=13.0),
-                seek=MagicMock(),
-            ),
-            debug_sync_logging=False,
-            max_drift=0.5,
+        collaborator.CollaboratorPi._handle_start_command(
+            dummy,
+            {
+                "type": "start",
+                "video_file": "test_video.mp4",
+                "leader_id": "leader-1",
+                "start_time": 100.0,
+                "sync_params": {"max_drift": 0.5},
+            },
         )
 
-        collaborator.CollaboratorPi._handle_start_command(dummy, {"type": "start"})
+        dummy.stop_playback.assert_not_called()
+        dummy.start_playback.assert_not_called()
+        dummy.video_player.load.assert_not_called()
 
-        dummy.video_player.seek.assert_called_once_with(12.0)
+    def test_duplicate_running_start_without_identity_is_ignored(self):
+        dummy = SimpleNamespace(
+            system_state=SimpleNamespace(is_running=True),
+            video_path="videos/test_video.mp4",
+            active_session_key=None,
+            video_manager=SimpleNamespace(find_video_file=MagicMock(return_value="videos/test_video.mp4")),
+            video_player=SimpleNamespace(load=MagicMock(), get_duration=MagicMock(return_value=10.0)),
+            stop_playback=MagicMock(),
+            start_playback=MagicMock(),
+            _update_sync_params=MagicMock(),
+        )
+
+        collaborator.CollaboratorPi._handle_start_command(
+            dummy,
+            {"type": "start", "video_file": "test_video.mp4"},
+        )
+
+        dummy.stop_playback.assert_not_called()
+        dummy.start_playback.assert_not_called()
+        dummy.video_player.load.assert_not_called()
+
+    def test_duplicate_running_start_new_session_restarts_playback(self):
+        dummy = SimpleNamespace(
+            system_state=SimpleNamespace(is_running=True),
+            video_path="videos/test_video.mp4",
+            active_session_key=("leader-1", "test_video.mp4", 100.0),
+            video_manager=SimpleNamespace(find_video_file=MagicMock(return_value="videos/test_video.mp4")),
+            video_player=SimpleNamespace(load=MagicMock(return_value=True), get_duration=MagicMock(return_value=10.0)),
+            stop_playback=MagicMock(),
+            start_playback=MagicMock(),
+            _update_sync_params=MagicMock(),
+            midi_scheduler=None,
+        )
+
+        collaborator.CollaboratorPi._handle_start_command(
+            dummy,
+            {
+                "type": "start",
+                "video_file": "test_video.mp4",
+                "leader_id": "leader-1",
+                "start_time": 200.0,
+            },
+        )
+
+        dummy.stop_playback.assert_called_once()
+        dummy.video_player.load.assert_called_once_with("videos/test_video.mp4")
+        dummy.start_playback.assert_called_once()
+        self.assertEqual(dummy.active_session_key, ("leader-1", "test_video.mp4", 200.0))
+
+
+class TestCollaboratorLoopHandling(unittest.TestCase):
+    def test_loop_boundary_uses_wrapped_deviation(self):
+        video_player = SimpleNamespace(
+            is_playing=True,
+            is_seeking=False,
+            get_position=MagicMock(return_value=9.95),
+            get_duration=MagicMock(return_value=10.0),
+            seek=MagicMock(),
+            set_speed=MagicMock(),
+        )
+        dummy = SimpleNamespace(
+            video_player=video_player,
+            debug_deviation_mode=False,
+            deviation_samples=[],
+            max_samples=3,
+            startup_sync_count=0,
+            FAST_SYNC_THRESHOLD=3,
+            max_drift=0.5,
+            min_drift=0.01,
+            kp=0.1,
+            min_rate=0.9,
+            max_rate=1.2,
+        )
+        dummy._normalize_loop_time = lambda media_time: collaborator.CollaboratorPi._normalize_loop_time(dummy, media_time)
+        dummy._normalize_loop_deviation = lambda video_pos, leader_time: collaborator.CollaboratorPi._normalize_loop_deviation(dummy, video_pos, leader_time)
+
+        collaborator.CollaboratorPi._maintain_video_sync(dummy, 0.05)
+
+        video_player.seek.assert_not_called()
+        video_player.set_speed.assert_called_once()
+        self.assertAlmostEqual(video_player.set_speed.call_args.args[0], 1.01)
+
+
+class TestGstDriverLooping(unittest.TestCase):
+    def test_eos_resets_cached_position_before_seek(self):
+        original_gst = gst_driver.Gst
+        original_available = gst_driver.GST_AVAILABLE
+        gst_driver.Gst = SimpleNamespace(MessageType=SimpleNamespace(EOS="eos"))
+        gst_driver.GST_AVAILABLE = True
+
+        try:
+            driver = gst_driver.GstDriver.__new__(gst_driver.GstDriver)
+            driver._cached_position = 12.34
+            driver._last_poll_time = 50.0
+            driver.seek = MagicMock()
+
+            message = SimpleNamespace(type="eos")
+            gst_driver.GstDriver._on_bus_message(driver, None, message)
+
+            self.assertEqual(driver._cached_position, 0.0)
+            driver.seek.assert_called_once_with(0)
+        finally:
+            gst_driver.Gst = original_gst
+            gst_driver.GST_AVAILABLE = original_available
 
 
 class TestCursorHiding(unittest.TestCase):

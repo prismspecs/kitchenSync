@@ -113,6 +113,14 @@ DISPLAY=:0 python3 tools/verify_gst_hwaccel.py --video videos/test_hevc_clean.mp
 
 Successful decode signal: `"active_decoder": "v4l2slh265dec"`
 
+## Looping Behavior
+
+Leader and collaborator both loop locally inside the GStreamer driver when they receive EOS. At the loop seam, raw positions can briefly jump from `duration` back to `0`, so sync logic must treat that boundary as wrapped time rather than linear drift.
+
+Current behavior:
+- The Gst driver resets its cached position to `0` before issuing the EOS loop seek so leader broadcasts do not keep advertising a stale tail-frame timestamp.
+- The collaborator normalizes loop-boundary drift against video duration, which prevents false multi-second deviation spikes and unnecessary hard seeks immediately after looping.
+
 ## Testing
 
 Run the automated test suite:
@@ -120,6 +128,7 @@ Run the automated test suite:
 python3 -m unittest tests/test_core.py
 python3 -m unittest tests/test_networking.py
 python3 -m unittest tests/test_sync_regressions.py
+pytest tests/test_sync_regressions.py tests/test_sync_simulation.py
 ```
 
 If you need a sample file for manual testing, download a test video into `videos/`:

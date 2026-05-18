@@ -349,6 +349,10 @@ class GstDriver(VideoDriver):
         t = message.type
         if t == Gst.MessageType.EOS:
             log_info("Gst: End of stream reached, looping...")
+            # Reset cached position immediately so sync consumers do not keep
+            # seeing a stale tail-frame timestamp while the loop seek settles.
+            self._cached_position = 0.0
+            self._last_poll_time = time.time()
             self.seek(0)
         elif t == Gst.MessageType.ASYNC_DONE:
             # Seek complete. Add a tiny grace period to allow hardware to settle
@@ -386,7 +390,8 @@ class GstDriver(VideoDriver):
         if not self.pipeline:
             return False
         # Wait up to timeout_ms for a valid state
-        success, current, _ = self.pipeline.get_state(timeout_ms * Gst.MSECOND)
+        millisecond = getattr(Gst, "MSECOND", int(Gst.SECOND / 1000))
+        success, current, _ = self.pipeline.get_state(timeout_ms * millisecond)
         return success != Gst.StateChangeReturn.FAILURE and current >= Gst.State.PAUSED
 
     def play(self) -> bool:

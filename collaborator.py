@@ -167,6 +167,27 @@ class CollaboratorPi:
             # 4. Adjust Video
             self._maintain_video_sync(adjusted_leader_time)
 
+    def _normalize_loop_time(self, media_time: float) -> float:
+        """Wrap media time into the current video duration when looping."""
+        duration = self.video_player.get_duration()
+        if duration and duration > 0:
+            return media_time % duration
+        return media_time
+
+    def _normalize_loop_deviation(self, video_pos: float, leader_time: float) -> float:
+        """Return the shortest signed distance between positions on a looping timeline."""
+        duration = self.video_player.get_duration()
+        deviation = video_pos - leader_time
+
+        if duration and duration > 0:
+            half_duration = duration / 2.0
+            if deviation > half_duration:
+                deviation -= duration
+            elif deviation < -half_duration:
+                deviation += duration
+
+        return deviation
+
     def _maintain_video_sync(self, leader_time: float) -> None:
         """Calculate drift and adjust playback speed - FAST VERSION"""
         if not self.video_player.is_playing or getattr(self.video_player, "is_seeking", False):
@@ -177,7 +198,10 @@ class CollaboratorPi:
         if video_pos is None:
             return
 
-        deviation = video_pos - leader_time
+        leader_time = self._normalize_loop_time(leader_time)
+        video_pos = self._normalize_loop_time(video_pos)
+
+        deviation = self._normalize_loop_deviation(video_pos, leader_time)
         
         if self.debug_deviation_mode:
             print(f"DEVIATION: {deviation:+.4f}s (V:{video_pos:.3f} L:{leader_time:.3f})")
@@ -330,10 +354,11 @@ class CollaboratorPi:
         leader_file = msg.get("video_file")
         leader_id = msg.get("leader_id")
         leader_start_time = msg.get("start_time")
+        active_leader_id = getattr(self, "active_leader_id", None)
         
         # Lock or re-lock to leader
         if leader_id:
-            if self.active_leader_id != leader_id:
+            if active_leader_id != leader_id:
                 log_info(f"Sync: Switching leader to {leader_id}", component="sync")
                 self.active_leader_id = leader_id
 
@@ -348,6 +373,8 @@ class CollaboratorPi:
         current_playing_name = Path(self.video_path).name if self.video_path else None
         new_video_name = Path(local_video_path).name
         session_key = (leader_id, new_video_name, leader_start_time)
+        active_session_key = getattr(self, "active_session_key", None)
+        stopped_for_restart = False
 
         if current_playing_name == new_video_name:
             sync_params = msg.get("sync_params", {})
@@ -355,12 +382,14 @@ class CollaboratorPi:
                 self._update_sync_params(sync_params)
 
             if self.system_state.is_running:
-                if session_key == self.active_session_key:
+                has_session_identity = leader_id is not None and leader_start_time is not None
+                if session_key == active_session_key or not has_session_identity:
                     return
 
                 log_info(f"Start command received for restarted session {leader_file}", component="collaborator")
                 self.stop_playback()
                 self.active_session_key = None
+                stopped_for_restart = True
             else:
                 log_info(f"Start command received for already-loaded {leader_file}; starting playback", component="collaborator")
                 self.active_session_key = session_key
@@ -370,7 +399,7 @@ class CollaboratorPi:
         log_info(f"Start command received for {leader_file}", component="collaborator")
 
         # If we are here, we need to load a new file (or start for the first time)
-        if self.system_state.is_running:
+        if self.system_state.is_running and not stopped_for_restart:
             self.stop_playback()
 
         # Load schedule

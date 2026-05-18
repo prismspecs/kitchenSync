@@ -11,6 +11,7 @@
 - [x] Implement a non-browser based debug overlay for the Collaborator (using a native toolkit like Tkinter or Pygame to avoid browser overhead).
 - [x] Tune collaborator drift control after live hardware measurements.
 - [x] Add a focused sync test that exercises repeated corrections with the mock driver.
+- [x] Make collaborator sync loop-aware so EOS wrap does not look like a huge drift spike.
 
 ## Deployment
 - [x] Add a deployment checklist for Pi imaging, X11 readiness, and USB content validation.
