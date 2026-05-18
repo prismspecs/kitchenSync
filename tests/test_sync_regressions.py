@@ -181,6 +181,7 @@ class TestCollaboratorLoopHandling(unittest.TestCase):
             max_samples=3,
             startup_sync_count=0,
             FAST_SYNC_THRESHOLD=3,
+            _settle_until=0,
             max_drift=0.5,
             min_drift=0.01,
             kp=0.1,

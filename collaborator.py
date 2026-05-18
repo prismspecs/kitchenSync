@@ -97,6 +97,7 @@ class CollaboratorPi:
         self.active_session_key = None
         self.startup_sync_count = 0
         self.FAST_SYNC_THRESHOLD = 3  # Lower threshold for faster lock
+        self._settle_until = 0  # Timestamp until which we ignore hard seeks
 
         # Sync Decoupling
         self._latest_sync_state = None
@@ -193,6 +194,10 @@ class CollaboratorPi:
         if not self.video_player.is_playing or getattr(self.video_player, "is_seeking", False):
             return
 
+        now = time.time()
+        if now < self._settle_until:
+            return
+
         # Query position (Now instantaneous due to background polling in GstDriver)
         video_pos = self.video_player.get_position()
         if video_pos is None:
@@ -227,10 +232,12 @@ class CollaboratorPi:
                 self.video_player.seek(leader_time, accurate=False)
                 self.deviation_samples.clear()
                 self.startup_sync_count = 0 # Re-trigger instant lock
+                self._settle_until = now + 1.5 # Wait 1.5s for buffers to settle
             elif abs(median_dev) > self.max_drift:
                 log_warning(f" Sync deviation: {median_dev:.3f}s. Precise seeking...", component="sync")
                 self.video_player.seek(leader_time, accurate=True)
                 self.deviation_samples.clear()
+                self._settle_until = now + 1.0 # Wait 1.0s for precise seek to settle
             elif abs(median_dev) > self.min_drift:
                 new_rate = 1.0 - (median_dev * self.kp)
                 new_rate = max(self.min_rate, min(self.max_rate, new_rate))

@@ -38,7 +38,7 @@ EDITABLE_CONFIG_FIELDS = {
         {"key": "latency_factor", "section": "DEFAULT", "type": "float", "label": "Latency Factor", "default": 0.5, "tooltip": "Multiplier for RTT compensation. 0.5 = RTT/2 (one-way estimate). Lower this if leader is behind followers."},
         {"key": "max_drift", "section": "DEFAULT", "type": "float", "label": "Max Drift", "default": 0.5, "tooltip": "Threshold (in seconds) for a hard seek. If the node is further away than this, it jumps to the leader time."},
         {"key": "min_drift", "section": "DEFAULT", "type": "float", "label": "Min Drift", "default": 0.01, "tooltip": "Threshold (in seconds) where speed adjustment begins. Drifts smaller than this are ignored for stability."},
-        {"key": "kp", "section": "DEFAULT", "type": "float", "label": "P-Gain", "default": 0.1, "tooltip": "The aggression of the speed correction. Higher values react faster but may cause visible speed jitter."},
+        {"key": "kp", "section": "DEFAULT", "type": "float", "label": "P-Gain", "default": 0.25, "tooltip": "The aggression of the speed correction. Higher values react faster but may cause visible speed jitter."},
         {"key": "max_samples", "section": "DEFAULT", "type": "int", "label": "Max Samples", "default": 3, "tooltip": "Number of samples for drift averaging. Lower values react faster; higher values are smoother but add lag."},
         {"key": "min_rate", "section": "DEFAULT", "type": "float", "label": "Min Rate", "default": 0.9, "tooltip": "Minimum playback speed adjustment (e.g. 0.9 = 90% speed)."},
         {"key": "max_rate", "section": "DEFAULT", "type": "float", "label": "Max Rate", "default": 1.2, "tooltip": "Maximum playback speed adjustment (e.g. 1.2 = 120% speed)."},
