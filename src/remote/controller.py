@@ -517,7 +517,6 @@ def start_remote():
     )
 
     sync_broadcaster.setup_socket()
-    command_manager.start_latency_probing()
 
     def master_clock():
         last_broadcast = 0.0
@@ -568,6 +567,7 @@ def start_remote():
     threading.Thread(target=master_clock, daemon=True).start()
 
     command_manager.start_listening()
+    command_manager.start_latency_probing()
 
     web_thread = threading.Thread(
         target=lambda: RobustRemoteServer(("0.0.0.0", 8080), RemoteHandler).serve_forever(),

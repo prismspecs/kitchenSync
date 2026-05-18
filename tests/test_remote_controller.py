@@ -3,7 +3,7 @@
 import sys
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
@@ -80,6 +80,45 @@ class TestRemoteController(unittest.TestCase):
         self.assertEqual(state["latency"]["compensation_ms"], 20.0)
         collaborator = next(device for device in state["devices"] if device["device_id"] == "collab-1")
         self.assertEqual(collaborator["latency_ms"], 25.0)
+
+    def test_start_remote_starts_listener_before_latency_probing(self):
+        call_order = []
+
+        class FakeCommandManager:
+            def register_handler(self, *_args, **_kwargs):
+                return None
+
+            def start_listening(self):
+                call_order.append("start_listening")
+
+            def start_latency_probing(self):
+                call_order.append("start_latency_probing")
+
+        class FakeThread:
+            def __init__(self, *args, **kwargs):
+                pass
+
+            def start(self):
+                return None
+
+        fake_server = MagicMock()
+
+        with patch.object(controller, "update_runtime_from_config", lambda: None), patch.object(
+            controller,
+            "command_manager",
+            FakeCommandManager(),
+        ), patch.object(controller.sync_broadcaster, "setup_socket", lambda: None), patch.object(
+            controller.threading,
+            "Thread",
+            FakeThread,
+        ), patch.object(controller, "RobustRemoteServer", MagicMock(return_value=fake_server)), patch.object(
+            controller,
+            "log_info",
+            lambda *args, **kwargs: None,
+        ):
+            controller.start_remote()
+
+        self.assertEqual(call_order, ["start_listening", "start_latency_probing"])
 
 
 if __name__ == "__main__":
