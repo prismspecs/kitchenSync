@@ -195,7 +195,10 @@ class CollaboratorPi:
             return
 
         now = time.time()
-        if now < self._settle_until:
+        
+        # Bypass settle window ONLY for the very first lock so we can snap immediately
+        is_very_first_lock = self.startup_sync_count == 0
+        if now < self._settle_until and not is_very_first_lock:
             return
 
         # Query position (Now instantaneous due to background polling in GstDriver)
