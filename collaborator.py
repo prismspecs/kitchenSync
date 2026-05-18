@@ -450,6 +450,14 @@ class CollaboratorPi:
     def start_playback(self) -> None:
         """Start video playback"""
         log_info("Starting playback...", component="collaborator")
+        
+        # 1. Start video player first and wait for hardware to initialize
+        if self.video_path:
+            if not self.video_player.play():
+                log_error("Failed to start video player", component="collaborator")
+                return
+
+        # 2. Initialize session state
         self.system_state.start_session()
         self.video_start_time = time.time()
         
@@ -457,31 +465,36 @@ class CollaboratorPi:
         self.startup_sync_count = 0
         self.deviation_samples.clear()
         
-        # Start sync processor thread
+        # Mandatory grace period for hardware settle (Prevents "catatonic" lockups on Pi)
+        self._settle_until = time.time() + 1.5
+        
+        # 3. Finally start sync processor thread
         self._stop_sync_thread.clear()
         self._sync_thread = threading.Thread(target=self._sync_processor_loop, daemon=True)
         self._sync_thread.start()
-
-        if self.video_path:
-            self.video_player.play()
         
         video_duration = self.video_player.get_duration()
         if self.midi_scheduler:
             self.midi_scheduler.start_playback(self.system_state.start_time, video_duration)
             
-        log_info("Playback started", component="collaborator")
+        log_info("Playback started and sync thread initialized", component="collaborator")
 
     def stop_playback(self) -> None:
         """Stop video playback"""
         log_info("Stopping playback...", component="collaborator")
         
-        # Stop sync thread
+        # 1. Stop sync thread first and wait for it to finish its last tick
         self._stop_sync_thread.set()
         if self._sync_thread:
-            self._sync_thread.join(timeout=0.2)
+            # We give it plenty of time to finish its last GStreamer call (seek/rate)
+            self._sync_thread.join(timeout=1.0)
+            if self._sync_thread.is_alive():
+                log_warning("Sync thread did not exit cleanly; proceeding with stop", component="sync")
             self._sync_thread = None
 
+        # 2. Now safe to stop the player
         self.video_player.stop()
+        
         if self.midi_scheduler:
             self.midi_scheduler.stop_playback()
         self.system_state.stop_session()

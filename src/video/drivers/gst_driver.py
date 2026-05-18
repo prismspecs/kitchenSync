@@ -404,13 +404,17 @@ class GstDriver(VideoDriver):
             self.state = PlayerState.ERROR
             return False
             
+        # Wait up to 1s for the pipeline to reach PAUSED/PLAYING (important for Pi hardware)
+        success, current, _ = self.pipeline.get_state(1.0 * Gst.SECOND)
+        if success == Gst.StateChangeReturn.FAILURE:
+            log_error("Gst: Pipeline failed to reach a stable state")
+            self.state = PlayerState.ERROR
+            return False
+
         self.state = PlayerState.PLAYING
         self._cached_position = 0.0
         self._last_poll_time = time.time() # Reset poll time to current to avoid extrapolation explosion
         self._start_polling()
-        
-        # Wait up to 1s for the pipeline to reach PAUSED/PLAYING (important for Pi hardware)
-        self.pipeline.get_state(1.0 * Gst.SECOND)
         
         self.decoder_name = self._discover_active_decoder()
         if not self.decoder_name and self.decoder_candidates:
