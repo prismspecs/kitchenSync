@@ -94,6 +94,7 @@ class CollaboratorPi:
         self.min_rate = self.config.min_rate
         self.max_rate = self.config.max_rate
         self.video_path = None
+        self.active_session_key = None
         self.startup_sync_count = 0
         self.FAST_SYNC_THRESHOLD = 3  # Lower threshold for faster lock
 
@@ -142,9 +143,19 @@ class CollaboratorPi:
         if state and self.system_state.is_running:
             leader_time, received_at, sent_at = state
             
-            # 1. Compensate for processing/network latency
-            processing_latency = time.time() - received_at
-            adjusted_leader_time = leader_time + processing_latency
+            # 1. Compensate for packet transit and local processing delay.
+            adjusted_leader_time = leader_time
+
+            if sent_at is not None:
+                try:
+                    transport_latency = received_at - float(sent_at)
+                    if 0.0 <= transport_latency <= 0.25:
+                        adjusted_leader_time += transport_latency
+                except (TypeError, ValueError):
+                    pass
+
+            processing_latency = max(0.0, time.time() - received_at)
+            adjusted_leader_time += processing_latency
             
             # 2. Update shared state
             self.system_state.current_time = adjusted_leader_time
@@ -318,6 +329,7 @@ class CollaboratorPi:
         """Initialize playback session from leader start command"""
         leader_file = msg.get("video_file")
         leader_id = msg.get("leader_id")
+        leader_start_time = msg.get("start_time")
         
         # Lock or re-lock to leader
         if leader_id:
@@ -335,6 +347,7 @@ class CollaboratorPi:
         # Compare base filenames to avoid infinite loops caused by absolute vs relative path strings
         current_playing_name = Path(self.video_path).name if self.video_path else None
         new_video_name = Path(local_video_path).name
+        session_key = (leader_id, new_video_name, leader_start_time)
 
         if current_playing_name == new_video_name:
             sync_params = msg.get("sync_params", {})
@@ -342,16 +355,17 @@ class CollaboratorPi:
                 self._update_sync_params(sync_params)
 
             if self.system_state.is_running:
-                # Already playing the same content.
-                # Reset sync state to force a fresh 'instant lock' on the next sync packet.
-                log_info("Start command received while running; resetting sync state...", component="collaborator")
-                self.startup_sync_count = 0
-                self.deviation_samples.clear()
-                return
+                if session_key == self.active_session_key:
+                    return
 
-            log_info(f"Start command received for already-loaded {leader_file}; starting playback", component="collaborator")
-            self.start_playback()
-            return
+                log_info(f"Start command received for restarted session {leader_file}", component="collaborator")
+                self.stop_playback()
+                self.active_session_key = None
+            else:
+                log_info(f"Start command received for already-loaded {leader_file}; starting playback", component="collaborator")
+                self.active_session_key = session_key
+                self.start_playback()
+                return
 
         log_info(f"Start command received for {leader_file}", component="collaborator")
 
@@ -376,6 +390,7 @@ class CollaboratorPi:
             return
 
         log_info(f"Collaborator Loading: {os.path.abspath(self.video_path)}", component="collaborator")
+        self.active_session_key = session_key
         self.start_playback()
 
     def _update_sync_params(self, params: dict) -> None:
@@ -435,6 +450,7 @@ class CollaboratorPi:
             self.midi_scheduler.stop_playback()
         self.system_state.stop_session()
         self.video_start_time = None
+        self.active_session_key = None
         self.deviation_samples.clear()
         log_info("Playback stopped", component="collaborator")
 
