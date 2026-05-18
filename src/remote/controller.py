@@ -504,6 +504,7 @@ def start_remote():
                         "time": cluster_state.video_pos,
                         "leader_id": sync_broadcaster.leader_id,
                         "source": "wall",
+                        "sent_at": time.time(),
                     }
                 )
                 sync_broadcaster.sync_sock.sendto(
