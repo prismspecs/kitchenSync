@@ -1,5 +1,7 @@
 const requestedConfigs = new Set();
 const lastSaveAt = new Map();
+const draftConfigValues = new Map();
+const openConfigPanels = new Set();
 
 async function postJson(path, payload) {
     const response = await fetch(path, {
@@ -46,15 +48,70 @@ async function requestConfig(deviceId) {
     await postJson('/api/config/request', { device_id: deviceId });
 }
 
+function escapeHtml(value) {
+    return String(value ?? '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#39;');
+}
+
+function renderTooltip(field) {
+    if (!field.tooltip) {
+        return '';
+    }
+
+    return `
+        <span class="tooltip" tabindex="0" aria-label="Help for ${escapeHtml(field.label)}">
+            <span class="tooltip-icon">?</span>
+            <span class="tooltip-bubble">${escapeHtml(field.tooltip)}</span>
+        </span>
+    `;
+}
+
 function renderField(deviceId, field, value, videoOptions, scheduleOptions) {
     const fieldId = `${deviceId}-${field.key}`;
-    const tooltip = field.tooltip ? `<span class="tooltip-icon" title="${field.tooltip}">?</span>` : '';
+    const tooltip = renderTooltip(field);
+    const safeValue = value ?? '';
     
     if (field.type === 'bool') {
         return `
             <div class="row">
-                <label for="${fieldId}">${field.label}${tooltip}</label>
-                <input id="${fieldId}" data-key="${field.key}" type="checkbox" ${value ? 'checked' : ''}>
+                <label for="${fieldId}" class="field-label">${escapeHtml(field.label)}${tooltip}</label>
+                <input id="${fieldId}" data-key="${field.key}" type="checkbox" ${safeValue ? 'checked' : ''}>
+            </div>
+        `;
+    }
+
+    if (field.key === 'video_file' && videoOptions.length) {
+        const options = videoOptions.map((video) => `
+            <option value="${escapeHtml(video)}" ${video === safeValue ? 'selected' : ''}>${escapeHtml(video)}</option>
+        `).join('');
+
+        return `
+            <div class="row">
+                <label for="${fieldId}" class="field-label">${escapeHtml(field.label)}${tooltip}</label>
+                <select id="${fieldId}" data-key="${field.key}">
+                    ${options}
+                </select>
+            </div>
+        `;
+    }
+
+    if (field.key === 'schedule_file' && scheduleOptions.length) {
+        const allowCustom = safeValue && !scheduleOptions.includes(safeValue);
+        const options = scheduleOptions.map((schedule) => `
+            <option value="${escapeHtml(schedule)}" ${schedule === safeValue ? 'selected' : ''}>${escapeHtml(schedule)}</option>
+        `).join('');
+
+        return `
+            <div class="row">
+                <label for="${fieldId}" class="field-label">${escapeHtml(field.label)}${tooltip}</label>
+                <select id="${fieldId}" data-key="${field.key}">
+                    ${allowCustom ? `<option value="${escapeHtml(safeValue)}" selected>${escapeHtml(safeValue)}</option>` : ''}
+                    ${options}
+                </select>
             </div>
         `;
     }
@@ -70,8 +127,8 @@ function renderField(deviceId, field, value, videoOptions, scheduleOptions) {
 
     return `
         <div class="row">
-            <label for="${fieldId}">${field.label}${tooltip}</label>
-            <input id="${fieldId}" data-key="${field.key}" type="${type}" value="${value ?? ''}" ${step} ${list}>
+            <label for="${fieldId}" class="field-label">${escapeHtml(field.label)}${tooltip}</label>
+            <input id="${fieldId}" data-key="${field.key}" type="${type}" value="${escapeHtml(safeValue)}" ${step} ${list}>
         </div>
     `;
 }
@@ -101,17 +158,28 @@ function renderConfigCell(device, videoOptions, scheduleOptions) {
         `;
     }
 
-    const fields = config.fields.map((field) => renderField(device.device_id, field, config.values?.[field.key], videoOptions, scheduleOptions)).join('');
+    const baseValues = config.values || {};
+    const draftValues = draftConfigValues.get(device.device_id) || {};
+    const values = { ...baseValues, ...draftValues };
+    const isOpen = openConfigPanels.has(device.device_id) || device.role === 'leader';
+    const fields = config.fields.map((field) => renderField(device.device_id, field, values[field.key], videoOptions, scheduleOptions)).join('');
+
     return `
-        <form onsubmit="saveConfig(event, '${device.device_id}', '${config.role}')">
-            ${fields}
-            <div class="row">
-                <button type="submit">Save</button>
-                <button type="button" onclick="loadDefaults('${device.device_id}')">Defaults</button>
-                ${device.role === 'collaborator' ? `<button type="button" onclick="requestConfig('${device.device_id}')">Refresh</button>` : ''}
-            </div>
-            <div class="message-area">${renderMessage(device.message)}</div>
-        </form>
+        <details class="config-panel" data-device-id="${device.device_id}" ${isOpen ? 'open' : ''}>
+            <summary>
+                <span>Configuration</span>
+                <span class="config-meta">${escapeHtml(config.config_path || '')}</span>
+            </summary>
+            <form onsubmit="saveConfig(event, '${device.device_id}', '${config.role}')">
+                ${fields}
+                <div class="row actions-row">
+                    <button type="submit">Save</button>
+                    <button type="button" onclick="loadDefaults('${device.device_id}')">Defaults</button>
+                    ${device.role === 'collaborator' ? `<button type="button" onclick="requestConfig('${device.device_id}')">Refresh</button>` : ''}
+                </div>
+                <div class="message-area">${renderMessage(device.message)}</div>
+            </form>
+        </details>
     `;
 }
 let initialLoadDone = false;
@@ -189,10 +257,30 @@ function renderState(state) {
             const snapshotTime = device.config?.updated_at || 0;
             const saveTime = lastSaveAt.get(device.device_id) || 0;
             const isPending = saveTime > snapshotTime && (Date.now() / 1000 - saveTime < 8);
+            if (!isPending && snapshotTime >= saveTime) {
+                draftConfigValues.delete(device.device_id);
+            }
 
             const hasFocus = configCell.contains(document.activeElement);
             if (!hasFocus && !isPending) {
                 configCell.innerHTML = renderConfigCell(device, state.available_videos || [], state.available_schedules || []);
+                const panel = configCell.querySelector('.config-panel');
+                if (panel) {
+                    panel.addEventListener('toggle', () => {
+                        const panelDeviceId = panel.dataset.deviceId;
+                        if (panel.open) {
+                            openConfigPanels.add(panelDeviceId);
+                        } else {
+                            openConfigPanels.delete(panelDeviceId);
+                        }
+                    });
+                }
+
+                configCell.querySelectorAll('[data-key]').forEach((input) => {
+                    const updateDraft = () => storeDraftValues(device.device_id, configCell);
+                    input.addEventListener('input', updateDraft);
+                    input.addEventListener('change', updateDraft);
+                });
             } else {
                 const messageArea = configCell.querySelector('.message-area');
                 if (messageArea) {
@@ -214,6 +302,20 @@ function renderState(state) {
     }
 }
 
+function storeDraftValues(deviceId, container) {
+    const values = {};
+    container.querySelectorAll('[data-key]').forEach((input) => {
+        if (input.type === 'checkbox') {
+            values[input.dataset.key] = input.checked;
+        } else if (input.type === 'number') {
+            values[input.dataset.key] = input.value === '' ? '' : Number(input.value);
+        } else {
+            values[input.dataset.key] = input.value;
+        }
+    });
+    draftConfigValues.set(deviceId, values);
+}
+
 async function saveConfig(event, deviceId, role) {
     event.preventDefault();
     const form = event.currentTarget;
@@ -227,6 +329,7 @@ async function saveConfig(event, deviceId, role) {
             updates[input.dataset.key] = input.value;
         }
     });
+    draftConfigValues.set(deviceId, updates);
 
     const messageArea = form.querySelector('.message-area');
     if (messageArea) {
@@ -242,6 +345,7 @@ async function loadDefaults(deviceId) {
     if (!confirm('Reset this device to defaults?')) {
         return;
     }
+    draftConfigValues.delete(deviceId);
     await postJson('/api/config/reset', { device_id: deviceId });
     setTimeout(refresh, 500);
 }

@@ -1,8 +1,8 @@
 body {
-    font-family: sans-serif;
+    font-family: "Inter", "Segoe UI", sans-serif;
     margin: 20px;
-    background: #fff;
-    color: #000;
+    background: #f6f2e8;
+    color: #1d1b19;
 }
 
 main {
@@ -23,20 +23,31 @@ main {
     margin-bottom: 30px;
 }
 
+h1, h2 {
+    color: #2a241d;
+}
+
 video {
     width: 100%;
-    border: 1px solid #000;
+    border: 1px solid #b8ad9a;
+    background: #000;
 }
 
 table {
     width: 100%;
     border-collapse: collapse;
+    background: #fffdf9;
 }
 
 th, td {
-    border: 1px solid #000;
-    padding: 5px;
+    border: 1px solid #d6ccb9;
+    padding: 8px;
     text-align: left;
+    vertical-align: top;
+}
+
+th {
+    background: #efe7d8;
 }
 
 .status {
@@ -46,15 +57,173 @@ th, td {
 
 .row {
     margin: 10px 0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    justify-content: space-between;
+}
+
+.field-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+    min-width: 150px;
+}
+
+input, select, button {
+    font: inherit;
+}
+
+input[type="text"],
+input[type="number"],
+select {
+    flex: 1;
+    min-width: 0;
+    padding: 8px 10px;
+    border: 1px solid #cbbfa9;
+    border-radius: 8px;
+    background: #fff;
+    color: #1d1b19;
+}
+
+input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+}
+
+button {
+    padding: 8px 12px;
+    border: 1px solid #a88e61;
+    border-radius: 999px;
+    background: #d9c39b;
+    color: #2a241d;
+    cursor: pointer;
+}
+
+button:hover {
+    background: #e5cfaa;
+}
+
+.actions-row {
+    justify-content: flex-start;
+}
+
+.config-panel {
+    border: 1px solid #d6ccb9;
+    border-radius: 12px;
+    background: #fffcf6;
+    overflow: visible;
+}
+
+.config-panel summary {
+    list-style: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 12px;
+    font-weight: 700;
+    color: #2a241d;
+}
+
+.config-panel summary::-webkit-details-marker {
+    display: none;
+}
+
+.config-panel summary::after {
+    content: "+";
+    font-size: 18px;
+    line-height: 1;
+}
+
+.config-panel[open] summary::after {
+    content: "-";
+}
+
+.config-panel form {
+    padding: 0 12px 12px;
+}
+
+.config-meta {
+    color: #7a6a55;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.tooltip {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    flex: 0 0 auto;
+    outline: none;
+}
+
+.tooltip-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #2f6fed;
+    color: #fff;
+    font-size: 12px;
+    font-weight: 700;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+}
+
+.tooltip-bubble {
+    position: absolute;
+    left: calc(100% + 10px);
+    top: 50%;
+    transform: translateY(-50%);
+    min-width: 220px;
+    max-width: 320px;
+    padding: 8px 10px;
+    border-radius: 10px;
+    background: #2a241d;
+    color: #fffdf8;
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1.35;
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 120ms ease;
+    z-index: 20;
+}
+
+.tooltip:hover .tooltip-bubble,
+.tooltip:focus-within .tooltip-bubble {
+    opacity: 1;
 }
 
 .message {
     font-size: 12px;
     margin: 5px 0;
+    padding: 6px 8px;
+    border-radius: 8px;
+    display: inline-block;
 }
 
 .message.error {
-    color: red;
+    color: #7b1f1f;
+    background: #f7d8d8;
+}
+
+.message.ok {
+    color: #215a25;
+    background: #dff1df;
+}
+
+.message.info {
+    color: #1f4f7b;
+    background: #ddecf7;
 }
 
 @media (max-width: 800px) {
@@ -63,5 +232,17 @@ th, td {
     }
     .left-pane, .right-pane {
         width: 100%;
+    }
+    .row {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .field-label {
+        min-width: 0;
+    }
+    .tooltip-bubble {
+        left: 0;
+        top: calc(100% + 8px);
+        transform: none;
     }
 }
