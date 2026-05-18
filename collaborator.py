@@ -336,25 +336,26 @@ class CollaboratorPi:
         current_playing_name = Path(self.video_path).name if self.video_path else None
         new_video_name = Path(local_video_path).name
 
-        if self.system_state.is_running and current_playing_name == new_video_name:
-            # Already playing same content.
-            # Just reset sync state to force a fresh 'instant lock' on the next sync packet.
-            log_info("Start command received while running; resetting sync state...", component="collaborator")
-            self.startup_sync_count = 0
-            self.deviation_samples.clear()
-            
-            # Update sync parameters even if already running
+        if current_playing_name == new_video_name:
             sync_params = msg.get("sync_params", {})
             if sync_params:
                 self._update_sync_params(sync_params)
+
+            if self.system_state.is_running:
+                # Already playing the same content.
+                # Reset sync state to force a fresh 'instant lock' on the next sync packet.
+                log_info("Start command received while running; resetting sync state...", component="collaborator")
+                self.startup_sync_count = 0
+                self.deviation_samples.clear()
+                return
+
+            log_info(f"Start command received for already-loaded {leader_file}; starting playback", component="collaborator")
+            self.start_playback()
             return
 
         log_info(f"Start command received for {leader_file}", component="collaborator")
-        
+
         # If we are here, we need to load a new file (or start for the first time)
-        self.video_path = local_video_path
-        self.video_player.load(self.video_path)
-        log_info(f"Collaborator Loading: {os.path.abspath(self.video_path)}", component="collaborator")
         if self.system_state.is_running:
             self.stop_playback()
 
@@ -368,12 +369,14 @@ class CollaboratorPi:
         if sync_params:
             self._update_sync_params(sync_params)
 
-        self.video_path = local_video
-        if self.video_path:
-            self.video_player.load(self.video_path)
-            self.start_playback()
-        else:
-            log_error("No video file found!", component="collaborator")
+        self.video_path = local_video_path
+        if not self.video_player.load(self.video_path):
+            log_error(f"Failed to load video file: {self.video_path}", component="collaborator")
+            self.video_path = None
+            return
+
+        log_info(f"Collaborator Loading: {os.path.abspath(self.video_path)}", component="collaborator")
+        self.start_playback()
 
     def _update_sync_params(self, params: dict) -> None:
         """Update sync parameters from message"""
