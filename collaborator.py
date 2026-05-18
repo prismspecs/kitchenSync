@@ -328,15 +328,11 @@ class CollaboratorPi:
             log_error("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!", component="collaborator")
         
         if self.system_state.is_running and local_video == self.video_path:
-            # Already playing same content: FORCE a fresh sync lock
-            log_info("Start command received while running; forcing re-sync...", component="collaborator")
+            # Already playing same content.
+            # Just reset sync state to force a fresh 'instant lock' on the next sync packet.
+            log_info("Start command received while running; resetting sync state...", component="collaborator")
             self.startup_sync_count = 0
             self.deviation_samples.clear()
-            
-            # If we already have a leader time, snap to it immediately
-            leader_time = self.system_state.current_time
-            if leader_time > 0:
-                self.video_player.seek(leader_time, accurate=False)
             return
 
         log_info(f"Start command received for {leader_file}", component="collaborator")

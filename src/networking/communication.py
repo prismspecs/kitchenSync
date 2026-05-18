@@ -237,15 +237,16 @@ class SyncReceiver:
                         self.last_sync_time = received_at
                         leader_time = msg.get("time", 0)
                         leader_id = msg.get("leader_id", "unknown")
+                        sent_at = msg.get("sent_at")
 
                         if self.sync_callback:
                             try:
                                 # Execute callback with high precision timestamp
-                                # Note: the callback SHOULD NOT block this thread.
                                 try:
-                                    self.sync_callback(leader_time, received_at, leader_id)
+                                    self.sync_callback(leader_time, received_at, leader_id, sent_at)
                                 except TypeError:
-                                    self.sync_callback(leader_time, received_at)
+                                    # Fallback for older handlers
+                                    self.sync_callback(leader_time, received_at, leader_id)
                                         
                                 if packets_drained > 5:
                                     log_info(

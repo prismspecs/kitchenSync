@@ -400,6 +400,22 @@ class ConfigManager:
 
         return None
 
+    def set_param(self, key: str, value: Any) -> None:
+        """Set a configuration parameter live."""
+        # Find which section this key belongs to
+        section = "DEFAULT"
+        for field in EDITABLE_CONFIG_FIELDS["leader"]:
+            if field["key"] == key:
+                section = field["section"]
+                break
+        
+        if section == "DEFAULT":
+            self.config.defaults()[key] = self._stringify_config_value(value)
+        else:
+            if section not in self.config:
+                self.config[section] = {}
+            self.config[section][key] = self._stringify_config_value(value)
+
     @staticmethod
     def _stringify_config_value(value: Any) -> str:
         if isinstance(value, bool):

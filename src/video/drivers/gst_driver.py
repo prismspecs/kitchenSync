@@ -221,20 +221,14 @@ class GstDriver(VideoDriver):
         if os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"):
             # build a GL bin with native window size control
             try:
-                # videoconvert and videoscale are added to ensure size negotiation is flexible
-                bin_desc = "glupload ! glcolorconvert ! glimagesink name=sink"
+                # Use videoscale + capsfilter to FORCE the window size at the GStreamer level
+                bin_desc = (
+                    "videoconvert ! videoscale ! "
+                    "capsfilter caps=\"video/x-raw, width=1280, height=720\" ! "
+                    "glupload ! glcolorconvert ! glimagesink name=sink"
+                )
                 sink_bin = Gst.parse_bin_from_description(bin_desc, True)
                 if sink_bin:
-                    sink_elem = sink_bin.get_by_name("sink")
-                    if sink_elem:
-                        # Attempt to set sane default window size directly on the element
-                        # Many gl sinks support these properties
-                        try:
-                            sink_elem.set_property("window-width", 1280)
-                            sink_elem.set_property("window-height", 720)
-                        except Exception:
-                            pass
-                    
                     self._start_window_management_task()
                     return sink_bin, "gl-optimized-bin"
             except Exception as e:

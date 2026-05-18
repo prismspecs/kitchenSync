@@ -82,6 +82,7 @@ class LeaderPi:
         self.command_manager.register_handler("remote_start", lambda msg, addr: self.start_system())
         self.command_manager.register_handler("remote_stop", lambda msg, addr: self.stop_system())
         self.command_manager.register_handler("remote_seek", lambda msg, addr: self.seek_video(str(msg.get("value", 0))))
+        self.command_manager.register_handler("remote_set", lambda msg, addr: self.set_sync_param(msg.get("param"), msg.get("value")))
 
         self.command_manager.start_listening()
 
@@ -215,18 +216,21 @@ class LeaderPi:
             self.midi_manager.cleanup()
         log_info("Cleanup completed", component="leader")
 
-    def set_sync_param(self, param: str, value: str) -> None:
+    def set_sync_param(self, param: str, value: Any) -> None:
         """Set a sync parameter live"""
         try:
-            val = float(value)
             if param == "tick_interval":
+                val = float(value)
                 self.sync_broadcaster.tick_interval = val
-                print(f"Sync interval set to {val}s")
+                log_info(f"Sync interval set to {val}s", component="leader")
             elif hasattr(self.config, param):
-                setattr(self.config, param, val)
-                print(f"Parameter {param} set to {val}")
-        except ValueError:
-            print(f"Invalid value: {value}. Must be a number.")
+                # ConfigManager handles internal type conversion for getboolean/getfloat
+                # But here we are setting it directly on the config object if possible,
+                # or just updating the internal config parser.
+                self.config.set_param(param, value)
+                log_info(f"Parameter {param} set to {value}", component="leader")
+        except Exception as e:
+            log_error(f"Failed to set parameter {param}: {e}", component="leader")
 
 
 def main():
