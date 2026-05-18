@@ -303,13 +303,14 @@ function renderState(state) {
             }
 
             const cells = row.cells;
-            const latencyText = device.latency_ms != null ? `RTT ${device.latency_ms}ms` : null;
+            const latencyText = device.latency_ms != null ? `Ping: ${device.latency_ms} ms` : 'Ping: n/a';
             const statusText = `${device.status} (${device.online ? 'Online' : 'Offline'})`;
             cells[0].innerHTML = `
                 <div class="device-summary-primary">${escapeHtml(device.label)}</div>
                 <div class="device-summary-line device-summary-status ${getStatusClass(device)}">${escapeHtml(statusText)}</div>
                 <div class="device-summary-line device-summary-role">${escapeHtml(device.role)}</div>
-                <div class="device-summary-line device-summary-ip">${escapeHtml(device.ip)}${latencyText ? ` <span class="device-summary-latency">${escapeHtml(latencyText)}</span>` : ''}</div>
+                <div class="device-summary-line device-summary-ip">${escapeHtml(device.ip)}</div>
+                <div class="device-summary-line device-summary-latency">${escapeHtml(latencyText)}</div>
             `;
 
             const configCell = cells[1];

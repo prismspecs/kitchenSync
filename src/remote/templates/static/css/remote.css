@@ -73,7 +73,7 @@ th, td {
 }
 
 .device-summary-latency {
-    margin-left: 8px;
+    color: #555;
 }
 
 .status-ready {
