@@ -6,6 +6,7 @@ Loads the appropriate driver backend based on configuration.
 
 from typing import Optional
 from video.driver import VideoDriver
+from video.file_manager import VideoFileManager
 from core.logger import log_info, log_error, log_warning
 
 def get_video_driver(driver_name: str, debug_mode: bool = False, enable_audio: bool = True) -> Optional[VideoDriver]:
@@ -39,3 +40,5 @@ def get_video_driver(driver_name: str, debug_mode: bool = False, enable_audio: b
     except Exception as e:
         log_error(f"Video: Error initializing driver '{driver_name}': {e}")
         return None
+
+__all__ = ["get_video_driver", "VideoFileManager", "VideoDriver"]
