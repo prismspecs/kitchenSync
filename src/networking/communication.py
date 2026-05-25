@@ -494,6 +494,14 @@ class CommandManager:
                 self._record_rtt_sample(device_id, time.monotonic() - sent_at)
             return
 
+        # If a new ID appears from an IP that we already know, 
+        # it's likely a device that restarted and changed its ID.
+        # Prune the old ID from that IP to avoid duplicate 'start' commands.
+        for old_id, info in list(self.collaborators.items()):
+            if info["ip"] == addr[0] and old_id != device_id:
+                log_info(f"Net: Device at {addr[0]} changed ID from {old_id} to {device_id}. Pruning old entry.", component="network")
+                del self.collaborators[old_id]
+
         if msg_type == "register":
             self.collaborators[device_id] = {
                 "ip": addr[0],
@@ -501,7 +509,6 @@ class CommandManager:
                 "status": msg.get("status", "unknown"),
                 "video_file": msg.get("video_file", ""),
             }
-            # print(f"Registered Pi: {device_id} at {addr[0]}")
 
         elif msg_type == "heartbeat":
             self.collaborators[device_id] = {
@@ -515,11 +522,16 @@ class CommandManager:
             }
 
     def get_collaborators(self) -> Dict[str, Dict]:
-        """Get current collaborator status"""
+        """Get current collaborator status and prune long-dead ones"""
         current_time = time.time()
-        for device_id, info in self.collaborators.items():
+        for device_id, info in list(self.collaborators.items()):
             last_seen = current_time - info["last_seen"]
             info["online"] = last_seen < 15
+            
+            # Prune if gone for more than 5 minutes
+            if last_seen > 300:
+                del self.collaborators[device_id]
+                
         return self.collaborators
 
 

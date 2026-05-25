@@ -174,10 +174,14 @@ class ConfigManager:
 
     def _create_default_config(self, role: str = "bystander", video_file: Optional[str] = None) -> None:
         """Create default configuration"""
+        # Try to get stable hardware ID first
+        hwid = self._get_hardware_id()
+        device_id = f"pi-{hwid}" if hwid else f"pi-{int(os.urandom(2).hex(), 16):03d}"
+
         self.config["KITCHENSYNC"] = {
             "role": role,
             "debug": "false",
-            "device_id": f"pi-{int(os.urandom(2).hex(), 16):03d}",
+            "device_id": device_id,
             "video_file": video_file or "video.mp4",
             "video_driver": "gst",
             "enable_system_logging": "false",
