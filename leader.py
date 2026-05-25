@@ -240,6 +240,35 @@ class LeaderPi:
         except Exception as e:
             log_error(f"Failed to set parameter {param}: {e}", component="leader")
 
+    def _handle_file_list_request(self, msg: dict, addr: tuple) -> None:
+        """Reply with the local media list."""
+        device_id = msg.get("target_device_id")
+        if device_id and device_id != "leader-pi":
+            return
+
+        response = {
+            "type": "file_list_response",
+            "device_id": "leader-pi",
+            "media": self.video_manager.list_videos(),
+        }
+        self.command_manager.send_command(response, target_pi=None) # Broadcast back or send to addr?
+        # CommandManager.send_command currently broadcasts if target_pi not in collaborators.
+        # But addr is where it came from.
+        # I'll use a more direct send if I can.
+        
+    def _handle_file_delete_request(self, msg: dict, addr: tuple) -> None:
+        """Delete a local file and report updated list."""
+        device_id = msg.get("target_device_id")
+        if device_id and device_id != "leader-pi":
+            return
+
+        filename = msg.get("filename")
+        if filename:
+            self.video_manager.delete_video(filename)
+
+        # Always reply with updated list
+        self._handle_file_list_request(msg, addr)
+
 
 def main():
     parser = argparse.ArgumentParser(description="KitchenSync Leader Node")

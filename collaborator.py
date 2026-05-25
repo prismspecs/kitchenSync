@@ -366,6 +366,57 @@ class CollaboratorPi:
 
         self.command_listener.send_message(response, host=addr[0])
 
+    def _handle_file_list_request(self, msg: dict, addr: tuple) -> None:
+        """Reply with the local media list."""
+        if not self._message_targets_this_device(msg):
+            return
+
+        response = {
+            "type": "file_list_response",
+            "device_id": self.config.device_id,
+            "media": self.video_manager.list_videos(),
+        }
+        self.command_listener.send_message(response, host=addr[0])
+
+    def _handle_file_delete_request(self, msg: dict, addr: tuple) -> None:
+        """Delete a local file and report updated list."""
+        if not self._message_targets_this_device(msg):
+            return
+
+        filename = msg.get("filename")
+        if filename:
+            self.video_manager.delete_video(filename)
+
+        # Always reply with updated list
+        self._handle_file_list_request(msg, addr)
+
+    def _handle_file_upload_notify(self, msg: dict, addr: tuple) -> None:
+        """Download a file from the provided URL."""
+        if not self._message_targets_this_device(msg):
+            return
+
+        filename = msg.get("filename")
+        source_url = msg.get("source_url")
+        
+        if not filename or not source_url:
+            return
+
+        def download_task():
+            try:
+                target_dir = self.video_manager.get_primary_video_dir()
+                target_path = os.path.join(target_dir, filename)
+                log_info(f"Downloading {filename} from {source_url} to {target_path}", component="collaborator")
+                
+                urllib.request.urlretrieve(source_url, target_path)
+                
+                log_info(f"Download complete: {filename}", component="collaborator")
+                # Notify leader of updated list
+                self._handle_file_list_request(msg, addr)
+            except Exception as e:
+                log_error(f"Failed to download {filename}: {e}", component="collaborator")
+
+        threading.Thread(target=download_task, daemon=True).start()
+
     def _handle_start_command(self, msg: dict) -> None:
         """Initialize playback session from leader start command"""
         leader_file = msg.get("video_file")

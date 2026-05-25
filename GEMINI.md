@@ -36,9 +36,14 @@
 - **Style**: PEP 8ish. Robust error handling for network/hardware disconnects.
 - **Logging**: Extensive logging for headless debugging; however, minimize logging in performance-critical loops.
 - **Sync Model**: Leader is the master clock. Collaborators drift-correct using speed adjustments (GStreamer) rather than disruptive seeks.
+- **Media Management**: Distributed system for managing content via Web UI.
+    - **Leader**: Acts as the central hub and file server for media.
+    - **Collaborators**: Can report local media, delete files, and pull updates from the Leader via HTTP.
+    - **Uploads**: Support for direct-to-device uploads (proxied through Leader).
 
 ## 5. Current Status
 - **Operational:** Basic playback and sync using VLC; USB auto-mounting; MIDI output.
+- **Media Management**: Fully integrated Web UI for file upload, deletion, and cluster-wide synchronization.
 - **Critical Issues:** VLC sync is "stop-and-wait" and causes black screens.
 - **Roadmap:**
     1. **GStreamer Migration:** Replace VLC for rate-based sync.

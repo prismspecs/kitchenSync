@@ -3,7 +3,7 @@
 <head>
     <title>KitchenSync Remote</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link rel="stylesheet" href="/static/css/remote.css">
+    <link rel="stylesheet" href="/static/css/remote.css?v=3">
 </head>
 <body>
     <h1>KitchenSync Remote</h1>
@@ -22,6 +22,12 @@
                     <button onclick="assignVideoToAllCollaborators()">Assign video to all</button>
                 </div>
                 <div class="status" id="clusterStatus">Loading...</div>
+                <div class="row upload-row">
+                    <label>Upload to Leader</label>
+                    <input type="file" id="mediaUploadInput">
+                    <button onclick="uploadMedia()">Upload</button>
+                    <div id="uploadStatus"></div>
+                </div>
                 <video id="preview" controls muted playsinline loop></video>
             </div>
         </div>
@@ -30,10 +36,16 @@
             <div class="section">
                 <h2>Device Config</h2>
                 <table>
+                    <colgroup>
+                        <col class="device-summary-cell">
+                        <col class="config-cell">
+                        <col class="media-cell">
+                    </colgroup>
                     <thead>
                         <tr>
-                            <th>Device Summary</th>
-                            <th>Config</th>
+                            <th class="device-summary-cell">Device Summary</th>
+                            <th class="config-cell">Config</th>
+                            <th class="media-cell">Media</th>
                         </tr>
                     </thead>
                     <tbody id="deviceRows"></tbody>
@@ -45,6 +57,6 @@
     <datalist id="videoSuggestions"></datalist>
     <datalist id="scheduleSuggestions"></datalist>
 
-    <script src="/static/js/remote.js?v=8"></script>
+    <script src="/static/js/remote.js?v=9"></script>
 </body>
 </html>

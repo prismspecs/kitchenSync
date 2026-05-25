@@ -42,13 +42,94 @@ th, td {
 }
 
 .device-summary-cell {
-    width: 32%;
-    min-width: 200px;
+    width: 18% !important;
+    min-width: 140px !important;
 }
 
 .config-cell {
-    width: 68%;
-    min-width: 320px;
+    width: 47% !important;
+    min-width: 250px !important;
+}
+
+.media-cell {
+    width: 35% !important;
+    min-width: 200px !important;
+}
+
+.media-panel .btn-small:first-child {
+    margin-bottom: 10px;
+}
+
+.media-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 5px;
+    padding-bottom: 5px;
+    border-bottom: 1px dotted #ccc;
+    font-size: 13px;
+}
+
+.media-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.media-meta {
+    font-size: 11px;
+    color: #666;
+}
+
+.btn-small {
+    font-size: 11px;
+    padding: 1px 4px;
+}
+
+.btn-danger {
+    color: #fff;
+    background: #a33;
+    border-color: #722;
+}
+
+.sync-section {
+    margin-top: 15px;
+    padding-top: 10px;
+    border-top: 1px solid #000;
+}
+
+.sync-section h4 {
+    margin: 0 0 5px 0;
+    font-size: 13px;
+}
+
+.upload-row {
+    background: #f0f0f0;
+    padding: 10px;
+    border: 1px solid #000;
+}
+
+#uploadStatus {
+    font-size: 12px;
+    margin-left: 10px;
+}
+
+.file-input-small {
+    font-size: 11px;
+    width: 120px;
+    flex: 1;
+}
+
+.select-small {
+    font-size: 11px;
+    padding: 1px;
+    flex: 1;
+}
+
+.btn-group {
+    gap: 4px;
 }
 
 .device-summary-primary {
@@ -265,7 +346,8 @@ select {
         table-layout: auto;
     }
     .device-summary-cell,
-    .config-cell {
+    .config-cell,
+    .media-cell {
         width: auto;
         min-width: 0;
     }

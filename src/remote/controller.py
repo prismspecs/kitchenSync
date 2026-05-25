@@ -7,15 +7,17 @@ import time
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, List
 from urllib.parse import parse_qs, urlparse
+import socket
 
 # Add parent directory to path to allow importing from src
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 from config.manager import ConfigManager
-from core.logger import enable_system_logging, log_info
+from core.logger import enable_system_logging, log_info, log_warning
 from networking.communication import CommandManager, SyncBroadcaster
+from video.file_manager import VideoFileManager
 
 
 @dataclass
@@ -32,12 +34,16 @@ LOCAL_LEADER_ID = "remote-leader"
 
 cluster_state = ClusterState()
 config = ConfigManager("leader_config.ini")
+video_manager = VideoFileManager(config.video_file, config.usb_mount_point)
 command_manager = CommandManager()
 sync_broadcaster = SyncBroadcaster()
 sync_broadcaster.leader_id = LOCAL_LEADER_ID
 
 config_snapshots: Dict[str, Dict[str, Any]] = {}
 config_messages: Dict[str, Dict[str, Any]] = {}
+
+# Media state cache
+media_snapshots: Dict[str, List[Dict[str, Any]]] = {}
 
 
 def compute_latency_compensation(avg_rtt: float, enabled: bool, latency_factor: float) -> float:
@@ -181,6 +187,7 @@ def build_ui_state() -> Dict[str, Any]:
             "latency_ms": round(avg_rtt * 1000, 1) if avg_rtt > 0 else None,
             "config": config_snapshots.get(LOCAL_LEADER_ID),
             "message": config_messages.get(LOCAL_LEADER_ID),
+            "media": media_snapshots.get(LOCAL_LEADER_ID, []),
         }
     ]
 
@@ -210,6 +217,7 @@ def build_ui_state() -> Dict[str, Any]:
                 else None,
                 "config": config_snapshots.get(device_id),
                 "message": config_messages.get(device_id),
+                "media": media_snapshots.get(device_id, []),
             }
         )
 
@@ -228,6 +236,7 @@ def build_ui_state() -> Dict[str, Any]:
         "available_videos": list_available_videos(),
         "available_schedules": list_available_schedules(),
         "devices": devices,
+        "leader_media": video_manager.list_videos(),
     }
 
 
@@ -299,6 +308,73 @@ class RemoteHandler(BaseHTTPRequestHandler):
         except json.JSONDecodeError:
             return {}
 
+    def _handle_upload(self):
+        """Handle multipart/form-data upload"""
+        content_type = self.headers.get("Content-Type", "")
+        if "multipart/form-data" not in content_type:
+            self._send_json({"status": "error", "message": "Expected multipart/form-data"}, status=400)
+            return
+
+        boundary = content_type.split("boundary=")[1].encode()
+        length = int(self.headers.get("Content-Length"))
+        
+        input_data = self.rfile.read(length)
+        parts = input_data.split(b"--" + boundary)
+        
+        file_data = None
+        filename = None
+        
+        for part in parts:
+            if b"Content-Disposition" in part and b"filename=" in part:
+                headers, body = part.split(b"\r\n\r\n", 1)
+                if body.endswith(b"\r\n"):
+                    body = body[:-2]
+                
+                file_data = body
+                
+                for line in headers.decode().split("\r\n"):
+                    if "Content-Disposition" in line and "filename=" in line:
+                        filename = line.split("filename=")[1].strip('"')
+                        break
+        
+        if filename and file_data:
+            target_dir = video_manager.get_primary_video_dir()
+            target_path = os.path.join(target_dir, filename)
+            
+            with open(target_path, "wb") as f:
+                f.write(file_data)
+            
+            log_info(f"Uploaded file saved to: {target_path}", "remote")
+            
+            # If a target device was specified, trigger a sync/download to that device
+            parsed_path = urlparse(self.path)
+            query = parse_qs(parsed_path.query)
+            target_device_id = query.get("target_device_id", [None])[0]
+            
+            if target_device_id and target_device_id != LOCAL_LEADER_ID:
+                log_info(f"Triggering automatic sync for {filename} to {target_device_id}", "remote")
+                
+                s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                try:
+                    s.connect(("8.8.8.8", 80))
+                    leader_ip = s.getsockname()[0]
+                finally:
+                    s.close()
+                    
+                command_manager.send_command(
+                    {
+                        "type": "file_upload_notify",
+                        "filename": filename,
+                        "source_url": f"http://{leader_ip}:8080/api/media/download?filename={filename}",
+                        "target_device_id": target_device_id
+                    },
+                    target_pi=target_device_id
+                )
+
+            self._send_json({"status": "ok", "filename": filename})
+        else:
+            self._send_json({"status": "error", "message": "No file found in request"}, status=400)
+
     def do_GET(self):
         parsed_path = urlparse(self.path)
         path = parsed_path.path
@@ -313,6 +389,9 @@ class RemoteHandler(BaseHTTPRequestHandler):
 
         if path.startswith("/static/"):
             file_path = TEMPLATE_DIR / path.lstrip("/")
+            # Check templates/static (new) and templates/templates/static (possible mistake)
+            # Actually, the templates are in src/remote/templates/
+            # Static is in src/remote/templates/static/
             if file_path.exists() and file_path.is_file():
                 self.send_response(200)
                 if file_path.suffix == ".css":
@@ -328,6 +407,30 @@ class RemoteHandler(BaseHTTPRequestHandler):
 
         if path in ["/state", "/json", "/api/state"]:
             self._send_json(build_ui_state())
+            return
+
+        if path == "/api/media/download":
+            query = parse_qs(parsed_path.query)
+            filename = query.get("filename", [None])[0]
+            if not filename:
+                self.send_error(400, "filename required")
+                return
+            
+            all_videos = video_manager.list_videos()
+            file_path = None
+            for v in all_videos:
+                if v["name"] == filename:
+                    file_path = Path(v["path"])
+                    break
+            
+            if not file_path or not file_path.exists():
+                self.send_error(404, "File not found")
+                return
+                
+            try:
+                self._send_file_range(file_path)
+            except Exception as exc:
+                log_info(f"Download error: {exc}", component="remote")
             return
 
         if path.startswith("/video_file"):
@@ -349,11 +452,89 @@ class RemoteHandler(BaseHTTPRequestHandler):
 
         self.send_error(404)
 
+    def do_DELETE(self):
+        parsed_path = urlparse(self.path)
+        action = parsed_path.path.strip("/")
+        
+        if action == "api/media":
+            query = parse_qs(parsed_path.query)
+            device_id = query.get("device_id", [None])[0]
+            filename = query.get("filename", [None])[0]
+            
+            if not device_id or not filename:
+                self._send_json({"status": "error", "message": "device_id and filename required"}, status=400)
+                return
+                
+            if device_id == LOCAL_LEADER_ID:
+                if video_manager.delete_video(filename):
+                    self._send_json({"status": "ok"})
+                else:
+                    self._send_json({"status": "error", "message": "File not found"}, status=404)
+                return
+            
+            command_manager.send_command(
+                {"type": "file_delete_request", "filename": filename, "target_device_id": device_id},
+                target_pi=device_id
+            )
+            self._send_json({"status": "requested"}, status=202)
+            return
+
+        self.send_error(404)
+
     def do_POST(self):
         parsed_path = urlparse(self.path)
         action = parsed_path.path.strip("/")
         query = parse_qs(parsed_path.query)
+        
+        if action == "api/media/upload":
+            self._handle_upload()
+            return
+
         payload = self._read_json_body()
+
+        if action == "api/media/sync":
+            device_id = payload.get("device_id")
+            filename = payload.get("filename")
+            if not device_id or not filename:
+                self._send_json({"status": "error", "message": "device_id and filename required"}, status=400)
+                return
+            
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            try:
+                s.connect(("8.8.8.8", 80))
+                leader_ip = s.getsockname()[0]
+            finally:
+                s.close()
+                
+            command_manager.send_command(
+                {
+                    "type": "file_upload_notify",
+                    "filename": filename,
+                    "source_url": f"http://{leader_ip}:8080/api/media/download?filename={filename}",
+                    "target_device_id": device_id
+                },
+                target_pi=device_id
+            )
+            self._send_json({"status": "requested"}, status=202)
+            return
+
+        if action == "api/media/request":
+            device_id = payload.get("device_id")
+            if not device_id:
+                self._send_json({"status": "error", "message": "device_id required"}, status=400)
+                return
+            
+            if device_id == LOCAL_LEADER_ID:
+                media_snapshots[LOCAL_LEADER_ID] = video_manager.list_videos()
+                self._send_json({"status": "ok", "media": media_snapshots[LOCAL_LEADER_ID]})
+                return
+                
+            command_manager.send_command(
+                {"type": "file_list_request", "target_device_id": device_id},
+                target_pi=device_id
+            )
+            self._send_json({"status": "requested"}, status=202)
+            return
 
         if action in {"play", "api/play"}:
             cluster_state.is_playing = True
@@ -393,7 +574,6 @@ class RemoteHandler(BaseHTTPRequestHandler):
         if action == "api/seek":
             new_pos = payload.get("value", 0)
             cluster_state.video_pos = float(new_pos)
-            # Adjust master start time so wall-clock sync remains accurate
             cluster_state.master_start_time = time.time() - cluster_state.video_pos
             
             command_manager.send_command({"type": "remote_seek", "value": cluster_state.video_pos})
@@ -448,7 +628,6 @@ class RemoteHandler(BaseHTTPRequestHandler):
                 config.clean_and_save_config("leader_config.ini", filtered_updates, role="leader")
                 update_runtime_from_config()
                 
-                # FORCE a fresh snapshot to reflect new values immediately
                 config_snapshots[LOCAL_LEADER_ID] = build_config_snapshot(LOCAL_LEADER_ID, "leader", config)
                 
                 config_messages[LOCAL_LEADER_ID] = {
@@ -515,6 +694,13 @@ def start_remote():
     command_manager.register_handler(
         "config_update_result", lambda msg, addr: store_config_message(msg)
     )
+    
+    def store_media_message(payload):
+        device_id = payload.get("device_id")
+        if device_id:
+            media_snapshots[device_id] = payload.get("media", [])
+            
+    command_manager.register_handler("file_list_response", lambda msg, addr: store_media_message(msg))
 
     sync_broadcaster.setup_socket()
 
@@ -536,14 +722,14 @@ def start_remote():
                         "start_time": cluster_state.master_start_time,
                         "schedule": [],
                         "debug_mode": config.debug_mode,
-                "sync_params": {
-                    "max_drift": config.max_drift,
-                    "min_drift": config.min_drift,
-                    "kp": config.kp,
-                    "min_rate": config.min_rate,
-                    "max_rate": config.max_rate,
-                    "max_samples": config.max_samples,
-                },
+                        "sync_params": {
+                            "max_drift": config.max_drift,
+                            "min_drift": config.min_drift,
+                            "kp": config.kp,
+                            "min_rate": config.min_rate,
+                            "max_rate": config.max_rate,
+                            "max_samples": config.max_samples,
+                        },
                     }
                     command_manager.send_command(start_cmd)
                     last_broadcast = time.time()

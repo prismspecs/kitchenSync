@@ -180,6 +180,79 @@ class VideoFileManager:
 
         return list(set(video_files))  # Remove duplicates
 
+    def get_primary_video_dir(self) -> str:
+        """Get the primary directory where videos should be stored/managed"""
+        if self.usb_mount_point and os.path.exists(self.usb_mount_point):
+            return self.usb_mount_point
+        
+        # Fallback to first existing local source
+        for source in self.fallback_sources:
+            if os.path.exists(source):
+                return os.path.abspath(source)
+        
+        # Default to ./videos/
+        os.makedirs("./videos", exist_ok=True)
+        return os.path.abspath("./videos")
+
+    def list_videos(self) -> List[dict]:
+        """List all available video files with metadata"""
+        video_files = []
+        seen_names = set()
+
+        # Check USB drives
+        for mount_point in self._get_usb_mount_points():
+            for vid_path in self._get_videos_in_directory(mount_point):
+                name = os.path.basename(vid_path)
+                if name not in seen_names:
+                    stats = os.stat(vid_path)
+                    video_files.append({
+                        "name": name,
+                        "path": vid_path,
+                        "size": stats.st_size,
+                        "mtime": stats.st_mtime,
+                        "location": "usb"
+                    })
+                    seen_names.add(name)
+
+        # Check local directories
+        for source in self.fallback_sources:
+            if os.path.exists(source):
+                for vid_path in self._get_videos_in_directory(source):
+                    name = os.path.basename(vid_path)
+                    if name not in seen_names:
+                        stats = os.stat(vid_path)
+                        video_files.append({
+                            "name": name,
+                            "path": os.path.abspath(vid_path),
+                            "size": stats.st_size,
+                            "mtime": stats.st_mtime,
+                            "location": "local"
+                        })
+                        seen_names.add(name)
+
+        return sorted(video_files, key=lambda x: x["name"])
+
+    def delete_video(self, filename: str) -> bool:
+        """Delete a video file by name from any discovered location"""
+        deleted = False
+        # Search all possible locations
+        locations = self._get_usb_mount_points() + self.fallback_sources
+        
+        for loc in locations:
+            if not os.path.exists(loc):
+                continue
+            
+            target = os.path.join(loc, filename)
+            if os.path.exists(target):
+                try:
+                    os.remove(target)
+                    log_info(f"Deleted video: {target}", "video")
+                    deleted = True
+                except Exception as e:
+                    log_error(f"Failed to delete {target}: {e}", "video")
+        
+        return deleted
+
     def _get_usb_mount_points(self) -> List[str]:
         """Get all USB mount points"""
         mount_points = []

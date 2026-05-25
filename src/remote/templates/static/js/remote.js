@@ -16,6 +16,68 @@ async function postJson(path, payload) {
     return response.json();
 }
 
+async function uploadMedia(deviceId = null) {
+    const inputId = deviceId ? `upload-input-${deviceId}` : 'mediaUploadInput';
+    const statusId = deviceId ? `upload-status-${deviceId}` : 'uploadStatus';
+    
+    const input = document.getElementById(inputId);
+    const status = document.getElementById(statusId);
+    if (!input || !input.files.length) return;
+
+    const file = input.files[0];
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    let url = '/api/media/upload';
+    if (deviceId && deviceId !== 'remote-leader') {
+        url += `?target_device_id=${encodeURIComponent(deviceId)}`;
+    }
+
+    status.textContent = 'Uploading...';
+    try {
+        const response = await fetch(url, {
+            method: 'POST',
+            body: formData
+        });
+        const result = await response.json();
+        if (result.status === 'ok') {
+            status.textContent = deviceId ? 'Transferring...' : 'Uploaded: ' + result.filename;
+            input.value = '';
+            setTimeout(refresh, deviceId ? 2000 : 500);
+        } else {
+            status.textContent = 'Error: ' + (result.message || 'Upload failed');
+        }
+    } catch (err) {
+        status.textContent = 'Error: ' + err.message;
+    }
+}
+
+async function deleteMedia(deviceId, filename) {
+    if (!confirm(`Delete ${filename} from ${deviceId}?`)) return;
+    
+    const response = await fetch(`/api/media?device_id=${encodeURIComponent(deviceId)}&filename=${encodeURIComponent(filename)}`, {
+        method: 'DELETE'
+    });
+    
+    if (response.ok) {
+        setTimeout(refresh, 500);
+    } else {
+        const result = await response.json();
+        alert('Delete failed: ' + (result.message || 'Unknown error'));
+    }
+}
+
+async function syncMedia(deviceId, filename) {
+    const response = await postJson('/api/media/sync', { device_id: deviceId, filename: filename });
+    if (response && response.status === 'requested') {
+        alert('Sync requested. This may take some time for large files.');
+    }
+}
+
+async function requestMedia(deviceId) {
+    await postJson('/api/media/request', { device_id: deviceId });
+}
+
 async function playCluster() {
     await fetch('/api/play', { method: 'POST' });
     document.getElementById('preview').play().catch(() => {});
@@ -230,8 +292,89 @@ function renderConfigCell(device, videoOptions, scheduleOptions) {
         </details>
     `;
 }
+
 let initialLoadDone = false;
 let currentPreviewVideo = null;
+
+function renderMediaCell(device, leaderMedia) {
+    const media = device.media || [];
+    const isLeader = device.role === 'leader';
+    
+    if (!device.online && !isLeader) {
+        return '<div class="message info">Device offline</div>';
+    }
+
+    if (!isLeader && !device.media && !requestedConfigs.has(device.device_id + '-media')) {
+        requestedConfigs.add(device.device_id + '-media');
+        requestMedia(device.device_id);
+    }
+
+    const mediaRows = media.map(m => {
+        const sizeMb = (m.size / (1024 * 1024)).toFixed(1);
+        return `
+            <div class="media-item">
+                <span class="media-name" title="${escapeHtml(m.path)}">${escapeHtml(m.name)}</span>
+                <span class="media-meta">${sizeMb} MB</span>
+                <button class="btn-small btn-danger" onclick="deleteMedia('${device.device_id}', '${escapeHtml(m.name)}')">Delete</button>
+            </div>
+        `;
+    }).join('');
+
+    const refreshBtn = `<button class="btn-small" onclick="requestMedia('${device.device_id}')" style="margin-top: 8px;">Refresh List</button>`;
+    let syncSection = '';
+    
+    if (!isLeader) {
+        const deviceFileNames = media.map(m => m.name);
+        const missingFiles = (leaderMedia || []).filter(m => !deviceFileNames.includes(m.name));
+        
+        const uploadSection = `
+            <div class="sync-section">
+                <h4>Upload to device</h4>
+                <div class="row btn-group">
+                    <input type="file" id="upload-input-${device.device_id}" class="file-input-small">
+                    <button class="btn-small" onclick="uploadMedia('${device.device_id}')">Upload</button>
+                </div>
+                <div id="upload-status-${device.device_id}" class="message info"></div>
+            </div>
+        `;
+
+        if (missingFiles.length > 0) {
+            const options = missingFiles.map(m => `
+                <option value="${escapeHtml(m.name)}">${escapeHtml(m.name)} (${(m.size / (1024 * 1024)).toFixed(1)} MB)</option>
+            `).join('');
+            
+            syncSection = `
+                <div class="sync-section">
+                    <h4>Download video from Leader</h4>
+                    <div class="row btn-group">
+                        <select id="sync-select-${device.device_id}" class="select-small">${options}</select>
+                        <button class="btn-small" onclick="syncMedia('${device.device_id}', document.getElementById('sync-select-${device.device_id}').value)">Pull</button>
+                    </div>
+                    ${refreshBtn}
+                </div>
+                ${uploadSection}
+            `;
+        } else {
+            // No download section, but still need refresh button above upload section
+            syncSection = `
+                <div style="padding: 10px 0 0 0;">${refreshBtn}</div>
+                ${uploadSection}
+            `;
+        }
+    } else {
+        // Leader only needs refresh button
+        syncSection = `<div style="padding-top: 10px;">${refreshBtn}</div>`;
+    }
+
+    return `
+        <div class="media-panel">
+            <div class="media-list">
+                ${mediaRows || '<div class="message info">No USB detected</div>'}
+            </div>
+            ${syncSection}
+        </div>
+    `;
+}
 
 function renderState(state) {
     latestState = state;
@@ -298,12 +441,13 @@ function renderState(state) {
                 rows.appendChild(row);
             }
 
-            if (row.cells.length !== 2) {
-                row.innerHTML = '<td class="device-summary-cell"></td><td class="config-cell"></td>';
+            if (row.cells.length !== 3) {
+                row.innerHTML = '<td class="device-summary-cell"></td><td class="config-cell"></td><td class="media-cell"></td>';
             }
 
             const cells = row.cells;
-            const latencyText = device.latency_ms != null ? `Ping: ${device.latency_ms} ms` : 'Ping: n/a';
+            const latencyLabel = device.role === 'leader' ? 'Cluster RTT avg' : 'Ping';
+            const latencyText = device.latency_ms != null ? `${latencyLabel}: ${device.latency_ms} ms` : `${latencyLabel}: n/a`;
             const statusText = `${device.status} (${device.online ? 'Online' : 'Offline'})`;
             cells[0].innerHTML = `
                 <div class="device-summary-primary">${escapeHtml(device.label)}</div>
@@ -351,6 +495,11 @@ function renderState(state) {
                         messageArea.innerHTML = renderMessage(device.message);
                     }
                 }
+            }
+
+            const mediaCell = cells[2];
+            if (!mediaCell.contains(document.activeElement)) {
+                mediaCell.innerHTML = renderMediaCell(device, state.leader_media);
             }
         });
 
