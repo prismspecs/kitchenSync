@@ -340,6 +340,16 @@ class CollaboratorPi:
 
     def _handle_start_command(self, msg: dict) -> None:
         leader_file = msg.get("video_file")
+        leader_id = msg.get("leader_id", "unknown")
+        start_time = msg.get("start_time", 0.0)
+        
+        # Identity session for deduplication
+        # If we are already running the SAME session (same leader, file, and base time), ignore.
+        session_key = (leader_id, leader_file, start_time)
+        if self.system_state.is_running and self.active_session_key == session_key:
+            # We are already in this session, do not restart
+            return
+
         configured_file = self.config.video_file
         target_file = configured_file or leader_file
         local_video_path = self.video_manager.find_video_file(target_file=target_file)
@@ -359,6 +369,7 @@ class CollaboratorPi:
 
         self.video_path = local_video_path
         if self.video_player.load(self.video_path):
+            self.active_session_key = session_key
             self.start_playback()
 
     def start_playback(self) -> None:

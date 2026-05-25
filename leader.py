@@ -166,11 +166,16 @@ class LeaderPi:
             # Send immediately on start
             self.command_manager.send_command(start_command)
             
-            # Then much slower re-broadcast for late joiners
+            # Then much slower re-broadcast for late joiners (every 30s instead of 10s)
             while self.system_state.is_running:
-                time.sleep(10.0)
+                time.sleep(30.0)
                 if self.system_state.is_running:
-                    self.command_manager.send_command(start_command)
+                    # Only broadcast (don't send direct to everyone again to reduce noise)
+                    self.command_manager._ensure_send_socket()
+                    payload = json.dumps(start_command)
+                    self.command_manager.control_sock.sendto(
+                        payload.encode(), (self.command_manager.broadcast_ip, self.command_manager.control_port)
+                    )
 
         threading.Thread(target=start_broadcast_loop, daemon=True).start()
 
