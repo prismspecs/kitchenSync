@@ -1,6 +1,6 @@
-# KitchenSync
+# kSync
 
-KitchenSync is a Raspberry Pi video-sync system for synchronized playback and protocol output (MIDI, OSC) across leader and collaborator nodes.
+kSync is a Raspberry Pi video-sync system for synchronized playback and protocol output (MIDI, OSC) across leader and collaborator nodes.
 
 The active stack is:
 - **GStreamer** for high-performance video playback
@@ -93,7 +93,7 @@ video_driver = gst
 
 ## Remote Control & Monitoring
 
-KitchenSync includes a web-based remote controller for cluster management:
+kSync includes a web-based remote controller for cluster management:
 
 ```bash
 python3 src/remote/controller.py
@@ -102,7 +102,7 @@ Available at `http://<pi-ip>:8080`
 
 ## Hardware Acceleration (Pi 5)
 
-KitchenSync prefers hardware-accelerated GStreamer sinks:
+kSync prefers hardware-accelerated GStreamer sinks:
 - **X11/Openbox**: `glimagesink`
 - **KMS/DRM**: `kmssink`
 

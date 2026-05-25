@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Sanity tests for KitchenSync core logic.
+Sanity tests for kSync core logic.
 Verifies that drivers and state management work as expected.
 """
 
@@ -20,7 +20,7 @@ from video import get_video_driver
 from video.driver import PlayerState
 from core import SyncTracker, SystemState
 
-class TestKitchenSync(unittest.TestCase):
+class TestkSync(unittest.TestCase):
     def test_video_driver_factory(self):
         """Verify the driver factory returns the correct classes."""
         gst = get_video_driver("gstreamer")

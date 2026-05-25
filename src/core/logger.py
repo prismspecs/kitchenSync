@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Centralized lightweight logger for KitchenSync.
+Centralized lightweight logger for kSync.
 Writes to /tmp so it works under systemd or desktop sessions without extra setup.
 """
 

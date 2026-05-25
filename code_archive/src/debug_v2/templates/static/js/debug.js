@@ -1,4 +1,4 @@
-/* KitchenSync Debug Overlay JavaScript */
+/* kSync Debug Overlay JavaScript */
 
 // Auto-refresh configuration  
 const REFRESH_INTERVAL = 15000; // 15 seconds - reduced frequency for better performance
@@ -86,7 +86,7 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
-    console.log('KitchenSync Debug Overlay initialized');
+    console.log('kSync Debug Overlay initialized');
 });
 
 // Utility functions for future enhancements
@@ -119,7 +119,7 @@ const DebugOverlay = {
     // Log debug information to console
     log: function (message, level = 'info') {
         const timestamp = new Date().toISOString();
-        console[level](`[${timestamp}] KitchenSync Debug: ${message}`);
+        console[level](`[${timestamp}] kSync Debug: ${message}`);
     }
 };
 

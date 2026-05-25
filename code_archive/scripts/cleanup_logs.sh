@@ -1,8 +1,8 @@
 #!/bin/bash
-# KitchenSync Log Cleanup Script
+# kSync Log Cleanup Script
 # Archives current logs and starts fresh, keeping last 1000 lines of history
 
-echo "🧹 KitchenSync Log Cleanup Starting..."
+echo "🧹 kSync Log Cleanup Starting..."
 
 # Function to archive logs with rotation (max 1000 lines per archive)
 archive_log() {

@@ -1,6 +1,6 @@
 # Pro-AV Enhancement Roadmap
 
-These are high-priority architectural enhancements to move KitchenSync from a prototype to a professional-grade AV appliance.
+These are high-priority architectural enhancements to move kSync from a prototype to a professional-grade AV synchronization system.
 
 ## 1. Precision Synchronization (Sub-millisecond)
 - **Goal:** Replace UDP broadcast with PTP (IEEE 1588) or GstNetClock.

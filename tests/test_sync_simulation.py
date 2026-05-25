@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Sync Simulation Test for KitchenSync
+Sync Simulation Test for kSync
 Simulates drift and verifies that the P-controller settles without oscillating.
 """
 

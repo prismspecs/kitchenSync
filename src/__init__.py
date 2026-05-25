@@ -1,1 +1,1 @@
-"""KitchenSync - Synchronized Video Playback & MIDI Output System"""
+"""kSync - Synchronized Video Playback & MIDI Output System"""

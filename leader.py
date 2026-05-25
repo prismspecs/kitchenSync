@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-KitchenSync Leader - Main entry point for the Leader role.
+kSync Leader - Main entry point for the Leader role.
 Coordinates playback, broadcasts time sync, and manages collaborators.
 """
 
@@ -34,7 +34,7 @@ class LeaderPi:
         self.config = ConfigManager(config_file)
         enable_system_logging(self.config.debug_mode)
 
-        log_info("Starting KitchenSync Leader...", component="leader")
+        log_info("Starting kSync Leader...", component="leader")
 
         # Core Components
         self.system_state = SystemState()
@@ -93,7 +93,7 @@ class LeaderPi:
             log_warning("System is already running", component="leader")
             return
 
-        log_info("Launching KitchenSync system...", component="leader")
+        log_info("Launching kSync system...", component="leader")
         hide_mouse_cursor()
 
         # Start system state
@@ -197,7 +197,7 @@ class LeaderPi:
         if not self.system_state.is_running:
             return
 
-        log_info("Stopping KitchenSync system...", component="leader")
+        log_info("Stopping kSync system...", component="leader")
         self.video_player.stop()
         self.sync_broadcaster.stop_broadcasting()
         if self.midi_scheduler:
@@ -308,7 +308,7 @@ class LeaderPi:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="KitchenSync Leader Node")
+    parser = argparse.ArgumentParser(description="kSync Leader Node")
     parser.add_argument("--config", dest="config_file", help="Path to config file")
     parser.add_argument("--debug", action="store_true", help="Enable debug mode")
     parser.add_argument("--auto", action="store_true", help="Start playback automatically")
@@ -332,7 +332,7 @@ def main():
             while True:
                 time.sleep(1)
         else:
-            interface = CommandInterface("KitchenSync Leader")
+            interface = CommandInterface("kSync Leader")
             interface.register_command("start", leader_instance.start_system, "Start synchronized playback")
             interface.register_command("stop", leader_instance.stop_system, "Stop synchronized playback")
             interface.register_command("status", lambda: StatusDisplay.show_leader_status(

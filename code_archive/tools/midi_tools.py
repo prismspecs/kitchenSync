@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 MIDI Schedule Converter - Convert between JSON and MIDI formats
-Demonstrates both input formats for KitchenSync relay control
+Demonstrates both input formats for kSync relay control
 """
 
 import sys
@@ -101,7 +101,7 @@ def create_test_schedule():
 
 
 def main():
-    parser = argparse.ArgumentParser(description="KitchenSync MIDI Schedule Tools")
+    parser = argparse.ArgumentParser(description="kSync MIDI Schedule Tools")
     parser.add_argument(
         "command",
         choices=["convert-to-json", "convert-to-midi", "inspect", "create-test"],
@@ -131,7 +131,7 @@ def main():
 
 if __name__ == "__main__":
     if len(sys.argv) == 1:
-        print("🎼 KitchenSync MIDI Schedule Tools")
+        print("🎼 kSync MIDI Schedule Tools")
         print("=" * 40)
         print("Usage examples:")
         print("  python3 midi_tools.py create-test")

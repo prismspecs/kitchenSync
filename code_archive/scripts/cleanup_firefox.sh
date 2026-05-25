@@ -1,5 +1,5 @@
 #!/bin/bash
-# KitchenSync Firefox Cleanup Script
+# kSync Firefox Cleanup Script
 # This script cleans up Firefox processes and the clean profile directory
 
 echo "🧹 Cleaning up Firefox processes and profile..."

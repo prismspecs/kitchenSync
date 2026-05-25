@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Mock Video Driver for KitchenSync
+Mock Video Driver for kSync
 Simulates video playback timing for testing logic without hardware.
 """
 

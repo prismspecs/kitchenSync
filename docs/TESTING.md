@@ -1,6 +1,6 @@
-# KitchenSync Testing & TDD Workflow
+# kSync Testing & TDD Workflow
 
-This document outlines how to test KitchenSync across multiple platforms and how to use the "Assisted TDD" framework for verified development.
+This document outlines how to test kSync across multiple platforms and how to use the "Assisted TDD" framework for verified development.
 
 ## 1. Automated Logic Tests (Tier 1)
 These tests verify pure Python logic (math, scheduling, state) without hardware. Run these before any commit.

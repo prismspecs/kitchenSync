@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-User Interface Components for KitchenSync
+User Interface Components for kSync
 Provides command-line interface and status display
 """
 
@@ -8,9 +8,9 @@ from typing import Dict, Any, Callable, Optional
 
 
 class CommandInterface:
-    """Command-line interface for KitchenSync"""
+    """Command-line interface for kSync"""
 
-    def __init__(self, app_name: str = "KitchenSync"):
+    def __init__(self, app_name: str = "kSync"):
         self.app_name = app_name
         self.commands: Dict[str, Dict[str, Any]] = {}
         self.running = False
@@ -84,7 +84,7 @@ class StatusDisplay:
         system_state: Any, collaborators: Dict[str, Dict], schedule_count: int = 0
     ) -> None:
         """Display leader status"""
-        print("\n=== KitchenSync Leader Status ===")
+        print("\n=== kSync Leader Status ===")
         print(f"System running: {system_state.is_running}")
 
         if system_state.is_running:
@@ -108,7 +108,7 @@ class StatusDisplay:
         sync_stats: Optional[Dict] = None,
     ) -> None:
         """Display collaborator status"""
-        print(f"\n=== KitchenSync Collaborator Status ({device_id}) ===")
+        print(f"\n=== kSync Collaborator Status ({device_id}) ===")
         print(f"Video file: {video_file}")
         print(f"Status: {'RUNNING' if is_running else 'READY'}")
 

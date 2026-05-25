@@ -24,7 +24,7 @@ from core.logger import log_info, log_error, log_warning
 
 class GstDriver(VideoDriver):
     """
-    GStreamer Driver for KitchenSync.
+    GStreamer Driver for kSync.
     Uses playbin for robustness and custom seek events for seamless rate control.
     """
 

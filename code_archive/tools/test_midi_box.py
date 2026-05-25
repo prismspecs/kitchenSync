@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 MIDI Relay Box Test Script
-Direct testing of MIDI relay outputs for KitchenSync
+Direct testing of MIDI relay outputs for kSync
 """
 
 import sys
@@ -14,11 +14,11 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 try:
     from protocols.midi_handler import MidiManager
 
-    print(" KitchenSync MIDI manager available")
+    print(" kSync MIDI manager available")
 except ImportError as e:
-    print("❌ KitchenSync MIDI manager not available")
+    print("❌ kSync MIDI manager not available")
     print(f"Import error: {e}")
-    print("This script needs to run from the KitchenSync directory")
+    print("This script needs to run from the kSync directory")
     print("Falling back to direct MIDI commands...")
 
     # Fallback: direct amidi testing
@@ -316,7 +316,7 @@ class MidiBoxTester:
 
 
 def main():
-    print("🎬 KitchenSync MIDI Relay Box Tester")
+    print("🎬 kSync MIDI Relay Box Tester")
     print("=" * 40)
 
     # Ask for MIDI port (default 0)

@@ -1,4 +1,4 @@
-# KitchenSync Schedule Format Examples
+# kSync Schedule Format Examples
 
 This directory contains example schedules in both supported formats.
 
@@ -20,7 +20,7 @@ JSON schedule exported to MIDI format for DAW editing.
 
 ## Testing Examples
 
-Use these files to test KitchenSync functionality:
+Use these files to test kSync functionality:
 
 ```bash
 # Test JSON loading
@@ -39,4 +39,4 @@ Copy any of these files to your USB drive as:
 - `schedule.json` (for JSON format)
 - `schedule.mid` (for MIDI format)
 
-KitchenSync will automatically detect and load the appropriate format.
+kSync will automatically detect and load the appropriate format.

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Base Video Driver Interface for KitchenSync
+Base Video Driver Interface for kSync
 Ensures all video backends (GStreamer, VLC, mpv) follow the same contract.
 """
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Convert a MIDI file (.mid) to KitchenSync schedule.json format.
+Convert a MIDI file (.mid) to kSync schedule.json format.
 Usage:
     python3 midi_to_schedule.py input.mid [output.json]
 If output.json is not provided, defaults to schedule.json.

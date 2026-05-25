@@ -1,6 +1,6 @@
 #!/bin/bash
-# KitchenSync Auto-Start Script
-# This script is called by the systemd service to start KitchenSync
+# kSync Auto-Start Script
+# This script is called by the systemd service to start kSync
 # with proper environment variables for display access
 
 set -e  # Exit on any error
@@ -33,7 +33,7 @@ archive_log() {
 }
 
 # Archive existing logs before starting
-echo "$(date): KitchenSync startup initiated - archiving old logs" >> /tmp/kitchensync_startup.log
+echo "$(date): kSync startup initiated - archiving old logs" >> /tmp/kitchensync_startup.log
 
 # Archive each log type (system, VLC, debug, stderr/stdout)
 archive_log "/tmp/kitchensync_system.log" "/tmp/kitchensync_system_archive.log"
@@ -96,6 +96,6 @@ if ! xset q >/dev/null 2>&1; then
     fi
 fi
 
-# Start KitchenSync main script
+# Start kSync main script
 echo "$(date): Launching kitchensync.py" >> /tmp/kitchensync_startup.log
 exec python3 kitchensync.py "$@"

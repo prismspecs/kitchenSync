@@ -1,5 +1,5 @@
 [Unit]
-Description=KitchenSync Auto-Start Service
+Description=kSync Auto-Start Service
 After=graphical.target network.target
 Wants=graphical.target
 # Add explicit dependency on display manager

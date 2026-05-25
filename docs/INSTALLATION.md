@@ -9,7 +9,7 @@ Use Raspberry Pi OS Lite (64-bit), then enable:
 - a normal user account
 - console autologin if this node is appliance-only
 
-## Install KitchenSync
+## Install kSync
 
 ```bash
 git clone https://github.com/prismspecs/kitchenSync.git

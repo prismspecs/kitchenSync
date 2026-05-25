@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Core System State Management for KitchenSync
+Core System State Management for kSync
 Manages system state and provides status information
 """
 

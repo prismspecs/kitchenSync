@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-KitchenSync Collaborator - Main entry point for the Collaborator role.
+kSync Collaborator - Main entry point for the Collaborator role.
 Receives time sync from the Leader and adjusts local playback.
 Supports Bystander mode for remote provisioning.
 """
@@ -34,7 +34,7 @@ class CollaboratorPi:
         self.config = ConfigManager(config_file)
         enable_system_logging(self.config.debug_mode)
 
-        log_info(f"Starting KitchenSync Node '{self.config.device_id}' (Role: {self.config.role_name()})", component="collaborator")
+        log_info(f"Starting kSync Node '{self.config.device_id}' (Role: {self.config.role_name()})", component="collaborator")
 
         # Core Components
         self.system_state = SystemState()
@@ -404,7 +404,7 @@ class CollaboratorPi:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="KitchenSync Node")
+    parser = argparse.ArgumentParser(description="kSync Node")
     parser.add_argument("--config", dest="config_file", help="Path to ksync.ini")
     parser.add_argument("--debug", action="store_true")
     args = parser.parse_args()

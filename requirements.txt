@@ -1,4 +1,4 @@
-# KitchenSync Requirements
+# kSync Requirements
 
 # MIDI Support
 python-rtmidi>=1.4.0

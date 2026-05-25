@@ -1,7 +1,7 @@
 # GEMINI.md - Context & Developer Guide
 
 ## 1. Project Overview
-**KitchenSync** is a distributed system for synchronized video playback and multi-protocol control output across multiple Raspberry Pi nodes.
+**kSync** is a distributed system for synchronized video playback and multi-protocol control output across multiple Raspberry Pi nodes.
 - **Goal:** Play video and trigger synchronized events (MIDI, OSC, and other common protocols) in perfect sync across a local network.
 - **Deployment:** "Plug-and-play" using USB drives for configuration (`kitchensync.ini`) and content (`.mp4`, `schedule.json`).
 - **Roles:**

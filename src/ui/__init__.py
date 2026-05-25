@@ -1,4 +1,4 @@
-"""User interface package for KitchenSync"""
+"""User interface package for kSync"""
 
 from .interface import (
     CommandInterface, StatusDisplay, ProgressDisplay, 

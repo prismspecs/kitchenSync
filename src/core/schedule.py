@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Core Schedule Management for KitchenSync
+Core Schedule Management for kSync
 Handles loading, saving, and editing MIDI schedules
 """
 

@@ -1,10 +1,10 @@
-# KitchenSync MIDI Relay Control
+# kSync MIDI Relay Control
 
-This document explains how to use KitchenSync's MIDI functionality for relay control.
+This document explains how to use kSync's MIDI functionality for relay control.
 
 ## Overview
 
-KitchenSync can send precisely-timed MIDI messages synchronized to video playback. This is perfect for controlling external relays that respond to MIDI signals.
+kSync can send precisely-timed MIDI messages synchronized to video playback. This is perfect for controlling external relays that respond to MIDI signals.
 
 ## How It Works
 
@@ -39,7 +39,7 @@ For relay control, we use **MIDI Note On/Off** messages with **note-based addres
 
 ## Schedule File Format
 
-KitchenSync supports **two input formats** for MIDI schedules:
+kSync supports **two input formats** for MIDI schedules:
 
 ### 1. JSON Format (Recommended for Relay Control)
 
@@ -432,7 +432,7 @@ python3 -c "from src.protocols.midi_handler import MidiManager; m = MidiManager(
 1. Create `schedule.json` with lighting cues
 2. Put on USB drive with video and config
 3. Insert USB into Leader Pi
-4. Start KitchenSync - lighting follows video automatically
+4. Start kSync - lighting follows video automatically
 
 ### Complex Multi-Zone Setup
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-MIDI Management for KitchenSync
+MIDI Management for kSync
 Handles MIDI output and scheduling
 """
 

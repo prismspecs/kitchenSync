@@ -1,10 +1,10 @@
 #!/bin/bash
-# setup_pi5.sh - Consolidated, idempotent setup for KitchenSync on Raspberry Pi 5
+# setup_pi5.sh - Consolidated, idempotent setup for kSync on Raspberry Pi 5
 # This script handles GStreamer, X11 permissions, hardware mapping, and UI polishing.
 
 set -e # Exit on error
 
-echo "Starting KitchenSync Pi 5 Appliance Setup..."
+echo "Starting kSync Setup..."
 
 # 1. Install System Dependencies
 echo "Installing GStreamer and X11 dependencies..."
@@ -103,7 +103,7 @@ VENV_PYTHON="$VENV_DIR/bin/python3"
 # Create a clean service file with dynamic paths
 sudo tee /etc/systemd/system/kitchensync.service <<EOF
 [Unit]
-Description=KitchenSync Universal Node
+Description=kSync Universal Node
 After=network.target
 # We don't depend on graphical.target because we start our own X session if needed
 

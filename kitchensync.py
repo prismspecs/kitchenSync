@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-KitchenSync Universal Node Bootstrapper
+kSync Universal Node Bootstrapper
 Handles role detection (Leader, Collaborator, Bystander) and process execution.
 Prioritizes ksync.ini on USB root.
 """
@@ -97,7 +97,7 @@ def apply_upgrade_if_available(usb_mount_point=None):
         print(f"[UPGRADE] Failed: {e}", file=sys.stderr)
 
 
-class KitchenSyncAutoStart:
+class kSyncAutoStart:
     """Universal Node Manager"""
 
     def __init__(self):
@@ -106,7 +106,7 @@ class KitchenSyncAutoStart:
 
     def run(self) -> bool:
         """Main execution flow"""
-        print("\nKitchenSync Universal Node")
+        print("\nkSync Universal Node")
         print("=" * 40)
         snapshot_env()
 
@@ -230,7 +230,7 @@ class KitchenSyncAutoStart:
 
 def main():
     try:
-        auto_start = KitchenSyncAutoStart()
+        auto_start = kSyncAutoStart()
         # Upgrade check
         usb_config = USBConfigLoader.find_config_on_usb()
         usb_mount = os.path.dirname(usb_config) if usb_config else None

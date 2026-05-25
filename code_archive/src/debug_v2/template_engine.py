@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Simple template engine for KitchenSync debug overlay
+Simple template engine for kSync debug overlay
 Provides basic variable substitution for HTML templates
 """
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Regression tests for KitchenSync networking."""
+"""Regression tests for kSync networking."""
 
 import json
 import socket

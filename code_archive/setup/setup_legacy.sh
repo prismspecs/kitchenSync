@@ -1,7 +1,7 @@
 #!/bin/bash
-# KitchenSync Setup Script
+# kSync Setup Script
 
-echo "=== KitchenSync Setup ==="
+echo "=== kSync Setup ==="
 
 # Check for Raspberry Pi OS version
 PI_VERSION=$(grep VERSION_CODENAME /etc/os-release 2>/dev/null | cut -d= -f2 | tr -d '"')
@@ -70,7 +70,7 @@ if [ -f /etc/gdm3/daemon.conf ]; then
 fi
 
 # Add X11 environment variables to user profile
-echo "# Force X11 mode for KitchenSync" >> ~/.bashrc
+echo "# Force X11 mode for kSync" >> ~/.bashrc
 echo "export GDK_BACKEND=x11" >> ~/.bashrc
 echo "export QT_QPA_PLATFORM=xcb" >> ~/.bashrc
 echo "export WAYLAND_DISPLAY=" >> ~/.bashrc
@@ -113,9 +113,9 @@ if [ ! -f "$GLOBAL_PC_CONF" ]; then
 fi
 
 # Append our overrides once at the end; do not replace earlier keys
-if ! grep -q "# KitchenSync overrides (desktop)" "$GLOBAL_PC_CONF"; then
+if ! grep -q "# kSync overrides (desktop)" "$GLOBAL_PC_CONF"; then
     sudo tee -a "$GLOBAL_PC_CONF" >/dev/null <<'EOF'
-# KitchenSync overrides (desktop)
+# kSync overrides (desktop)
 show_trash=0
 show_mounts=0
 wallpaper=
@@ -193,7 +193,7 @@ echo "1. Create kitchensync.ini on your USB drive with:"
 echo "   - is_leader = true/false (designates leader or collaborator)"
 echo "   - pi_id = unique ID for each Pi" 
 echo "   - video_file = specific video filename (optional)"
-echo "2. Power on the Pi - KitchenSync starts automatically!"
+echo "2. Power on the Pi - kSync starts automatically!"
 echo ""
 echo "📁 USB Drive Contents:"
 echo "   - kitchensync.ini (configuration file)"

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Configuration Management for KitchenSync
+Configuration Management for kSync
 Handles loading and managing configuration from various sources
 """
 
@@ -135,7 +135,7 @@ class USBConfigLoader:
 
 
 class ConfigManager:
-    """Central configuration manager for KitchenSync"""
+    """Central configuration manager for kSync"""
 
     def __init__(self, config_file: Optional[str] = None):
         self.config = configparser.ConfigParser()

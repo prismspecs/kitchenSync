@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Networking Components for KitchenSync
+Networking Components for kSync
 Handles time sync and command communication between leader and collaborators
 """
 

@@ -1,4 +1,4 @@
-# KitchenSync Deployment Checklist
+# kSync Deployment Checklist
 
 Use this checklist when setting up a new Raspberry Pi node (Leader or Collaborator).
 

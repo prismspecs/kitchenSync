@@ -452,7 +452,7 @@ def build_report(video_path: Path, sample_seconds: float) -> dict:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Verify KitchenSync GStreamer hardware acceleration")
+    parser = argparse.ArgumentParser(description="Verify kSync GStreamer hardware acceleration")
     parser.add_argument(
         "--video",
         default="videos/test_video.mp4",

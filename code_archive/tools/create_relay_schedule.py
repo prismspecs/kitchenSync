@@ -126,7 +126,7 @@ def create_custom_schedule():
 
 def main():
     """Main menu"""
-    print("🎬 KitchenSync Relay Schedule Creator")
+    print("🎬 kSync Relay Schedule Creator")
     print("=" * 40)
     print("1. Create demonstration schedule")
     print("2. Create custom schedule interactively")

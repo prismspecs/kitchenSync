@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-HTML-based debug overlay for KitchenSync
+HTML-based debug overlay for kSync
 Opens a browser window with live-updating debug information
 """
 
@@ -164,7 +164,7 @@ class HTMLDebugOverlay:
             fallback_html = f"""<!DOCTYPE html>
 <html>
 <head>
-    <title>KitchenSync Debug - {self.device_id} (Fallback)</title>
+    <title>kSync Debug - {self.device_id} (Fallback)</title>
     <meta charset="utf-8">
     <style>
         body {{ font-family: monospace; background: #1a1a2e; color: #fff; margin: 20px; }}
@@ -172,7 +172,7 @@ class HTMLDebugOverlay:
     </style>
 </head>
 <body>
-    <h1>KitchenSync Debug - {self.device_id}</h1>
+    <h1>kSync Debug - {self.device_id}</h1>
     <div class="error">
         <h2>Template System Error</h2>
         <p>The template system failed to load. Using fallback display.</p>

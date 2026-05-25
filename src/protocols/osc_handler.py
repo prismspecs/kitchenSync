@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-OSC (Open Sound Control) Handler for KitchenSync
+OSC (Open Sound Control) Handler for kSync
 Provides industry-standard control integration (e.g., QLab, Ableton, TouchOSC).
 """
 
@@ -17,7 +17,7 @@ except ImportError:
 class OscHandler:
     """
     Placeholder for the future OSC protocol integration.
-    This will allow KitchenSync to send and receive OSC messages
+    This will allow kSync to send and receive OSC messages
     for synchronization and external hardware control.
     """
 

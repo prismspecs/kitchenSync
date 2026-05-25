@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Video File Discovery and Management for KitchenSync
+Video File Discovery and Management for kSync
 Handles finding and managing video files from various sources
 """
 

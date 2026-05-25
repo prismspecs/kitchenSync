@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Video Driver Factory for KitchenSync
+Video Driver Factory for kSync
 Loads the appropriate driver backend based on configuration.
 """
 

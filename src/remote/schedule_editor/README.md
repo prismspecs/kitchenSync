@@ -1,6 +1,6 @@
 # Schedule Editor
 
-A simple HTML/JS grid interface for creating KitchenSync schedules.
+A simple HTML/JS grid interface for creating kSync schedules.
 
 - X axis: seconds (0-19)
 - Y axis: notes (1-12, mapped to MIDI notes 60-71)

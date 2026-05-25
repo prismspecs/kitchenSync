@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Cross-platform window management for KitchenSync
+Cross-platform window management for kSync
 Supports both X11 (wmctrl) and Wayland (wlrctl)
 """
 

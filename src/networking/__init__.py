@@ -1,4 +1,4 @@
-"""Networking package for KitchenSync"""
+"""Networking package for kSync"""
 
 from .communication import (
     SyncBroadcaster, SyncReceiver, CommandManager, CommandListener, NetworkError

@@ -166,7 +166,7 @@ class RemoteHandler(BaseHTTPRequestHandler):
             <!DOCTYPE html>
             <html>
             <head>
-                <title>KitchenSync Remote</title>
+                <title>kSync Remote</title>
                 <meta name="viewport" content="width=device-width, initial-scale=1">
                 <style>
                     body {
@@ -235,7 +235,7 @@ class RemoteHandler(BaseHTTPRequestHandler):
                 </style>
             </head>
             <body>
-                <h1>KitchenSync Remote</h1>
+                <h1>kSync Remote</h1>
 
                 <div class="section">
                     <h2>Cluster Control</h2>

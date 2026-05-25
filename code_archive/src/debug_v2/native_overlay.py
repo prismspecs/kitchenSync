@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Native Tkinter-based debug overlay for KitchenSync
+Native Tkinter-based debug overlay for kSync
 Provides a lightweight alternative to the browser-based overlay.
 """
 

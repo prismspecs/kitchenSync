@@ -1,4 +1,4 @@
-"""Configuration management package for KitchenSync"""
+"""Configuration management package for kSync"""
 
 from .manager import ConfigManager, ConfigurationError, USBConfigLoader
 

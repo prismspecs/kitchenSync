@@ -1,4 +1,4 @@
-"""Core system components for KitchenSync"""
+"""Core system components for kSync"""
 
 from .schedule import Schedule, ScheduleEditor, ScheduleError
 from .system_state import SystemState, CollaboratorRegistry, SyncTracker

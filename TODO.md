@@ -1,4 +1,4 @@
-# KitchenSync Todo
+# kSync Todo
 
 ## Current Cleanup Follow-Up
 - [x] Rename remaining `vlc_*` debug labels and log keys to generic player terminology.
