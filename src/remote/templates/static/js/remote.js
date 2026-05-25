@@ -309,13 +309,20 @@ function renderMediaCell(device, leaderMedia) {
         requestMedia(device.device_id);
     }
 
-    const mediaRows = media.map(m => {
+    const mediaListHtml = media.map(m => {
         const sizeMb = (m.size / (1024 * 1024)).toFixed(1);
+        const sourceLabel = m.location === 'usb' ? 'USB' : 'DISK';
+        const sourceClass = m.location === 'usb' ? 'source-usb' : 'source-local';
         return `
             <div class="media-item">
-                <span class="media-name" title="${escapeHtml(m.path)}">${escapeHtml(m.name)}</span>
-                <span class="media-meta">${sizeMb} MB</span>
-                <button class="btn-small btn-danger" onclick="deleteMedia('${device.device_id}', '${escapeHtml(m.name)}')">Delete</button>
+                <div class="media-item-info">
+                    <span class="media-source ${sourceClass}">${sourceLabel}</span>
+                    <span class="media-name" title="${escapeHtml(m.path)}">${escapeHtml(m.name)}</span>
+                </div>
+                <div class="media-item-actions">
+                    <span class="media-meta">${sizeMb} MB</span>
+                    <button class="btn-small btn-danger" onclick="deleteMedia('${device.device_id}', '${escapeHtml(m.name)}')">Delete</button>
+                </div>
             </div>
         `;
     }).join('');
@@ -355,21 +362,20 @@ function renderMediaCell(device, leaderMedia) {
                 ${uploadSection}
             `;
         } else {
-            // No download section, but still need refresh button above upload section
             syncSection = `
                 <div style="padding: 10px 0 0 0;">${refreshBtn}</div>
                 ${uploadSection}
             `;
         }
     } else {
-        // Leader only needs refresh button
         syncSection = `<div style="padding-top: 10px;">${refreshBtn}</div>`;
     }
 
     return `
         <div class="media-panel">
+            <h4>Available Videos</h4>
             <div class="media-list">
-                ${mediaRows || '<div class="message info">No USB detected</div>'}
+                ${mediaListHtml || '<div class="message info">No videos found</div>'}
             </div>
             ${syncSection}
         </div>

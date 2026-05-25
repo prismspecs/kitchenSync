@@ -62,13 +62,47 @@ th, td {
 
 .media-item {
     display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 8px;
-    margin-bottom: 5px;
-    padding-bottom: 5px;
+    flex-direction: column;
+    gap: 4px;
+    margin-bottom: 8px;
+    padding-bottom: 8px;
     border-bottom: 1px dotted #ccc;
     font-size: 13px;
+}
+
+.media-item-info {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+}
+
+.media-item-actions {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 8px;
+}
+
+.media-source {
+    font-size: 9px;
+    font-weight: bold;
+    padding: 1px 3px;
+    border-radius: 3px;
+    text-transform: uppercase;
+    flex-shrink: 0;
+}
+
+.source-usb {
+    background: #e1f5fe;
+    color: #01579b;
+    border: 1px solid #b3e5fc;
+}
+
+.source-local {
+    background: #f1f8e9;
+    color: #33691e;
+    border: 1px solid #ddc977;
 }
 
 .media-name {

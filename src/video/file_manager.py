@@ -37,6 +37,7 @@ class VideoFileManager:
     ):
         self.configured_file = configured_file
         self.usb_mount_point = usb_mount_point
+        # Prioritize local videos/ folder explicitly
         self.fallback_sources = ["./videos/", "./"]
         self.cache_dir = cache_dir or os.path.expanduser("~/kitchensync_cache")
 
