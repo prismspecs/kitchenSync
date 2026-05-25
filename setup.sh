@@ -83,16 +83,57 @@ grep -q "unclutter" $AUTOSTART || echo "unclutter -idle 0.1 -root &" >> $AUTOSTA
 
 # 6. Python Virtual Environment
 echo "Setting up Python virtual environment..."
-if [ ! -d ".venv" ]; then
-    python3 -m venv --system-site-packages .venv
-    echo "Virtual environment created."
+VENV_DIR="$PWD/.venv"
+if [ ! -d "$VENV_DIR" ]; then
+    python3 -m venv --system-site-packages "$VENV_DIR"
+    echo "Virtual environment created at $VENV_DIR"
 fi
 
 echo "Installing Python dependencies..."
-./.venv/bin/pip install --upgrade pip
-./.venv/bin/pip install mido pyserial python-osc
+"$VENV_DIR/bin/pip" install --upgrade pip
+"$VENV_DIR/bin/pip" install mido pyserial python-osc
+
+# 7. Systemd Service Configuration
+echo "Configuring systemd service..."
+SERVICE_FILE="kitchensync.service"
+CURRENT_USER=$(whoami)
+INSTALL_DIR=$(pwd)
+VENV_PYTHON="$VENV_DIR/bin/python3"
+
+# Create a clean service file with dynamic paths
+sudo tee /etc/systemd/system/kitchensync.service <<EOF
+[Unit]
+Description=KitchenSync Universal Node
+After=network.target
+# We don't depend on graphical.target because we start our own X session if needed
+
+[Service]
+Type=simple
+User=$CURRENT_USER
+Group=$CURRENT_USER
+WorkingDirectory=$INSTALL_DIR
+Environment=PYTHONPATH=$INSTALL_DIR/src
+Environment=DISPLAY=:0
+Environment=XAUTHORITY=/home/$CURRENT_USER/.Xauthority
+# Ensure the node can start X if it's not already running
+ExecStartPre=$INSTALL_DIR/tools/start_x.sh
+# Launch the universal bootstrapper
+ExecStart=$VENV_PYTHON kitchensync.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+echo "Enabling kitchensync.service..."
+sudo systemctl daemon-reload
+sudo systemctl enable kitchensync.service
 
 echo "-------------------------------------------------------"
-echo "Setup Complete! Please REBOOT for group changes to take effect."
-echo "After reboot, start X with ./tools/start_x.sh before running DISPLAY=:0 verification commands from SSH."
+echo "Setup Complete! Please REBOOT for changes to take effect."
+echo "Upon reboot, the Pi will automatically:"
+echo " 1. Start X11/Openbox"
+echo " 2. Search for ksync.ini on USB root"
+echo " 3. Assume the configured Role (Leader/Collaborator/Bystander)"
 echo "-------------------------------------------------------"

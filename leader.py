@@ -269,6 +269,38 @@ class LeaderPi:
         # Always reply with updated list
         self._handle_file_list_request(msg, addr)
 
+    def _handle_config_request(self, msg: dict, addr: tuple) -> None:
+        """Reply with current configuration."""
+        response = {
+            "type": "config_state",
+            "device_id": self.config.device_id,
+            "role": "leader",
+            "fields": self.config.get_editable_fields("leader"),
+            "values": self.config.get_editable_values("leader"),
+            "config_path": self.config.get_config_path() or "ksync.ini"
+        }
+        self.command_manager.send_command(response, target_pi=None)
+
+    def _handle_config_update(self, msg: dict, addr: tuple) -> None:
+        """Handle a configuration update from the remote controller."""
+        updates = msg.get("updates", {})
+        log_info(f"Applying leader config updates: {updates}", component="leader")
+        
+        self.config.clean_and_save_config("ksync.ini", updates, role="leader")
+        
+        response = {
+            "type": "config_update_result",
+            "device_id": self.config.device_id,
+            "status": "ok",
+            "requires_restart": "role" in updates
+        }
+        self.command_manager.send_command(response, target_pi=None)
+        
+        if "role" in updates and updates["role"] != "leader":
+            log_info("Role change detected. Restarting...", component="leader")
+            time.sleep(1)
+            os.execv(sys.executable, [sys.executable, "kitchensync.py"])
+
 
 def main():
     parser = argparse.ArgumentParser(description="KitchenSync Leader Node")

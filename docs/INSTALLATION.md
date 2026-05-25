@@ -18,39 +18,34 @@ cd kitchenSync
 sudo reboot
 ```
 
-`setup.sh` is a compatibility wrapper. The real provisioning logic lives in `setup_pi5.sh`.
+## Universal Node Boot Sequence
 
-`setup_pi5.sh` now also:
-- runs `apt full-upgrade`
-- installs `v4l-utils` for decoder/device inspection
-- attempts `rpi-eeprom-update -a` when available
+Upon reboot, the Pi will automatically:
+1.  **Initialize Graphics**: Launch X11 and Openbox (via `tools/start_x.sh`).
+2.  **Universal Startup**: Run `kitchensync.py`.
+3.  **Role Detection**:
+    *   **USB Check**: Search for `ksync.ini` at the root of any attached USB drive.
+    *   **Fallback**: Check for local `./ksync.ini`.
+    *   **Bystander Mode**: If no config is found, the node enters **Bystander Mode**, remaining idle but discoverable via the Remote Controller Web UI.
 
-## What The Setup Configures
+## Manual Operation (Optional)
 
-- X11 and Openbox
-- Pi 5 Xorg mapping to `/dev/dri/card1`
-- GStreamer runtime packages
-- `v4l2-ctl` via `v4l-utils`
-- `unclutter` for cursor hiding
-- the `kitchensync.service` systemd unit
-
-## Manual X11 Bring-Up
-
-If the system is on a text console, start the local display stack:
+While the system is automated, you can still run components manually for debugging:
 
 ```bash
-./tools/start_x.sh
+source .venv/bin/activate
+# Start as Leader
+DISPLAY=:0 python3 leader.py --auto
+# Start as Collaborator
+DISPLAY=:0 python3 collaborator.py
 ```
 
-Do this before any manual `DISPLAY=:0` runtime command from SSH. Setting `DISPLAY=:0` without a running X server will not work.
+## Remote Provisioning
 
-## Manual Runtime Testing
-
-```bash
-source ~/ks-env/bin/activate
-DISPLAY=:0 python3 collaborator.py --config collaborator_config.ini --debug
-DISPLAY=:0 python3 leader.py --config leader_config.ini --debug
-```
+If a node starts in **Bystander Mode**, it will appear in the Remote Controller Web UI. You can then:
+1.  Upload video content to the node.
+2.  Push a new `ksync.ini` configuration.
+3.  The node will automatically restart and assume the assigned role.
 
 ## Hardware Acceleration Verification
 

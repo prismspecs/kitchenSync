@@ -20,3 +20,4 @@
 - [ ] Local content caching.
 - [x] Leader web configuration (integrated into remote controller).
 - [ ] Multi-channel MIDI improvements.
+- [ ] Bystander Status Overlay: Create a visual status screen (IP, ID, Status) for unconfigured nodes to avoid black screens during setup.

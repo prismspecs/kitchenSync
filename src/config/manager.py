@@ -15,46 +15,55 @@ from core.logger import log_info, log_warning, log_error
 
 CONFIG_ROLE_SECTIONS = {
     "leader": {
-        "KITCHENSYNC": {"is_leader", "device_id", "debug", "enable_system_logging", "enable_audio", "audio_output", "enable_midi", "enable_osc", "enable_caching", "enable_latency_compensation"},
+        "KITCHENSYNC": {"role", "device_id", "debug", "enable_system_logging", "enable_audio", "audio_output", "enable_midi", "enable_osc", "enable_caching", "enable_latency_compensation"},
         "DEFAULT": {"video_file", "schedule_file", "video_driver", "sync_port", "tick_interval", "latency_factor", "max_drift", "min_drift", "kp", "min_rate", "max_rate", "max_samples"},
     },
     "collaborator": {
-        "KITCHENSYNC": {"debug", "enable_system_logging", "enable_audio", "enable_caching"},
+        "KITCHENSYNC": {"role", "debug", "enable_system_logging", "enable_audio", "enable_caching"},
         "DEFAULT": {"device_id", "video_file", "video_driver", "midi_port", "sync_port"},
+    },
+    "bystander": {
+        "KITCHENSYNC": {"role", "device_id", "debug", "enable_system_logging"},
+        "DEFAULT": {},
     },
 }
 
 EDITABLE_CONFIG_FIELDS = {
     "leader": [
+        {"key": "role", "section": "KITCHENSYNC", "type": "string", "label": "Role", "default": "leader"},
         {"key": "video_file", "section": "DEFAULT", "type": "string", "label": "Video file", "default": "videos/sync_test.mp4"},
         {"key": "schedule_file", "section": "DEFAULT", "type": "string", "label": "Schedule file", "default": "schedule.json"},
         {"key": "enable_audio", "section": "KITCHENSYNC", "type": "bool", "label": "Enable Audio", "default": True},
         {"key": "audio_output", "section": "KITCHENSYNC", "type": "string", "label": "Audio Output", "default": "hdmi", "tooltip": "hdmi or headphone"},
         {"key": "enable_midi", "section": "KITCHENSYNC", "type": "bool", "label": "Enable MIDI", "default": True},
-        {"key": "enable_caching", "section": "KITCHENSYNC", "type": "bool", "label": "Local Caching", "default": False, "tooltip": "Copy files from USB to local SD card before playback for better performance."},
+        {"key": "enable_caching", "section": "KITCHENSYNC", "type": "bool", "label": "Local Caching", "default": False},
         {"key": "debug", "section": "KITCHENSYNC", "type": "bool", "label": "Debug", "default": False},
-        {"key": "tick_interval", "section": "DEFAULT", "type": "float", "label": "Sync Interval", "default": 0.05, "tooltip": "How often the leader sends sync packets (in seconds). Smaller is faster but uses more network/CPU."},
-        {"key": "enable_latency_compensation", "section": "KITCHENSYNC", "type": "bool", "label": "Latency Compensation", "default": True, "tooltip": "Automatically advance sync clock based on network RTT to eliminate follower lag."},
-        {"key": "latency_factor", "section": "DEFAULT", "type": "float", "label": "Latency Factor", "default": 0.5, "tooltip": "Multiplier for RTT compensation. 0.5 = RTT/2 (one-way estimate). Lower this if leader is behind followers."},
-        {"key": "max_drift", "section": "DEFAULT", "type": "float", "label": "Max Drift", "default": 0.5, "tooltip": "Threshold (in seconds) for a hard seek. If the node is further away than this, it jumps to the leader time."},
-        {"key": "min_drift", "section": "DEFAULT", "type": "float", "label": "Min Drift", "default": 0.01, "tooltip": "Threshold (in seconds) where speed adjustment begins. Drifts smaller than this are ignored for stability."},
-        {"key": "kp", "section": "DEFAULT", "type": "float", "label": "P-Gain", "default": 0.25, "tooltip": "The aggression of the speed correction. Higher values react faster but may cause visible speed jitter."},
-        {"key": "max_samples", "section": "DEFAULT", "type": "int", "label": "Max Samples", "default": 3, "tooltip": "Number of samples for drift averaging. Lower values react faster; higher values are smoother but add lag."},
-        {"key": "min_rate", "section": "DEFAULT", "type": "float", "label": "Min Rate", "default": 0.9, "tooltip": "Minimum playback speed adjustment (e.g. 0.9 = 90% speed)."},
-        {"key": "max_rate", "section": "DEFAULT", "type": "float", "label": "Max Rate", "default": 1.2, "tooltip": "Maximum playback speed adjustment (e.g. 1.2 = 120% speed)."},
+        {"key": "tick_interval", "section": "DEFAULT", "type": "float", "label": "Sync Interval", "default": 0.05},
+        {"key": "enable_latency_compensation", "section": "KITCHENSYNC", "type": "bool", "label": "Latency Compensation", "default": True},
+        {"key": "latency_factor", "section": "DEFAULT", "type": "float", "label": "Latency Factor", "default": 0.5},
+        {"key": "max_drift", "section": "DEFAULT", "type": "float", "label": "Max Drift", "default": 0.5},
+        {"key": "min_drift", "section": "DEFAULT", "type": "float", "label": "Min Drift", "default": 0.01},
+        {"key": "kp", "section": "DEFAULT", "type": "float", "label": "P-Gain", "default": 0.25},
+        {"key": "max_samples", "section": "DEFAULT", "type": "int", "label": "Max Samples", "default": 3},
+        {"key": "min_rate", "section": "DEFAULT", "type": "float", "label": "Min Rate", "default": 0.9},
+        {"key": "max_rate", "section": "DEFAULT", "type": "float", "label": "Max Rate", "default": 1.2},
         {"key": "enable_system_logging", "section": "KITCHENSYNC", "type": "bool", "label": "Verbose logging", "default": False},
     ],
     "collaborator": [
+        {"key": "role", "section": "KITCHENSYNC", "type": "string", "label": "Role", "default": "collaborator"},
         {"key": "video_file", "section": "DEFAULT", "type": "string", "label": "Video file", "default": "videos/sync_test.mp4"},
         {"key": "enable_audio", "section": "KITCHENSYNC", "type": "bool", "label": "Enable Audio", "default": True},
         {"key": "midi_port", "section": "DEFAULT", "type": "int", "label": "MIDI port", "default": 0},
+        {"key": "debug", "section": "KITCHENSYNC", "type": "bool", "label": "Debug", "default": False},
+    ],
+    "bystander": [
+        {"key": "role", "section": "KITCHENSYNC", "type": "string", "label": "Role", "default": "bystander"},
         {"key": "debug", "section": "KITCHENSYNC", "type": "bool", "label": "Debug", "default": False},
     ],
 }
 
 class ConfigurationError(Exception):
     """Raised when configuration loading fails"""
-
     pass
 
 
@@ -75,9 +84,7 @@ class USBConfigLoader:
                         parts = line.split(" on ")
                         if len(parts) >= 2:
                             mount_point = parts[1].split(" type ")[0]
-                            if os.path.exists(mount_point) and os.path.isdir(
-                                mount_point
-                            ):
+                            if os.path.exists(mount_point) and os.path.isdir(mount_point):
                                 mount_points.append(mount_point)
         except Exception as e:
             print(f"Error checking USB drives: {e}")
@@ -85,11 +92,18 @@ class USBConfigLoader:
 
     @staticmethod
     def find_config_on_usb() -> Optional[str]:
-        """Find kitchensync.ini on USB drives"""
-        for mount_point in USBConfigLoader.find_usb_mount_points():
-            config_path = os.path.join(mount_point, "kitchensync.ini")
+        """Find ksync.ini on USB drives, prioritizing root."""
+        mount_points = USBConfigLoader.find_usb_mount_points()
+        # Prioritize root
+        for mount_point in mount_points:
+            config_path = os.path.join(mount_point, "ksync.ini")
             if os.path.exists(config_path):
                 return config_path
+        # Then subdirs
+        for mount_point in mount_points:
+            for root, _, files in os.walk(mount_point):
+                if "ksync.ini" in files:
+                    return os.path.join(root, "ksync.ini")
         return None
 
     @staticmethod
@@ -101,9 +115,7 @@ class USBConfigLoader:
                 for file in files:
                     if any(file.lower().endswith(ext) for ext in video_extensions):
                         video_path = os.path.join(root, file)
-                        log_info(
-                            f"Found video on USB: {video_path}", component="config"
-                        )
+                        log_info(f"Found video on USB: {video_path}", component="config")
                         return {"mount_point": mount_point, "video_file": file}
         return None
 
@@ -112,40 +124,12 @@ class USBConfigLoader:
         """Find a MIDI schedule file on USB drives"""
         schedule_files = ["schedule.json", "midi_schedule.json", "relay_schedule.json"]
         for mount_point in USBConfigLoader.find_usb_mount_points():
-            # Check root directory first
-            for schedule_file in schedule_files:
-                schedule_path = os.path.join(mount_point, schedule_file)
-                if os.path.exists(schedule_path):
-                    log_info(
-                        f"Found schedule on USB: {schedule_path}", component="config"
-                    )
-                    return schedule_path
-
-            # Check subdirectories for schedule files
             for root, _, files in os.walk(mount_point):
                 for file in files:
                     if file.lower() in [sf.lower() for sf in schedule_files]:
                         schedule_path = os.path.join(root, file)
-                        log_info(
-                            f"Found schedule on USB: {schedule_path}",
-                            component="config",
-                        )
+                        log_info(f"Found schedule on USB: {schedule_path}", component="config")
                         return schedule_path
-        return None
-
-    @staticmethod
-    def find_midi_file_on_usb() -> Optional[str]:
-        """Find a MIDI file on USB drives for conversion to schedule"""
-        midi_extensions = [".mid", ".midi"]
-        for mount_point in USBConfigLoader.find_usb_mount_points():
-            for root, _, files in os.walk(mount_point):
-                for file in files:
-                    if any(file.lower().endswith(ext) for ext in midi_extensions):
-                        midi_path = os.path.join(root, file)
-                        log_info(
-                            f"Found MIDI file on USB: {midi_path}", component="config"
-                        )
-                        return midi_path
         return None
 
 
@@ -156,453 +140,248 @@ class ConfigManager:
         self.config = configparser.ConfigParser()
         self.config_file = config_file
         self.usb_config_path = None
-        self._usb_mount_point = None  # Use a private attribute
+        self._usb_mount_point = None
         self.load_configuration()
 
     def load_configuration(self) -> None:
         """Load configuration from USB, file, or create defaults"""
-        # Try USB first
+        # 1. Try USB prioritize root (via USBConfigLoader)
         self.usb_config_path = USBConfigLoader.find_config_on_usb()
         if self.usb_config_path:
             self.config.read(self.usb_config_path)
             self._usb_mount_point = os.path.dirname(self.usb_config_path)
-            log_info(
-                f"Loaded config from USB: {self.usb_config_path}", component="config"
-            )
+            log_info(f"Loaded config from USB: {self.usb_config_path}", component="config")
             return
 
-        # Try to find video on USB if no config is found
-        usb_video_info = USBConfigLoader.find_video_on_usb()
-        if usb_video_info:
-            log_info(
-                "No config file found, but a video was detected on USB.",
-                component="config",
-            )
-            log_info(
-                "Assuming 'collaborator' role and creating a default config.",
-                component="config",
-            )
-            self._create_default_config(
-                is_leader=False, video_file=usb_video_info["video_file"]
-            )
-            self._usb_mount_point = usb_video_info["mount_point"]
-            return
-
-        # Try specified config file
+        # 2. Try specified config file
         if self.config_file and os.path.exists(self.config_file):
             self.config.read(self.config_file)
             log_info(f"Loaded config from: {self.config_file}", component="config")
             return
 
-        # Create default configuration if no other option is available
-        log_warning(
-            "No config file or USB drive found. Creating default config.",
-            component="config",
-        )
-        self._create_default_config()
+        # 3. Try finding video on USB to auto-configure as collaborator
+        usb_video_info = USBConfigLoader.find_video_on_usb()
+        if usb_video_info:
+            log_info("No ksync.ini found, but video detected on USB. Auto-configuring collaborator.", component="config")
+            self._create_default_config(role="collaborator", video_file=usb_video_info["video_file"])
+            self._usb_mount_point = usb_video_info["mount_point"]
+            return
 
-    def _create_default_config(
-        self, is_leader: bool = False, video_file: Optional[str] = None
-    ) -> None:
+        # 4. Fallback to bystander
+        log_warning("No config file or USB found. Entering bystander mode.", component="config")
+        self._create_default_config(role="bystander")
+
+    def _create_default_config(self, role: str = "bystander", video_file: Optional[str] = None) -> None:
         """Create default configuration"""
         self.config["KITCHENSYNC"] = {
-            "is_leader": str(is_leader).lower(),
+            "role": role,
             "debug": "false",
             "device_id": f"pi-{int(os.urandom(2).hex(), 16):03d}",
             "video_file": video_file or "video.mp4",
             "video_driver": "gst",
-            # Logging settings - default to minimal for performance
             "enable_system_logging": "false",
-            # Networking / sync
-            "tick_interval": "0.1",  # seconds between leader sync broadcasts
-            # Audio output selection
-            "audio_output": "hdmi",  # hdmi or headphone
+            "tick_interval": "0.1",
+            "audio_output": "hdmi",
         }
 
         if self.config_file and not os.path.exists(self.config_file):
             try:
                 with open(self.config_file, "w") as f:
                     self.config.write(f)
-                log_info(
-                    f"Created default config file: {self.config_file}",
-                    component="config",
-                )
+                log_info(f"Created default config file: {self.config_file}", component="config")
             except IOError as e:
-                log_error(
-                    f"Could not write default config file: {e}", component="config"
-                )
+                log_error(f"Could not write default config file: {e}", component="config")
 
     def get(self, key: str, default: Any = None, section: str = "KITCHENSYNC") -> Any:
-        """Get configuration value"""
         try:
-            if section in self.config:
-                return self.config.get(section, key, fallback=default)
-            elif "DEFAULT" in self.config:
-                return self.config.get("DEFAULT", key, fallback=default)
+            if section in self.config and key in self.config[section]:
+                return self.config.get(section, key)
+            if "DEFAULT" in self.config and key in self.config["DEFAULT"]:
+                return self.config.get("DEFAULT", key)
             return default
         except Exception:
             return default
 
-    def getboolean(
-        self, key: str, default: bool = False, section: str = "KITCHENSYNC"
-    ) -> bool:
-        """Get boolean configuration value"""
-        try:
-            if section in self.config:
-                return self.config.getboolean(section, key, fallback=default)
-            elif "DEFAULT" in self.config:
-                return self.config.getboolean("DEFAULT", key, fallback=default)
-            return default
-        except Exception:
-            return default
+    def getboolean(self, key: str, default: bool = False, section: str = "KITCHENSYNC") -> bool:
+        val = self.get(key, None, section)
+        if val is None: return default
+        return str(val).lower() in ("true", "yes", "1", "on")
 
     def getint(self, key: str, default: int = 0, section: str = "KITCHENSYNC") -> int:
-        """Get integer configuration value"""
-        try:
-            if section in self.config:
-                return self.config.getint(section, key, fallback=default)
-            elif "DEFAULT" in self.config:
-                return self.config.getint("DEFAULT", key, fallback=default)
-            return default
-        except Exception:
-            return default
+        try: return int(self.get(key, default, section))
+        except: return default
 
-    def getfloat(
-        self, key: str, default: float = 0.0, section: str = "KITCHENSYNC"
-    ) -> float:
-        """Get float configuration value"""
-        try:
-            if section in self.config:
-                return self.config.getfloat(section, key, fallback=default)
-            elif "DEFAULT" in self.config:
-                return self.config.getfloat("DEFAULT", key, fallback=default)
-            return default
-        except Exception:
-            return default
+    def getfloat(self, key: str, default: float = 0.0, section: str = "KITCHENSYNC") -> float:
+        try: return float(self.get(key, default, section))
+        except: return default
 
-    def update_local_config(self, target_file: str, updates: Dict[str, Any]) -> None:
-        """Update local configuration file with new values"""
+    def update_local_config(self, target_file: str, updates: Dict[str, Any], section: str = "KITCHENSYNC") -> None:
         local_config = configparser.ConfigParser()
-
-        # Load existing config or create new
         if os.path.exists(target_file):
             local_config.read(target_file)
-
-        # Ensure DEFAULT section exists
-        if "DEFAULT" not in local_config:
-            local_config.add_section("DEFAULT")
-
-        # Apply updates
+        if section not in local_config:
+            local_config.add_section(section)
         for key, value in updates.items():
-            local_config.set("DEFAULT", key, str(value))
-
-        # Save updated config
+            local_config.set(section, key, str(value))
         with open(target_file, "w") as f:
             local_config.write(f)
+        log_info(f"Updated {target_file}", component="config")
 
-        print(f" Updated {target_file}")
+    @property
+    def is_leader(self) -> bool:
+        return self.get("role", "bystander").lower() == "leader"
+
+    @property
+    def is_bystander(self) -> bool:
+        return self.get("role", "bystander").lower() == "bystander"
 
     def role_name(self) -> str:
-        """Return the runtime role associated with this config."""
-        return "leader" if self.is_leader else "collaborator"
+        if self.is_leader: return "leader"
+        if self.is_bystander: return "bystander"
+        return "collaborator"
 
     def get_config_path(self) -> Optional[str]:
-        """Return the active writable config path."""
-        if self.config_file:
-            return self.config_file
-        return self.usb_config_path
+        return self.config_file or self.usb_config_path
 
     def get_editable_fields(self, role: Optional[str] = None) -> list[Dict[str, Any]]:
-        """Return metadata for fields exposed in the remote controller."""
-        return list(EDITABLE_CONFIG_FIELDS[self._normalize_role(role)])
+        return list(EDITABLE_CONFIG_FIELDS[role or self.role_name()])
 
     def get_editable_values(self, role: Optional[str] = None) -> Dict[str, Any]:
-        """Return editable config values using native Python types."""
         values: Dict[str, Any] = {}
         for field in self.get_editable_fields(role):
             key = field["key"]
             section = field["section"]
-            field_type = field["type"]
+            ftype = field["type"]
             default = field.get("default")
-            if field_type == "int":
-                values[key] = self.getint(key, int(default) if default is not None else 0, section=section)
-            elif field_type == "float":
-                values[key] = self.getfloat(key, float(default) if default is not None else 0.0, section=section)
-            elif field_type == "bool":
-                values[key] = self.getboolean(key, bool(default) if default is not None else False, section=section)
-            else:
-                values[key] = self.get(key, str(default) if default is not None else "", section=section)
+            if ftype == "int": values[key] = self.getint(key, int(default) if default is not None else 0, section)
+            elif ftype == "float": values[key] = self.getfloat(key, float(default) if default is not None else 0.0, section)
+            elif ftype == "bool": values[key] = self.getboolean(key, bool(default) if default is not None else False, section)
+            else: values[key] = self.get(key, str(default) if default is not None else "", section)
         return values
 
     def get_default_values(self, role: Optional[str] = None) -> Dict[str, Any]:
-        """Return the default values for editable fields."""
-        values: Dict[str, Any] = {}
-        for field in self.get_editable_fields(role):
-            values[field["key"]] = field.get("default")
-        return values
+        return {f["key"]: f.get("default") for f in self.get_editable_fields(role)}
 
-    def clean_and_save_config(
-        self,
-        target_file: str,
-        updates: Dict[str, Any],
-        role: Optional[str] = None,
-    ) -> None:
-        """Rewrite a config file to the supported surface for the given role."""
-        role_name = self._normalize_role(role)
-        existing = configparser.ConfigParser()
-        if os.path.exists(target_file):
-            existing.read(target_file)
-
+    def clean_and_save_config(self, target_file: str, updates: Dict[str, Any], role: Optional[str] = None) -> None:
+        role_name = role or self.role_name()
         cleaned = configparser.ConfigParser()
         cleaned["KITCHENSYNC"] = {}
         cleaned["DEFAULT"] = {}
+        
+        # Determine if we are updating the current config
+        is_current = (self.get_config_path() == target_file)
 
-        for section_name, keys in CONFIG_ROLE_SECTIONS[role_name].items():
-            for key in sorted(keys):
-                value = self._resolve_config_value(existing, updates, section_name, key)
-                if value is None:
-                    continue
-                cleaned[section_name][key] = self._stringify_config_value(value)
+        for sec, keys in CONFIG_ROLE_SECTIONS[role_name].items():
+            if sec not in cleaned: cleaned.add_section(sec)
+            for k in sorted(keys):
+                val = updates.get(k)
+                if val is None:
+                    # Fallback to current
+                    val = self.get(k, None, sec)
+                if val is not None:
+                    cleaned[sec][k] = str(val).lower() if isinstance(val, bool) else str(val)
 
         with open(target_file, "w") as handle:
             cleaned.write(handle)
-
-        if self.get_config_path() == target_file:
+        
+        if is_current:
             self.config = cleaned
 
-    def _normalize_role(self, role: Optional[str]) -> str:
-        resolved = role or self.role_name()
-        if resolved not in CONFIG_ROLE_SECTIONS:
-            raise ConfigurationError(f"Unsupported config role: {resolved}")
-        return resolved
-
-    def _resolve_config_value(
-        self,
-        parser: configparser.ConfigParser,
-        updates: Dict[str, Any],
-        section: str,
-        key: str,
-    ) -> Any:
-        if key in updates:
-            return updates[key]
-
-        if section != "DEFAULT" and section in parser and key in parser[section]:
-            return parser[section][key]
-
-        if key in parser.defaults():
-            return parser.defaults()[key]
-
-        if section != "DEFAULT" and section in self.config and key in self.config[section]:
-            return self.config[section][key]
-
-        if key in self.config.defaults():
-            return self.config.defaults()[key]
-
-        return None
-
     def set_param(self, key: str, value: Any) -> None:
-        """Set a configuration parameter live."""
-        # Find which section this key belongs to
-        section = "DEFAULT"
+        # Live update internal object
+        section = "KITCHENSYNC"
         for field in EDITABLE_CONFIG_FIELDS["leader"]:
             if field["key"] == key:
                 section = field["section"]
                 break
-        
-        if section == "DEFAULT":
-            self.config.defaults()[key] = self._stringify_config_value(value)
-        else:
-            if section not in self.config:
-                self.config[section] = {}
-            self.config[section][key] = self._stringify_config_value(value)
-
-    @staticmethod
-    def _stringify_config_value(value: Any) -> str:
-        if isinstance(value, bool):
-            return str(value).lower()
-        return str(value)
+        if section not in self.config: self.config[section] = {}
+        self.config[section][key] = str(value).lower() if isinstance(value, bool) else str(value)
 
     @property
     def content_dir(self) -> str:
-        """Get the directory where content (video/schedules) is located"""
-        if self._usb_mount_point:
-            return self._usb_mount_point
-        return os.getcwd()
+        return self._usb_mount_point or os.getcwd()
+
+    @property
+    def video_file(self) -> str: return self.get("video_file", "video.mp4")
 
     @property
     def schedule_file(self) -> str:
-        """Get the path to the schedule JSON file"""
-        # Try to find on USB first
-        usb_schedule = USBConfigLoader.find_schedule_on_usb()
-        if usb_schedule:
-            return usb_schedule
-        
-        # Fallback to config value or default
-        return self.get("schedule_file", "schedule.json")
+        usb_sched = USBConfigLoader.find_schedule_on_usb()
+        return usb_sched or self.get("schedule_file", "schedule.json")
 
     @property
-    def video_driver(self) -> str:
-        """Get selected video driver (gstreamer or mock)."""
-        return self.get("video_driver", "gst")
+    def video_driver(self) -> str: return self.get("video_driver", "gst")
 
     @property
-    def enable_midi(self) -> bool:
-        """Check if MIDI output is enabled"""
-        return self.getboolean("enable_midi", True)
+    def enable_midi(self) -> bool: return self.getboolean("enable_midi", True)
 
     @property
-    def enable_osc(self) -> bool:
-        """Check if OSC output is enabled"""
-        return self.getboolean("enable_osc", False)
+    def enable_osc(self) -> bool: return self.getboolean("enable_osc", False)
 
     @property
-    def is_leader(self) -> bool:
-        """Check if this instance should run as leader"""
-        return self.getboolean("is_leader", False)
-
-    @property
-    def debug_mode(self) -> bool:
-        """Check if debug mode is enabled"""
-        return self.getboolean("debug", False)
+    def debug_mode(self) -> bool: return self.getboolean("debug", False)
 
     @property
     def device_id(self) -> str:
-        """Get unique device identifier, with hardware-based fallback for clones."""
-        configured_id = self.get("device_id", "pi-unknown")
-        
-        # If the ID is the default or generic, try to make it unique via hardware
-        if configured_id in ["pi-unknown", "pi-001", "unknown-pi"]:
-            hw_id = self._get_hardware_id()
-            if hw_id:
-                return f"pi-{hw_id}"
-        
-        return configured_id
+        cid = self.get("device_id", "pi-unknown")
+        if cid in ["pi-unknown", "pi-001", "unknown-pi"]:
+            hwid = self._get_hardware_id()
+            if hwid: return f"pi-{hwid}"
+        return cid
 
     def _get_hardware_id(self) -> Optional[str]:
-        """Try to get a unique hardware ID (Pi Serial or MAC)."""
-        # 1. Try Pi Serial
         try:
             with open("/proc/cpuinfo", "r") as f:
                 for line in f:
                     if line.startswith("Serial"):
-                        serial = line.split(":")[1].strip()
-                        if serial and serial != "0000000000000000":
-                            return serial[-6:] # Last 6 digits
-        except Exception:
-            pass
-
-        # 2. Try MAC address
+                        s = line.split(":")[1].strip()
+                        if s and s != "0000000000000000": return s[-6:]
+        except: pass
         try:
             import uuid
-            mac = hex(uuid.getnode())[2:]
-            if mac:
-                return mac[-6:]
-        except Exception:
-            pass
-            
+            m = hex(uuid.getnode())[2:]
+            if m: return m[-6:]
+        except: pass
         return None
 
     @property
-    def video_file(self) -> str:
-        """Get configured video file"""
-        return self.get("video_file", "video.mp4")
+    def usb_mount_point(self) -> Optional[str]: return self._usb_mount_point
 
     @property
-    def usb_mount_point(self) -> Optional[str]:
-        """Get USB mount point if available"""
-        return self._usb_mount_point
+    def enable_system_logging(self) -> bool: return self.getboolean("enable_system_logging", False)
 
     @property
-    def enable_system_logging(self) -> bool:
-        """Check if system detailed logging is enabled"""
-        return self.getboolean("enable_system_logging", False)
-        {
-            "key": "enable_audio",
-            "section": "KITCHENSYNC",
-            "type": "bool",
-            "label": "Enable Audio",
-        },
-        {
-            "key": "tick_interval",
-            "section": "DEFAULT",
-            "type": "float",
-            "label": "Sync Tick Interval",
-        },
-        {
-            "key": "max_drift",
-            "section": "DEFAULT",
-            "type": "float",
-            "label": "Max Drift (Hard Seek)",
-        },
-        {
-            "key": "min_drift",
-            "section": "DEFAULT",
-            "type": "float",
-            "label": "Min Drift (Fine Sync)",
-        },
-        {
-            "key": "kp",
-            "section": "DEFAULT",
-            "type": "float",
-            "label": "Sync P-Gain",
-        },
+    def tick_interval(self) -> float: return self.getfloat("tick_interval", 0.1)
 
     @property
-    def tick_interval(self) -> float:
-        """Leader broadcast interval in seconds (default 0.1)."""
-        return self.getfloat("tick_interval", 0.1)
+    def audio_output(self) -> str: return self.get("audio_output", "hdmi")
 
     @property
-    def audio_output(self) -> str:
-        """Get audio output selection (hdmi or headphone, default: hdmi)."""
-        return self.get("audio_output", "hdmi")
+    def max_drift(self) -> float: return self.getfloat("max_drift", 0.5)
 
     @property
-    def max_drift(self) -> float:
-        """Threshold for hard seek in seconds (default 0.5)."""
-        return self.getfloat("max_drift", 0.5)
+    def min_drift(self) -> float: return self.getfloat("min_drift", 0.01)
 
     @property
-    def min_drift(self) -> float:
-        """Threshold for fine speed adjustment in seconds (default 0.01)."""
-        return self.getfloat("min_drift", 0.01)
+    def kp(self) -> float: return self.getfloat("kp", 0.25)
 
     @property
-    def kp(self) -> float:
-        """P-gain coefficient for speed adjustment (default 0.25)."""
-        return self.getfloat("kp", 0.25)
+    def min_rate(self) -> float: return self.getfloat("min_rate", 0.9)
 
     @property
-    def min_rate(self) -> float:
-        """Minimum playback rate (default 0.9)."""
-        return self.getfloat("min_rate", 0.9)
+    def max_rate(self) -> float: return self.getfloat("max_rate", 1.2)
 
     @property
-    def max_rate(self) -> float:
-        """Maximum playback rate (default 1.2)."""
-        return self.getfloat("max_rate", 1.2)
+    def max_samples(self) -> int: return self.getint("max_samples", 10)
 
     @property
-    def max_samples(self) -> int:
-        """Number of samples for drift averaging (default 10)."""
-        return self.getint("max_samples", 10)
+    def enable_audio(self) -> bool: return self.getboolean("enable_audio", True)
 
     @property
-    def enable_audio(self) -> bool:
-        """Check if audio playback is enabled (default: True)."""
-        return self.getboolean("enable_audio", True)
+    def enable_latency_compensation(self) -> bool: return self.getboolean("enable_latency_compensation", True)
 
     @property
-    def enable_latency_compensation(self) -> bool:
-        """Check if automatic RTT latency compensation is enabled (default: True)."""
-        return self.getboolean("enable_latency_compensation", True)
+    def latency_factor(self) -> float: return self.getfloat("latency_factor", 0.5)
 
     @property
-    def latency_factor(self) -> float:
-        """Multiplier for RTT compensation (default: 0.5)."""
-        return self.getfloat("latency_factor", 0.5)
-
-    @property
-    def enable_caching(self) -> bool:
-        """Check if local content caching is enabled (default: False)."""
-        return self.getboolean("enable_caching", False)
+    def enable_caching(self) -> bool: return self.getboolean("enable_caching", False)
