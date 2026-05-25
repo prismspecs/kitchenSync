@@ -37,8 +37,17 @@ class VideoFileManager:
     ):
         self.configured_file = configured_file
         self.usb_mount_point = usb_mount_point
-        # Prioritize local videos/ folder explicitly
-        self.fallback_sources = ["./videos/", "./"]
+        
+        # Calculate project root (one level up from src/)
+        self.project_root = Path(__file__).parent.parent.parent.resolve()
+        
+        # Prioritize absolute paths for stability
+        self.fallback_sources = [
+            str(self.project_root / "videos"),
+            str(self.project_root),
+            "./videos",
+            "."
+        ]
         self.cache_dir = cache_dir or os.path.expanduser("~/kitchensync_cache")
 
     def find_video_file(self, target_file: Optional[str] = None, use_cache: bool = False) -> Optional[str]:
@@ -200,36 +209,51 @@ class VideoFileManager:
         video_files = []
         seen_names = set()
 
+        log_info(f"Scanning for videos in fallback sources: {self.fallback_sources}", "video")
+
         # Check USB drives
-        for mount_point in self._get_usb_mount_points():
-            for vid_path in self._get_videos_in_directory(mount_point):
+        usb_mounts = self._get_usb_mount_points()
+        for mount_point in usb_mounts:
+            vids = self._get_videos_in_directory(mount_point)
+            log_info(f"Found {len(vids)} videos on USB mount: {mount_point}", "video")
+            for vid_path in vids:
                 name = os.path.basename(vid_path)
                 if name not in seen_names:
-                    stats = os.stat(vid_path)
-                    video_files.append({
-                        "name": name,
-                        "path": vid_path,
-                        "size": stats.st_size,
-                        "mtime": stats.st_mtime,
-                        "location": "usb"
-                    })
-                    seen_names.add(name)
+                    try:
+                        stats = os.stat(vid_path)
+                        video_files.append({
+                            "name": name,
+                            "path": vid_path,
+                            "size": stats.st_size,
+                            "mtime": stats.st_mtime,
+                            "location": "usb"
+                        })
+                        seen_names.add(name)
+                    except Exception as e:
+                        log_error(f"Error reading video metadata for {vid_path}: {e}", "video")
 
         # Check local directories
         for source in self.fallback_sources:
             if os.path.exists(source):
-                for vid_path in self._get_videos_in_directory(source):
+                vids = self._get_videos_in_directory(source)
+                log_info(f"Found {len(vids)} videos in local source: {source}", "video")
+                for vid_path in vids:
                     name = os.path.basename(vid_path)
                     if name not in seen_names:
-                        stats = os.stat(vid_path)
-                        video_files.append({
-                            "name": name,
-                            "path": os.path.abspath(vid_path),
-                            "size": stats.st_size,
-                            "mtime": stats.st_mtime,
-                            "location": "local"
-                        })
-                        seen_names.add(name)
+                        try:
+                            stats = os.stat(vid_path)
+                            video_files.append({
+                                "name": name,
+                                "path": os.path.abspath(vid_path),
+                                "size": stats.st_size,
+                                "mtime": stats.st_mtime,
+                                "location": "local"
+                            })
+                            seen_names.add(name)
+                        except Exception as e:
+                            log_error(f"Error reading video metadata for {vid_path}: {e}", "video")
+            else:
+                log_warning(f"Local source directory does not exist: {source}", "video")
 
         return sorted(video_files, key=lambda x: x["name"])
 
@@ -276,24 +300,28 @@ class VideoFileManager:
         return mount_points
 
     def _find_any_video_in_directory(self, directory: str) -> Optional[str]:
-        """Find any video file in a directory"""
-        if not os.path.exists(directory):
-            return None
-
-        for ext in self.SUPPORTED_EXTENSIONS:
-            videos = glob.glob(os.path.join(directory, f"*{ext}"))
-            if videos:
-                return videos[0]  # Return first found
-        return None
+        """Find any video file in a directory (case-insensitive)"""
+        vids = self._get_videos_in_directory(directory)
+        return vids[0] if vids else None
 
     def _get_videos_in_directory(self, directory: str) -> List[str]:
-        """Get all video files in a directory"""
+        """Get all video files in a directory (case-insensitive)"""
         if not os.path.exists(directory):
             return []
 
         videos = []
-        for ext in self.SUPPORTED_EXTENSIONS:
-            videos.extend(glob.glob(os.path.join(directory, f"*{ext}")))
+        try:
+            # Get all files and filter manually for case-insensitivity
+            all_files = os.listdir(directory)
+            for filename in all_files:
+                file_path = os.path.join(directory, filename)
+                if os.path.isfile(file_path):
+                    ext = os.path.splitext(filename)[1].lower()
+                    if ext in self.SUPPORTED_EXTENSIONS:
+                        videos.append(file_path)
+        except Exception as e:
+            log_error(f"Error scanning directory {directory}: {e}", "video")
+            
         return videos
 
     @staticmethod
