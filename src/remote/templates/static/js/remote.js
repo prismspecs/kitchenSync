@@ -194,6 +194,21 @@ function renderField(deviceId, field, value, videoOptions, scheduleOptions) {
         `;
     }
 
+    if (field.type === 'choice') {
+        const options = (field.options || []).map((opt) => `
+            <option value="${escapeHtml(opt)}" ${opt === safeValue ? 'selected' : ''}>${escapeHtml(opt)}</option>
+        `).join('');
+
+        return `
+            <div class="row">
+                <label for="${fieldId}" class="field-label">${escapeHtml(field.label)}${tooltip}</label>
+                <select id="${fieldId}" data-key="${field.key}">
+                    ${options}
+                </select>
+            </div>
+        `;
+    }
+
     if (field.key === 'video_file' && videoOptions.length) {
         const options = videoOptions.map((video) => `
             <option value="${escapeHtml(video)}" ${video === safeValue ? 'selected' : ''}>${escapeHtml(video)}</option>
