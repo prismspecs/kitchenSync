@@ -139,13 +139,6 @@ async function requestConfig(deviceId) {
     await postJson('/api/config/request', { device_id: deviceId });
 }
 
-async function refreshDevice(deviceId) {
-    await Promise.all([
-        postJson('/api/media/request', { device_id: deviceId }),
-        postJson('/api/config/request', { device_id: deviceId })
-    ]);
-}
-
 function escapeHtml(value) {
 
     return String(value ?? '')
@@ -283,7 +276,7 @@ function renderMessage(message) {
 
 function renderConfigCell(device, videoOptions, scheduleOptions) {
     const config = device.config;
-    const refreshIcon = `<button class="btn-icon btn-refresh-cell" title="Refresh Config & Media" onclick="refreshDevice('${device.device_id}')">${REFRESH_ICON_SVG}</button>`;
+    const refreshIcon = `<button class="btn-icon btn-refresh-cell" title="Refresh Config" onclick="requestConfig('${device.device_id}')">${REFRESH_ICON_SVG}</button>`;
 
     if (!config) {
         if (device.role === 'collaborator' && !requestedConfigs.has(device.device_id)) {
@@ -331,7 +324,7 @@ let currentPreviewVideo = null;
 function renderMediaCell(device, leaderMedia) {
     const media = device.media || [];
     const isLeader = device.role === 'leader';
-    const refreshIcon = `<button class="btn-icon btn-refresh-cell" title="Refresh Config & Media" onclick="refreshDevice('${device.device_id}')">${REFRESH_ICON_SVG}</button>`;
+    const refreshIcon = `<button class="btn-icon btn-refresh-cell" title="Refresh Media" onclick="requestMedia('${device.device_id}')">${REFRESH_ICON_SVG}</button>`;
 
     if (!device.online && !isLeader) {
         return `
@@ -549,11 +542,9 @@ function renderState(state) {
             const latencyLabel = device.role === 'leader' ? 'Cluster RTT avg' : 'Ping';
             const latencyText = device.latency_ms != null ? `${latencyLabel}: ${device.latency_ms} ms` : `${latencyLabel}: n/a`;
             const statusText = `${device.status} (${device.online ? 'Online' : 'Offline'})`;
-            const refreshIcon = `<button class="btn-icon btn-refresh-cell" title="Refresh Config & Media" onclick="refreshDevice('${device.device_id}')">${REFRESH_ICON_SVG}</button>`;
             
             const newSummaryHtml = `
                 <div class="cell-container">
-                    ${refreshIcon}
                     <div class="device-summary-primary">${escapeHtml(device.label)}</div>
                     <div class="device-summary-line device-summary-status ${getStatusClass(device)}">${escapeHtml(statusText)}</div>
                     <div class="device-summary-line device-summary-role">${escapeHtml(device.role)}</div>
