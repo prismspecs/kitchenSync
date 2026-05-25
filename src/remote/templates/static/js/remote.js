@@ -137,7 +137,15 @@ async function requestConfig(deviceId) {
     await postJson('/api/config/request', { device_id: deviceId });
 }
 
+async function refreshDevice(deviceId) {
+    await Promise.all([
+        postJson('/api/media/request', { device_id: deviceId }),
+        postJson('/api/config/request', { device_id: deviceId })
+    ]);
+}
+
 function escapeHtml(value) {
+
     return String(value ?? '')
         .replaceAll('&', '&amp;')
         .replaceAll('<', '&lt;')
@@ -273,13 +281,18 @@ function renderMessage(message) {
 
 function renderConfigCell(device, videoOptions, scheduleOptions) {
     const config = device.config;
+    const refreshIcon = `<button class="btn-icon btn-refresh-cell" title="Refresh Config & Media" onclick="refreshDevice('${device.device_id}')">↻</button>`;
+
     if (!config) {
         if (device.role === 'collaborator' && !requestedConfigs.has(device.device_id)) {
             requestConfig(device.device_id);
         }
         return `
-            <button onclick="requestConfig('${device.device_id}')">Load config</button>
-            <div class="message-area">${renderMessage(device.message)}</div>
+            <div class="cell-container">
+                ${refreshIcon}
+                <button onclick="requestConfig('${device.device_id}')">Load config</button>
+                <div class="message-area">${renderMessage(device.message)}</div>
+            </div>
         `;
     }
 
@@ -290,21 +303,23 @@ function renderConfigCell(device, videoOptions, scheduleOptions) {
     const fields = config.fields.map((field) => renderField(device.device_id, field, values[field.key], videoOptions, scheduleOptions)).join('');
 
     return `
-        <details class="config-panel" data-device-id="${device.device_id}" ${isOpen ? 'open' : ''}>
-            <summary>
-                <span>Configuration</span>
-                <span class="config-meta">${escapeHtml(config.config_path || '')}</span>
-            </summary>
-            <form onsubmit="saveConfig(event, '${device.device_id}', '${config.role}')">
-                ${fields}
-                <div class="row actions-row">
-                    <button type="submit">Save</button>
-                    <button type="button" onclick="loadDefaults('${device.device_id}')">Defaults</button>
-                    ${device.role === 'collaborator' ? `<button type="button" onclick="requestConfig('${device.device_id}')">Refresh</button>` : ''}
-                </div>
-                <div class="message-area">${renderMessage(device.message)}</div>
-            </form>
-        </details>
+        <div class="cell-container">
+            ${refreshIcon}
+            <details class="config-panel" data-device-id="${device.device_id}" ${isOpen ? 'open' : ''}>
+                <summary>
+                    <span>Configuration</span>
+                    <span class="config-meta">${escapeHtml(config.config_path || '')}</span>
+                </summary>
+                <form onsubmit="saveConfig(event, '${device.device_id}', '${config.role}')">
+                    ${fields}
+                    <div class="row actions-row">
+                        <button type="submit">Save</button>
+                        <button type="button" onclick="loadDefaults('${device.device_id}')">Defaults</button>
+                    </div>
+                    <div class="message-area">${renderMessage(device.message)}</div>
+                </form>
+            </details>
+        </div>
     `;
 }
 
@@ -314,9 +329,15 @@ let currentPreviewVideo = null;
 function renderMediaCell(device, leaderMedia) {
     const media = device.media || [];
     const isLeader = device.role === 'leader';
-    
+    const refreshIcon = `<button class="btn-icon btn-refresh-cell" title="Refresh Config & Media" onclick="refreshDevice('${device.device_id}')">↻</button>`;
+
     if (!device.online && !isLeader) {
-        return '<div class="message info">Device offline</div>';
+        return `
+            <div class="cell-container">
+                ${refreshIcon}
+                <div class="message info">Device offline</div>
+            </div>
+        `;
     }
 
     if (!isLeader && !device.media && !requestedConfigs.has(device.device_id + '-media')) {
@@ -342,7 +363,6 @@ function renderMediaCell(device, leaderMedia) {
         `;
     }).join('');
 
-    const refreshBtn = `<button class="btn-small" onclick="requestMedia('${device.device_id}')" style="margin-top: 8px;">Refresh List</button>`;
     let syncSection = '';
     
     if (!isLeader) {
@@ -372,27 +392,26 @@ function renderMediaCell(device, leaderMedia) {
                         <select id="sync-select-${device.device_id}" class="select-small">${options}</select>
                         <button class="btn-small" onclick="syncMedia('${device.device_id}', document.getElementById('sync-select-${device.device_id}').value)">Pull</button>
                     </div>
-                    ${refreshBtn}
                 </div>
                 ${uploadSection}
             `;
         } else {
             syncSection = `
-                <div style="padding: 10px 0 0 0;">${refreshBtn}</div>
                 ${uploadSection}
             `;
         }
-    } else {
-        syncSection = `<div style="padding-top: 10px;">${refreshBtn}</div>`;
     }
 
     return `
-        <div class="media-panel">
-            <h4>Available Videos</h4>
-            <div class="media-list">
-                ${mediaListHtml || '<div class="message info">No videos found</div>'}
+        <div class="cell-container">
+            ${refreshIcon}
+            <div class="media-panel">
+                <h4>Available Videos</h4>
+                <div class="media-list">
+                    ${mediaListHtml || '<div class="message info">No videos found</div>'}
+                </div>
+                ${syncSection}
             </div>
-            ${syncSection}
         </div>
     `;
 }
@@ -528,12 +547,17 @@ function renderState(state) {
             const latencyLabel = device.role === 'leader' ? 'Cluster RTT avg' : 'Ping';
             const latencyText = device.latency_ms != null ? `${latencyLabel}: ${device.latency_ms} ms` : `${latencyLabel}: n/a`;
             const statusText = `${device.status} (${device.online ? 'Online' : 'Offline'})`;
+            const refreshIcon = `<button class="btn-icon btn-refresh-cell" title="Refresh Config & Media" onclick="refreshDevice('${device.device_id}')">↻</button>`;
+            
             const newSummaryHtml = `
-                <div class="device-summary-primary">${escapeHtml(device.label)}</div>
-                <div class="device-summary-line device-summary-status ${getStatusClass(device)}">${escapeHtml(statusText)}</div>
-                <div class="device-summary-line device-summary-role">${escapeHtml(device.role)}</div>
-                <div class="device-summary-line device-summary-ip">${escapeHtml(device.ip)}</div>
-                <div class="device-summary-line device-summary-latency">${escapeHtml(latencyText)}</div>
+                <div class="cell-container">
+                    ${refreshIcon}
+                    <div class="device-summary-primary">${escapeHtml(device.label)}</div>
+                    <div class="device-summary-line device-summary-status ${getStatusClass(device)}">${escapeHtml(statusText)}</div>
+                    <div class="device-summary-line device-summary-role">${escapeHtml(device.role)}</div>
+                    <div class="device-summary-line device-summary-ip">${escapeHtml(device.ip)}</div>
+                    <div class="device-summary-line device-summary-latency">${escapeHtml(latencyText)}</div>
+                </div>
             `;
             if (cells[0].innerHTML !== newSummaryHtml) {
                 cells[0].innerHTML = newSummaryHtml;
