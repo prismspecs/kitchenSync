@@ -47,6 +47,25 @@ class SystemState:
         self.start_time = None
         self.current_time = 0.0
 
+    @property
+    def is_syncing(self) -> bool:
+        """Check if system is currently in a running/syncing state"""
+        return self.is_running
+
+    def get(self, key: str, default: Any = None) -> Any:
+        """
+        Safety fallback for code treating SystemState as a dictionary.
+        Logs the access to help identify the caller.
+        """
+        from core.logger import log_warning
+        log_warning(f"SystemState: Legacy dictionary-style access detected for key '{key}'")
+        
+        # Try to return matching attribute if it exists
+        if hasattr(self, key):
+            return getattr(self, key)
+            
+        return default
+
     def update_time(self) -> float:
         """Update current time and return it"""
         if self.is_running and self.start_time:

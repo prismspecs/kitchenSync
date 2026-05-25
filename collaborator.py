@@ -125,12 +125,19 @@ class CollaboratorPi:
             while self.is_running:
                 # Send heartbeat with current role and status
                 status = "bystander" if self.config.is_bystander else "ready"
-                if self.system_state.is_syncing:
+                if self.system_state.is_running:
                     status = "syncing"
                 
-                self.command_listener.send_heartbeat(self.config.device_id, status)
+                try:
+                    self.command_listener.send_heartbeat(self.config.device_id, status)
+                except Exception as e:
+                    log_warning(f"Failed to send heartbeat: {e}", component="collaborator")
+                    
                 time.sleep(2)
         except KeyboardInterrupt:
+            self.cleanup()
+        except Exception as e:
+            log_error(f"Collaborator main loop crashed: {e}", component="collaborator")
             self.cleanup()
 
     def _handle_command(self, msg: dict, addr: tuple) -> None:
