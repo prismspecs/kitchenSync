@@ -1,51 +1,43 @@
-# GEMINI.md - Context & Developer Guide
+# kSync.md - Context & Developer Guide
 
 ## 1. Project Overview
 **kSync** is a distributed system for synchronized video playback and multi-protocol control output across multiple Raspberry Pi nodes.
 - **Goal:** Play video and trigger synchronized events (MIDI, OSC, and other common protocols) in perfect sync across a local network.
-- **Deployment:** "Plug-and-play" using USB drives for configuration (`kitchensync.ini`) and content (`.mp4`, `schedule.json`).
-- **Roles:**
-    - **Leader:** Plays video, broadcasts time sync (UDP 5005), manages the schedule, and coordinates collaborators.
-    - **Collaborator:** Receives time sync, adjusts video playback (drift correction), and manages local protocol output (MIDI, OSC, etc.).
+- **Deployment:** "Plug-and-play" using USB drives for configuration (`ksync.ini`) and content (`.mp4`, `schedule.json`).
+- **Universal Node:** Every node starts as a "Universal Node". It detects its role (Leader, Collaborator, or Bystander) from the configuration and boots into the appropriate state.
 
 ## 2. Core Development Principles
-- **High Organization:** All code must be highly organized and modular. Before adding code, evaluate if it belongs in an existing module or deserves a new file.
-- **No Hacks:** Writing "hacks" or "quick fixes" is a last resort. Prioritize robust, idiomatic solutions that address the root cause.
-- **Research First:** Always look up existing documentation, best practices, and community solutions online before implementing. Leverage the global knowledge base to ensure technical integrity.
-- **Efficiency:** The system must be incredibly efficient, especially regarding network latency, CPU usage on the Pi, and disk I/O.
-- **Abstraction:** Design for extensibility. Protocol handlers (MIDI, OSC) should be abstracted so that new protocols can be added with minimal changes to the core sync logic.
+- **Universal Architecture:** A single codebase powers all roles. Nodes pivot between roles using `os.execv` to ensure a clean state transition.
+- **Robust Discovery:** Video discovery is hardened using absolute path resolution across USB, local `videos/` folders, and the project root.
+- **Surgical UI:** The Web UI utilizes a custom DOM reconciliation strategy to allow real-time status updates without disrupting user input or focus.
+- **Stable Identity:** Device IDs are derived from hardware serial numbers to ensure consistent identification across restarts without manual configuration.
 
 ## 3. Architecture & Core Components
 
 ### Entry Points
-- **`kitchensync.py`**: The main boot-time entry point (systemd service). Detects role and launches appropriate script.
-- **`leader.py`**: Uses `src.video` for playback, broadcasts master clock, hosts debug UI.
-- **`collaborator.py`**: Listens for sync, adjusts playback to match leader, drives control protocols.
+- **`kitchensync.py`**: The Universal Bootstrapper. Handles USB config detection, software upgrades, and role-switching.
+- **`leader.py`**: The master node. Coordinates playback, broadcasts time sync, and manages collaborators.
+- **`collaborator.py`**: The playback node. Handles both `collaborator` (syncing) and `bystander` (idle) modes.
 
 ### Module Structure (`src/`)
-- **`src/config/`**: USB detection, ini parsing.
+- **`src/config/`**: Unified configuration management and USB detection.
 - **`src/core/`**: Shared logic (logging, system state, scheduling).
-- **`src/protocols/`**: (Future) Abstraction layer for MIDI, OSC, etc. Currently `src/midi/`.
-- **`src/networking/`**: UDP broadcast/listen logic.
-- **`src/video/`**: Abstracted video player. Moving to GStreamer for seamless rate-based sync.
-- **`src/ui/`**: CLI/Terminal interface.
-- **`src/debug/`**: HTML overlay for status.
+- **`src/protocols/`**: Abstraction layer for MIDI and OSC output.
+- **`src/networking/`**: High-precision UDP sync and command management.
+- **`src/video/`**: GStreamer-based video driver with rate-based synchronization.
+- **`src/ui/`**: CLI/Terminal interface and window management.
 
 ## 4. Conventions
 - **Language**: Python 3.
-- **Style**: PEP 8ish. Robust error handling for network/hardware disconnects.
-- **Logging**: Extensive logging for headless debugging; however, minimize logging in performance-critical loops.
-- **Sync Model**: Leader is the master clock. Collaborators drift-correct using speed adjustments (GStreamer) rather than disruptive seeks.
-- **Media Management**: Distributed system for managing content via Web UI.
-    - **Leader**: Acts as the central hub and file server for media.
-    - **Collaborators**: Can report local media, delete files, and pull updates from the Leader via HTTP.
-    - **Uploads**: Support for direct-to-device uploads (proxied through Leader).
+- **Sync Model**: Leader broadcasts a master clock. Collaborators use a P-controller to adjust playback speed via GStreamer for seamless correction.
+- **Media Management**: Centralized via Web UI. Leader acts as the hub; Collaborators pull media via HTTP.
+- **Branding**: Consistently referred to as **kSync**.
 
 ## 5. Current Status
-- **Operational:** Basic playback and sync using VLC; USB auto-mounting; MIDI output.
-- **Media Management**: Fully integrated Web UI for file upload, deletion, and cluster-wide synchronization.
-- **Critical Issues:** VLC sync is "stop-and-wait" and causes black screens.
-- **Roadmap:**
-    1. **GStreamer Migration:** Replace VLC for rate-based sync.
-    2. **Protocol Abstraction:** Refactor MIDI logic into a generic protocol handler (adding OSC support).
-    3. **OS Optimization:** Move to a minimal OS profile (Openbox + X11 on Lite) for better reliability.
+- **Operational:** High-performance GStreamer sync; surgical Web UI for cluster management; stable hardware-based IDs.
+- **Recently Implemented:**
+    - [x] Unified "Universal Node" boot sequence.
+    - [x] Surgical DOM reconciliation (Boss UI).
+    - [x] Hardened video discovery (Case-insensitive & Multi-path).
+    - [x] Automated systemd service generation.
+    - [x] "Bystander" idle state for provisioning.
