@@ -702,6 +702,13 @@ def start_remote():
             
     command_manager.register_handler("file_list_response", lambda msg, addr: store_media_message(msg))
 
+    def auto_discover(device_id, ip):
+        log_info(f"Auto-discovered new device: {device_id} at {ip}. Requesting state...", component="remote")
+        command_manager.send_command({"type": "file_list_request"}, target_pi=device_id)
+        command_manager.send_command({"type": "config_request"}, target_pi=device_id)
+        
+    command_manager.on_device_discovered = auto_discover
+
     sync_broadcaster.setup_socket()
 
     def master_clock():
@@ -709,11 +716,6 @@ def start_remote():
         while True:
             if cluster_state.is_master and cluster_state.is_playing:
                 cluster_state.video_pos = time.time() - cluster_state.master_start_time
-                compensation = compute_latency_compensation(
-                    command_manager.get_average_rtt(),
-                    config.enable_latency_compensation,
-                    config.latency_factor,
-                )
 
                 if time.time() - last_broadcast > 2.0:
                     start_cmd = {
@@ -737,7 +739,7 @@ def start_remote():
                 sync_packet = json.dumps(
                     {
                         "type": "sync",
-                        "time": cluster_state.video_pos + compensation,
+                        "time": cluster_state.video_pos,
                         "leader_id": sync_broadcaster.leader_id,
                         "source": "wall",
                         "sent_at": time.time(),

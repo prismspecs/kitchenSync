@@ -103,6 +103,7 @@ class CollaboratorPi:
         self._stop_sync_thread = threading.Event()
         
         self.is_running = False
+        self.local_rtt = 0.0
 
     def run(self) -> None:
         """Main execution loop"""
@@ -123,17 +124,8 @@ class CollaboratorPi:
 
         try:
             while self.is_running:
-                # Send heartbeat with current role and status
-                status = "bystander" if self.config.is_bystander else "ready"
-                if self.system_state.is_running:
-                    status = "syncing"
-                
-                try:
-                    self.command_listener.send_heartbeat(self.config.device_id, status)
-                except Exception as e:
-                    log_warning(f"Failed to send heartbeat: {e}", component="collaborator")
-                    
-                time.sleep(2)
+                # Pong now handles status/heartbeat via the leader's ping mechanism
+                time.sleep(1)
         except KeyboardInterrupt:
             self.cleanup()
         except Exception as e:
@@ -153,8 +145,15 @@ class CollaboratorPi:
         elif cmd_type == "stop":
             self.stop_playback()
         elif cmd_type == "ping":
+            self.local_rtt = float(msg.get("last_rtt", self.local_rtt))
+            status = "bystander" if self.config.is_bystander else ("syncing" if self.system_state.is_running else "ready")
             self.command_listener.send_message(
-                {"type": "pong", "device_id": self.config.device_id},
+                {
+                    "type": "pong", 
+                    "device_id": self.config.device_id,
+                    "status": status,
+                    "video_file": self.config.video_file
+                },
                 host=addr[0],
             )
         elif cmd_type == "config_request":
@@ -285,10 +284,19 @@ class CollaboratorPi:
         if state and self.system_state.is_running:
             leader_time, received_at, sent_at = state
             adjusted_leader_time = leader_time
-            if sent_at:
+            
+            # Per-device Latency Compensation (Robust against unsynced clocks)
+            compensation = 0.0
+            if self.config.enable_latency_compensation and self.local_rtt > 0:
+                compensation = (self.local_rtt / 2.0) * self.config.latency_factor
+                adjusted_leader_time += compensation
+
+            # Legacy transport latency (only if RTT is unknown and clocks might be synced)
+            if sent_at and compensation == 0.0:
                 transport_latency = received_at - float(sent_at)
                 if 0.0 <= transport_latency <= 0.25:
                     adjusted_leader_time += transport_latency
+            
             adjusted_leader_time += max(0.0, time.time() - received_at)
             self.system_state.current_time = adjusted_leader_time
             if self.midi_scheduler:

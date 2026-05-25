@@ -296,8 +296,10 @@ class CommandManager:
         
         # Latency tracking
         self._rtt_samples = {} # Dict[device_id, list]
+        self._last_rtt = {}    # Dict[device_id, float]
         self._ping_sent_at = {} # Dict[device_id, float]
         self._latency_probe_thread = None
+        self.on_device_discovered = None
 
     def get_average_rtt(self) -> float:
         """Calculate the average round-trip time across all collaborators."""
@@ -317,15 +319,13 @@ class CommandManager:
 
     def get_device_last_rtt(self, device_id: str) -> float:
         """Return the most recent RTT for a specific collaborator."""
-        samples = self._rtt_samples.get(device_id, [])
-        if not samples:
-            return 0.0
-        return samples[-1]
+        return self._last_rtt.get(device_id, 0.0)
 
     def _record_rtt_sample(self, device_id: str, rtt: float) -> None:
         """Store a bounded RTT sample for a collaborator."""
         if rtt < 0.0 or rtt > 2.0:
             return
+        self._last_rtt[device_id] = rtt
         if device_id not in self._rtt_samples:
             self._rtt_samples[device_id] = []
         self._rtt_samples[device_id].append(rtt)
@@ -460,9 +460,8 @@ class CommandManager:
     def send_ping(self, target_pi: Optional[str] = None) -> None:
         """Send an explicit latency probe to one or all registered collaborators."""
         self._ensure_send_socket()
-        ping = {"type": "ping", "sent_at": time.time()}
+        
         targets = []
-
         if target_pi:
             info = self.collaborators.get(target_pi)
             if info:
@@ -476,6 +475,11 @@ class CommandManager:
 
         for device_id, ip in targets:
             try:
+                ping = {
+                    "type": "ping", 
+                    "sent_at": time.time(),
+                    "last_rtt": self._last_rtt.get(device_id, 0.0)
+                }
                 self._ping_sent_at[device_id] = time.monotonic()
                 self.control_sock.sendto(json.dumps(ping).encode(), (ip, self.control_port))
             except Exception:
@@ -488,10 +492,22 @@ class CommandManager:
         if not device_id:
             return
 
+        is_new = device_id not in self.collaborators
+
         if msg_type == "pong":
             sent_at = self._ping_sent_at.pop(device_id, None)
             if sent_at is not None:
                 self._record_rtt_sample(device_id, time.monotonic() - sent_at)
+            
+            # Use pong as heartbeat - update status and video info
+            self.collaborators[device_id] = {
+                "ip": addr[0],
+                "last_seen": time.time(),
+                "status": msg.get("status", "ready"),
+                "video_file": msg.get("video_file", self.collaborators.get(device_id, {}).get("video_file", "")),
+            }
+            if is_new and self.on_device_discovered:
+                self.on_device_discovered(device_id, addr[0])
             return
 
         # If a new ID appears from an IP that we already know, 
@@ -509,6 +525,8 @@ class CommandManager:
                 "status": msg.get("status", "unknown"),
                 "video_file": msg.get("video_file", ""),
             }
+            if is_new and self.on_device_discovered:
+                self.on_device_discovered(device_id, addr[0])
 
         elif msg_type == "heartbeat":
             self.collaborators[device_id] = {
@@ -520,6 +538,8 @@ class CommandManager:
                     self.collaborators.get(device_id, {}).get("video_file", ""),
                 ),
             }
+            if is_new and self.on_device_discovered:
+                self.on_device_discovered(device_id, addr[0])
 
     def get_collaborators(self) -> Dict[str, Dict]:
         """Get current collaborator status and prune long-dead ones"""
