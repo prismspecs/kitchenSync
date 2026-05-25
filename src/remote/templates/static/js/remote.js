@@ -4,6 +4,8 @@ const draftConfigValues = new Map();
 const openConfigPanels = new Set();
 let latestState = null;
 
+const REFRESH_ICON_SVG = `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"></path><path d="M1 20v-6h6"></path><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>`;
+
 async function postJson(path, payload) {
     const response = await fetch(path, {
         method: 'POST',
@@ -281,7 +283,7 @@ function renderMessage(message) {
 
 function renderConfigCell(device, videoOptions, scheduleOptions) {
     const config = device.config;
-    const refreshIcon = `<button class="btn-icon btn-refresh-cell" title="Refresh Config & Media" onclick="refreshDevice('${device.device_id}')">↻</button>`;
+    const refreshIcon = `<button class="btn-icon btn-refresh-cell" title="Refresh Config & Media" onclick="refreshDevice('${device.device_id}')">${REFRESH_ICON_SVG}</button>`;
 
     if (!config) {
         if (device.role === 'collaborator' && !requestedConfigs.has(device.device_id)) {
@@ -329,7 +331,7 @@ let currentPreviewVideo = null;
 function renderMediaCell(device, leaderMedia) {
     const media = device.media || [];
     const isLeader = device.role === 'leader';
-    const refreshIcon = `<button class="btn-icon btn-refresh-cell" title="Refresh Config & Media" onclick="refreshDevice('${device.device_id}')">↻</button>`;
+    const refreshIcon = `<button class="btn-icon btn-refresh-cell" title="Refresh Config & Media" onclick="refreshDevice('${device.device_id}')">${REFRESH_ICON_SVG}</button>`;
 
     if (!device.online && !isLeader) {
         return `
@@ -547,7 +549,7 @@ function renderState(state) {
             const latencyLabel = device.role === 'leader' ? 'Cluster RTT avg' : 'Ping';
             const latencyText = device.latency_ms != null ? `${latencyLabel}: ${device.latency_ms} ms` : `${latencyLabel}: n/a`;
             const statusText = `${device.status} (${device.online ? 'Online' : 'Offline'})`;
-            const refreshIcon = `<button class="btn-icon btn-refresh-cell" title="Refresh Config & Media" onclick="refreshDevice('${device.device_id}')">↻</button>`;
+            const refreshIcon = `<button class="btn-icon btn-refresh-cell" title="Refresh Config & Media" onclick="refreshDevice('${device.device_id}')">${REFRESH_ICON_SVG}</button>`;
             
             const newSummaryHtml = `
                 <div class="cell-container">
