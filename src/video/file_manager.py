@@ -39,15 +39,26 @@ class VideoFileManager:
         self.usb_mount_point = usb_mount_point
         
         # Calculate project root (one level up from src/)
-        self.project_root = Path(__file__).parent.parent.parent.resolve()
+        # We also check the current working directory as a safety fallback
+        try:
+            self.project_root = Path(__file__).parent.parent.parent.resolve()
+        except Exception:
+            self.project_root = Path(os.getcwd()).resolve()
         
         # Prioritize absolute paths for stability
         self.fallback_sources = [
             str(self.project_root / "videos"),
+            str(Path(os.getcwd()).resolve() / "videos"),
             str(self.project_root),
+            str(Path(os.getcwd()).resolve()),
             "./videos",
             "."
         ]
+        
+        # Remove duplicates while preserving order
+        seen = set()
+        self.fallback_sources = [x for x in self.fallback_sources if not (x in seen or seen.add(x))]
+        
         self.cache_dir = cache_dir or os.path.expanduser("~/kitchensync_cache")
 
     def find_video_file(self, target_file: Optional[str] = None, use_cache: bool = False) -> Optional[str]:

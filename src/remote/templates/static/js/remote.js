@@ -397,50 +397,108 @@ function renderMediaCell(device, leaderMedia) {
     `;
 }
 
+/**
+ * Surgical DOM Reconciliation
+ * Replaces the content of a container ONLY if it has changed, 
+ * and ALWAYS preserves focus/selection in inputs/forms.
+ */
+function reconcileCell(container, newHtml, force = false) {
+    if (!container) return;
+    
+    // 1. If nothing changed, do nothing
+    const currentHtml = container.innerHTML;
+    if (!force && currentHtml === newHtml) return;
+
+    // 2. If the user is currently interacting with something in this cell, 
+    // we must be very careful not to wipe their state.
+    const activeElement = document.activeElement;
+    const hasFocus = container.contains(activeElement);
+    
+    if (hasFocus) {
+        // If it's a form element, we skip the broad innerHTML update to preserve focus/typing.
+        // We only update non-input parts of the cell if possible.
+        // For now, if focused, we only update the 'message-area' if it exists.
+        const messageArea = container.querySelector('.message-area');
+        if (messageArea) {
+            const temp = document.createElement('div');
+            temp.innerHTML = newHtml;
+            const newMessageArea = temp.querySelector('.message-area');
+            if (newMessageArea && messageArea.innerHTML !== newMessageArea.innerHTML) {
+                messageArea.innerHTML = newMessageArea.innerHTML;
+            }
+        }
+        
+        // Also update the 'media-list' if it's a media cell and the user isn't focused there
+        const mediaList = container.querySelector('.media-list');
+        const mediaInput = container.querySelector('.file-input-small');
+        const isMediaFocused = mediaList?.contains(activeElement) || mediaInput === activeElement;
+        
+        if (!isMediaFocused) {
+            const temp = document.createElement('div');
+            temp.innerHTML = newHtml;
+            const newMediaList = temp.querySelector('.media-list');
+            if (newMediaList && mediaList && mediaList.innerHTML !== newMediaList.innerHTML) {
+                mediaList.innerHTML = newMediaList.innerHTML;
+            }
+        }
+        
+        return;
+    }
+
+    // 3. No focus, safe to replace
+    container.innerHTML = newHtml;
+}
+
 function renderState(state) {
     latestState = state;
+    
+    // Update Top-level Video Selector
     const selector = document.getElementById('videoSelector');
     if (selector && document.activeElement !== selector) {
-        selector.innerHTML = (state.available_videos || []).map((video) => `
+        const newSelectorHtml = (state.available_videos || []).map((video) => `
             <option value="${video}" ${video === state.current_video ? 'selected' : ''}>${video}</option>
         `).join('');
-        selector.onchange = () => changeVideo(selector.value);
-
-        if (state.current_video && state.current_video !== currentPreviewVideo) {
-            const preview = document.getElementById('preview');
-            if (preview) {
-                const buster = initialLoadDone ? '?t=' + Date.now() : '';
-                preview.src = '/video_file' + buster;
-                preview.load();
-            }
-            currentPreviewVideo = state.current_video;
-            initialLoadDone = true;
+        if (selector.innerHTML !== newSelectorHtml) {
+            selector.innerHTML = newSelectorHtml;
+            selector.onchange = () => changeVideo(selector.value);
         }
     }
 
+    if (state.current_video && state.current_video !== currentPreviewVideo) {
+        const preview = document.getElementById('preview');
+        if (preview) {
+            const buster = initialLoadDone ? '?t=' + Date.now() : '';
+            preview.src = '/video_file' + buster;
+            preview.load();
+        }
+        currentPreviewVideo = state.current_video;
+        initialLoadDone = true;
+    }
 
+    // Update Suggestions
     const suggestions = document.getElementById('videoSuggestions');
     if (suggestions) {
-        suggestions.innerHTML = (state.available_videos || []).map((video) => `
-            <option value="${video}"></option>
-        `).join('');
+        const newSugg = (state.available_videos || []).map(v => `<option value="${v}"></option>`).join('');
+        if (suggestions.innerHTML !== newSugg) suggestions.innerHTML = newSugg;
     }
 
     const scheduleSuggestions = document.getElementById('scheduleSuggestions');
     if (scheduleSuggestions) {
-        scheduleSuggestions.innerHTML = (state.available_schedules || []).map((schedule) => `
-            <option value="${schedule}"></option>
-        `).join('');
+        const newSugg = (state.available_schedules || []).map(s => `<option value="${s}"></option>`).join('');
+        if (scheduleSuggestions.innerHTML !== newSugg) scheduleSuggestions.innerHTML = newSugg;
     }
 
+    // Update Status Header
     const clusterStatus = document.getElementById('clusterStatus');
     if (clusterStatus) {
         const latency = state.latency || {};
         const latencyText = latency.enabled
             ? ` | RTT: ${latency.avg_rtt_ms ?? 'n/a'}ms | Compensation: ${latency.compensation_ms ?? 0}ms`
             : ' | RTT compensation: off';
-        clusterStatus.textContent =
-            `Status: ${state.status} | Time: ${state.video_pos.toFixed(2)}s | Video: ${state.current_video}${latencyText}`;
+        const newStatusText = `Status: ${state.status} | Time: ${state.video_pos.toFixed(2)}s | Video: ${state.current_video}${latencyText}`;
+        if (clusterStatus.textContent !== newStatusText) {
+            clusterStatus.textContent = newStatusText;
+        }
     }
 
     // Sync Preview Video
@@ -452,6 +510,7 @@ function renderState(state) {
         }
     }
 
+    // Update Device Table
     const rows = document.getElementById('deviceRows');
     if (rows) {
         state.devices.forEach((device) => {
@@ -459,27 +518,28 @@ function renderState(state) {
             if (!row) {
                 row = document.createElement('tr');
                 row.id = `row-${device.device_id}`;
+                row.innerHTML = '<td class="device-summary-cell"></td><td class="config-cell"></td><td class="media-cell"></td>';
                 rows.appendChild(row);
             }
 
-            if (row.cells.length !== 3) {
-                row.innerHTML = '<td class="device-summary-cell"></td><td class="config-cell"></td><td class="media-cell"></td>';
-            }
-
             const cells = row.cells;
+            
+            // 1. Update Summary Cell
             const latencyLabel = device.role === 'leader' ? 'Cluster RTT avg' : 'Ping';
             const latencyText = device.latency_ms != null ? `${latencyLabel}: ${device.latency_ms} ms` : `${latencyLabel}: n/a`;
             const statusText = `${device.status} (${device.online ? 'Online' : 'Offline'})`;
-            cells[0].innerHTML = `
+            const newSummaryHtml = `
                 <div class="device-summary-primary">${escapeHtml(device.label)}</div>
                 <div class="device-summary-line device-summary-status ${getStatusClass(device)}">${escapeHtml(statusText)}</div>
                 <div class="device-summary-line device-summary-role">${escapeHtml(device.role)}</div>
                 <div class="device-summary-line device-summary-ip">${escapeHtml(device.ip)}</div>
                 <div class="device-summary-line device-summary-latency">${escapeHtml(latencyText)}</div>
             `;
+            if (cells[0].innerHTML !== newSummaryHtml) {
+                cells[0].innerHTML = newSummaryHtml;
+            }
 
-            const configCell = cells[1];
-            
+            // 2. Update Config Cell (Surgical)
             const snapshotTime = device.config?.updated_at || 0;
             const saveTime = lastSaveAt.get(device.device_id) || 0;
             const isPending = saveTime > snapshotTime && (Date.now() / 1000 - saveTime < 8);
@@ -487,48 +547,38 @@ function renderState(state) {
                 draftConfigValues.delete(device.device_id);
             }
 
-            const hasFocus = configCell.contains(document.activeElement);
-            if (!hasFocus && !isPending) {
-                configCell.innerHTML = renderConfigCell(device, state.available_videos || [], state.available_schedules || []);
-                const panel = configCell.querySelector('.config-panel');
-                if (panel) {
-                    panel.addEventListener('toggle', () => {
-                        const panelDeviceId = panel.dataset.deviceId;
-                        if (panel.open) {
-                            openConfigPanels.add(panelDeviceId);
-                        } else {
-                            openConfigPanels.delete(panelDeviceId);
-                        }
-                    });
-                }
+            const newConfigHtml = renderConfigCell(device, state.available_videos || [], state.available_schedules || []);
+            reconcileCell(cells[1], newConfigHtml);
 
-                configCell.querySelectorAll('[data-key]').forEach((input) => {
-                    const updateDraft = () => storeDraftValues(device.device_id, configCell);
+            // Re-attach listeners to new inputs if they were just rendered
+            cells[1].querySelectorAll('[data-key]').forEach((input) => {
+                if (!input.dataset.bound) {
+                    const updateDraft = () => storeDraftValues(device.device_id, cells[1]);
                     input.addEventListener('input', updateDraft);
                     input.addEventListener('change', updateDraft);
-                });
-            } else {
-                const messageArea = configCell.querySelector('.message-area');
-                if (messageArea) {
-                    if (isPending) {
-                        messageArea.innerHTML = '<div class="message info">Saving...</div>';
-                    } else {
-                        messageArea.innerHTML = renderMessage(device.message);
-                    }
+                    input.dataset.bound = "true";
                 }
+            });
+            
+            // Update Toggle State
+            const panel = cells[1].querySelector('.config-panel');
+            if (panel && !panel.dataset.bound) {
+                panel.addEventListener('toggle', () => {
+                    if (panel.open) openConfigPanels.add(device.device_id);
+                    else openConfigPanels.delete(device.device_id);
+                });
+                panel.dataset.bound = "true";
             }
 
-            const mediaCell = cells[2];
-            if (!mediaCell.contains(document.activeElement)) {
-                mediaCell.innerHTML = renderMediaCell(device, state.leader_media);
-            }
+            // 3. Update Media Cell (Surgical)
+            const newMediaHtml = renderMediaCell(device, state.leader_media);
+            reconcileCell(cells[2], newMediaHtml);
         });
 
+        // Prune dead rows
         const activeIds = new Set(state.devices.map(d => `row-${d.device_id}`));
         Array.from(rows.children).forEach(row => {
-            if (!activeIds.has(row.id)) {
-                rows.removeChild(row);
-            }
+            if (!activeIds.has(row.id)) rows.removeChild(row);
         });
     }
 }
