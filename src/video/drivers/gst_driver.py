@@ -510,17 +510,18 @@ class GstDriver(VideoDriver):
             log_info(f"Gst: Playback rate adjusted to {rate:.4f} (seamless)")
             return True
 
-        # 2. Fallback to Flushing Seek (for hardware that rejects instant changes)
-        # This is less seamless (minor flicker) but works on Pi 5.
+        # 2. Fallback to Non-Flushing Seek (much more seamless than flushing)
+        # We use ACCURATE to ensure the rate is applied precisely at the current time,
+        # but omit FLUSH to prevent the pipeline from emptying and causing a black frame.
         pos = self.get_position()
         if pos is None:
-            log_warning("Gst: Cannot adjust rate (position query failed)")
             return False
 
+        # Note: We omit Gst.SeekFlags.FLUSH here.
         success = self.pipeline.seek(
             rate,
             Gst.Format.TIME,
-            Gst.SeekFlags.FLUSH | Gst.SeekFlags.ACCURATE,
+            Gst.SeekFlags.ACCURATE,
             Gst.SeekType.SET, int(pos * Gst.SECOND),
             Gst.SeekType.NONE, -1
         )
