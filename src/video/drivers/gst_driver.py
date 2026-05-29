@@ -222,10 +222,9 @@ class GstDriver(VideoDriver):
         if os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"):
             # build a GL bin with native window size control
             try:
-                # Use videoscale + capsfilter to FORCE the window size at the GStreamer level
+                # Let GStreamer output native resolution, letting OpenGL handle scaling
                 bin_desc = (
-                    "videoconvert ! videoscale ! "
-                    "capsfilter caps=\"video/x-raw, width=1280, height=720\" ! "
+                    "videoconvert ! "
                     "glupload ! glcolorconvert ! glimagesink name=sink"
                 )
                 sink_bin = Gst.parse_bin_from_description(bin_desc, True)
