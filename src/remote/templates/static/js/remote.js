@@ -546,9 +546,7 @@ function renderState(state) {
     const clusterStatus = document.getElementById('clusterStatus');
     if (clusterStatus) {
         const latency = state.latency || {};
-        const latencyText = latency.enabled
-            ? ` | RTT: ${latency.avg_rtt_ms ?? 'n/a'}ms | Compensation: ${latency.compensation_ms ?? 0}ms`
-            : ' | RTT compensation: off';
+        const latencyText = latency.avg_rtt_ms != null ? ` | Cluster RTT avg: ${latency.avg_rtt_ms}ms` : '';
         const newStatusText = `Status: ${state.status} | Time: ${state.video_pos.toFixed(2)}s | Video: ${state.current_video}${latencyText}`;
         if (clusterStatus.textContent !== newStatusText) {
             clusterStatus.textContent = newStatusText;

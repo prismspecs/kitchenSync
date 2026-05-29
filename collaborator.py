@@ -313,7 +313,7 @@ class CollaboratorPi:
         if state and self.system_state.is_running:
             leader_time, received_at, sent_at = state
             adjusted_leader_time = leader_time
-            if sent_at:
+            if sent_at and self.config.enable_latency_compensation:
                 transport_latency = received_at - float(sent_at)
                 if 0.0 <= transport_latency <= 0.1:
                     # EWMA smoothing to reduce jitter in per-device latency

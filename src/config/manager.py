@@ -15,11 +15,11 @@ from core.logger import log_info, log_warning, log_error
 
 CONFIG_ROLE_SECTIONS = {
     "leader": {
-        "KITCHENSYNC": {"role", "device_id", "debug", "enable_system_logging", "enable_audio", "audio_output", "enable_midi", "enable_osc", "enable_caching", "enable_latency_compensation"},
-        "DEFAULT": {"video_file", "schedule_file", "video_driver", "sync_port", "tick_interval", "latency_factor", "max_drift", "min_drift", "kp", "min_rate", "max_rate", "max_samples"},
+        "KITCHENSYNC": {"role", "device_id", "debug", "enable_system_logging", "enable_audio", "audio_output", "enable_midi", "enable_osc", "enable_caching"},
+        "DEFAULT": {"video_file", "schedule_file", "video_driver", "sync_port", "tick_interval", "max_drift", "min_drift", "kp", "min_rate", "max_rate", "max_samples"},
     },
     "collaborator": {
-        "KITCHENSYNC": {"role", "debug", "enable_system_logging", "enable_audio", "enable_caching"},
+        "KITCHENSYNC": {"role", "debug", "enable_system_logging", "enable_audio", "enable_caching", "enable_latency_compensation"},
         "DEFAULT": {"device_id", "video_file", "video_driver", "midi_port", "sync_port"},
     },
     "bystander": {
@@ -39,8 +39,6 @@ EDITABLE_CONFIG_FIELDS = {
         {"key": "enable_caching", "section": "KITCHENSYNC", "type": "bool", "label": "Local Caching", "default": False, "tooltip": "If enabled, external USB videos will be copied to SD card for smoother playback."},
         {"key": "debug", "section": "KITCHENSYNC", "type": "bool", "label": "Debug Overlay", "default": False, "tooltip": "Show real-time synchronization statistics as an on-screen video overlay."},
         {"key": "tick_interval", "section": "DEFAULT", "type": "float", "label": "Sync Interval", "default": 0.05, "tooltip": "How often (seconds) to broadcast time sync messages. Lower = tighter sync but more network traffic."},
-        {"key": "enable_latency_compensation", "section": "KITCHENSYNC", "type": "bool", "label": "Latency Compensation", "default": True, "tooltip": "Automatically adjust for network RTT delay."},
-        {"key": "latency_factor", "section": "DEFAULT", "type": "float", "label": "Latency Factor", "default": 0.5, "tooltip": "Weighting for RTT compensation (0.0 to 1.0)."},
         {"key": "max_drift", "section": "DEFAULT", "type": "float", "label": "Max Drift", "default": 0.5, "tooltip": "Maximum allowed sync deviation before a hard seek (jump) is forced."},
         {"key": "min_drift", "section": "DEFAULT", "type": "float", "label": "Min Drift", "default": 0.01, "tooltip": "Minimum deviation to ignore (prevents jitter)."},
         {"key": "kp", "section": "DEFAULT", "type": "float", "label": "P-Gain", "default": 0.25, "tooltip": "Proportional gain for playback speed adjustment. Higher = faster catchup."},
@@ -55,6 +53,7 @@ EDITABLE_CONFIG_FIELDS = {
         {"key": "enable_audio", "section": "KITCHENSYNC", "type": "bool", "label": "Enable Audio", "default": True, "tooltip": "Toggle audio playback on/off."},
         {"key": "audio_output", "section": "KITCHENSYNC", "type": "choice", "label": "Audio Output", "default": "hdmi", "options": ["hdmi", "headphone"], "tooltip": "Select audio destination: HDMI or the 3.5mm Headphone Jack."},
         {"key": "enable_caching", "section": "KITCHENSYNC", "type": "bool", "label": "Local Caching", "default": False, "tooltip": "If enabled, external USB videos will be copied to SD card for smoother playback."},
+        {"key": "enable_latency_compensation", "section": "KITCHENSYNC", "type": "bool", "label": "Latency Compensation", "default": True, "tooltip": "Enable high-precision per-device latency compensation."},
         {"key": "midi_port", "section": "DEFAULT", "type": "int", "label": "MIDI port", "default": 0, "tooltip": "The index of the MIDI output port to use."},
         {"key": "debug", "section": "KITCHENSYNC", "type": "bool", "label": "Debug Overlay", "default": False, "tooltip": "Show real-time synchronization statistics as an on-screen video overlay."},
     ],

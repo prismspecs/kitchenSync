@@ -768,11 +768,7 @@ def start_remote():
         while True:
             if cluster_state.is_master and cluster_state.is_playing:
                 cluster_state.video_pos = time.time() - cluster_state.master_start_time
-                compensation = compute_latency_compensation(
-                    command_manager.get_average_rtt(),
-                    config.enable_latency_compensation,
-                    config.latency_factor,
-                )
+                compensation = 0.0
 
                 if time.time() - last_broadcast > 2.0:
                     start_cmd = {
