@@ -124,8 +124,20 @@ class CollaboratorPi:
 
         try:
             while self.is_running:
-                # Pong now handles status/heartbeat via the leader's ping mechanism
-                time.sleep(1)
+                # 1. Primary Heartbeat (Ensures visibility to Leader)
+                status = "bystander" if self.config.is_bystander else ("syncing" if self.system_state.is_running else "ready")
+                try:
+                    self.command_listener.send_message({
+                        "type": "heartbeat",
+                        "device_id": self.config.device_id,
+                        "status": status,
+                        "video_file": self.config.video_file
+                    })
+                except Exception as e:
+                    log_warning(f"Failed to send heartbeat: {e}")
+
+                # 2. Wait (Pongs are handled asynchronously in _handle_command)
+                time.sleep(5)
         except KeyboardInterrupt:
             self.cleanup()
         except Exception as e:
