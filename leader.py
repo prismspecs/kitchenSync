@@ -86,7 +86,7 @@ class LeaderPi:
         self.command_manager.register_handler("remote_set", lambda msg, addr: self.set_sync_param(param=msg.get("param"), value=msg.get("value")))
 
         # Initialize and start the integrated Remote Controller
-        set_shared_resources(self.config, self.command_manager, self.sync_broadcaster)
+        set_shared_resources(self.config, self.command_manager, self.sync_broadcaster, shared_leader=self)
         start_remote(integrated=True)
         
         # Register handlers for leader-side media and config requests

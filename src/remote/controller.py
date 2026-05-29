@@ -521,6 +521,12 @@ class RemoteHandler(BaseHTTPRequestHandler):
             return
 
         if action in {"play", "api/play"}:
+            if leader_instance:
+                leader_instance.start_system()
+                self.send_response(204)
+                self.end_headers()
+                return
+
             cluster_state.is_playing = True
             cluster_state.is_master = True
             cluster_state.master_start_time = time.time()
@@ -547,6 +553,12 @@ class RemoteHandler(BaseHTTPRequestHandler):
             return
 
         if action in {"stop", "api/stop"}:
+            if leader_instance:
+                leader_instance.stop_system()
+                self.send_response(204)
+                self.end_headers()
+                return
+
             cluster_state.is_playing = False
             cluster_state.is_master = False
             command_manager.send_command({"type": "stop"})
@@ -557,11 +569,32 @@ class RemoteHandler(BaseHTTPRequestHandler):
 
         if action == "api/seek":
             new_pos = payload.get("value", 0)
+            if leader_instance:
+                leader_instance.seek_video(str(new_pos))
+                self.send_response(204)
+                self.end_headers()
+                return
+
             cluster_state.video_pos = float(new_pos)
             cluster_state.master_start_time = time.time() - cluster_state.video_pos
             
             command_manager.send_command({"type": "remote_seek", "value": cluster_state.video_pos})
             log_info(f"Cluster SEEK: {cluster_state.video_pos:.2f}s", component="remote")
+            self.send_response(204)
+            self.end_headers()
+            return
+
+        if action == "api/set":
+            param = payload.get("param")
+            value = payload.get("value")
+            
+            if leader_instance:
+                leader_instance.set_sync_param(param, value)
+                self.send_response(204)
+                self.end_headers()
+                return
+
+            command_manager.send_command({"type": "set", "param": param, "value": value})
             self.send_response(204)
             self.end_headers()
             return
@@ -670,6 +703,10 @@ class RobustRemoteServer(ThreadingHTTPServer):
         super().handle_error(request, client_address)
 
 
+# Leader instance for integrated mode
+leader_instance = None
+
+
 def update_cluster_state(is_playing: bool, video_pos: float, duration: float, master_start_time: float, is_master: bool, current_video: str):
     global cluster_state
     cluster_state.is_playing = is_playing
@@ -680,11 +717,12 @@ def update_cluster_state(is_playing: bool, video_pos: float, duration: float, ma
     cluster_state.current_video = current_video
 
 
-def set_shared_resources(shared_config, shared_command_manager, shared_sync_broadcaster):
-    global config, command_manager, sync_broadcaster, video_manager, LOCAL_LEADER_ID
+def set_shared_resources(shared_config, shared_command_manager, shared_sync_broadcaster, shared_leader=None):
+    global config, command_manager, sync_broadcaster, video_manager, LOCAL_LEADER_ID, leader_instance
     config = shared_config
     command_manager = shared_command_manager
     sync_broadcaster = shared_sync_broadcaster
+    leader_instance = shared_leader
     LOCAL_LEADER_ID = config.device_id
     video_manager = VideoFileManager(config.video_file, config.usb_mount_point)
 
