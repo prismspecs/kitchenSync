@@ -607,13 +607,16 @@ class GstDriver(VideoDriver):
         return position if success else None
 
     def get_duration(self) -> float:
+        if not hasattr(self, "_duration"):
+            self._duration = 0.0
+            
         if not self._is_ready():
-            return 0.0
+            return self._duration
         
         success, duration = self.pipeline.query_duration(Gst.Format.TIME)
         if success:
-            return duration / Gst.SECOND
-        return 0.0
+            self._duration = duration / Gst.SECOND
+        return self._duration
 
     def get_state(self) -> PlayerState:
         if not self.pipeline:

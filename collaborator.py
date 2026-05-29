@@ -323,12 +323,15 @@ class CollaboratorPi:
             if deviation > duration/2: deviation -= duration
             elif deviation < -duration/2: deviation += duration
 
-        # Suppress hard corrections near loop boundary (within ~0.5s of seam)
-        # to avoid fighting the gapless loop transition
-        if duration and duration > 0:
-            if video_pos < 0.5 or video_pos > (duration - 0.5):
-                if abs(deviation) > 1.0:
-                    return
+        # Detect if we are near the loop boundary (within 3.0 seconds of the seam).
+        # Near boundaries, GStreamer non-flushing loop offsets can transiently 
+        # diverge, and flushing seeks are extremely expensive. We suppress standard
+        # seeks here and let the P-controller seamlessly adjust speed, unless there
+        # is a massive out-of-sync situation (> 5.0s).
+        is_near_loop = False
+        if duration and duration > 3.0:
+            if video_pos < 3.0 or video_pos > (duration - 3.0):
+                is_near_loop = True
 
         self.deviation_samples.append(deviation)
         if len(self.deviation_samples) > self.max_samples:
@@ -338,12 +341,18 @@ class CollaboratorPi:
             median_dev = deviation if self.startup_sync_count < self.FAST_SYNC_THRESHOLD else statistics.median(self.deviation_samples)
             if self.startup_sync_count < self.FAST_SYNC_THRESHOLD: self.startup_sync_count += 1
 
-            if abs(median_dev) > 2.0:
+            # Seek overrides for loop boundaries
+            allow_hard_seek = abs(median_dev) > 5.0 if is_near_loop else abs(median_dev) > 2.0
+            allow_accurate_seek = False if is_near_loop else abs(median_dev) > self.max_drift
+
+            if allow_hard_seek:
+                log_info(f"Sync: Initiating hard seek to {leader_time:.3f}s (dev={median_dev:.3f}s, near_loop={is_near_loop})", component="collaborator")
                 self.video_player.seek(leader_time, accurate=False)
                 self.deviation_samples.clear()
                 self.startup_sync_count = 0
                 self._settle_until = now + 2.5
-            elif abs(median_dev) > self.max_drift:
+            elif allow_accurate_seek:
+                log_info(f"Sync: Initiating accurate seek to {leader_time:.3f}s (dev={median_dev:.3f}s)", component="collaborator")
                 self.video_player.seek(leader_time, accurate=True)
                 self.deviation_samples.clear()
                 self._settle_until = now + 1.0
