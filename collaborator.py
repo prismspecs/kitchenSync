@@ -125,6 +125,7 @@ class CollaboratorPi:
         
         # Start the latency probe loop (pings the leader to measure RTT)
         def latency_probe_loop():
+            interval = self.config.getfloat("ping_interval", 2.0)
             while self.is_running:
                 if self.leader_ip:
                     self._ping_sent_at = time.monotonic()
@@ -132,7 +133,7 @@ class CollaboratorPi:
                         {"type": "ping", "device_id": self.config.device_id},
                         host=self.leader_ip
                     )
-                time.sleep(2.0)
+                time.sleep(interval)
                 
         threading.Thread(target=latency_probe_loop, daemon=True).start()
         
