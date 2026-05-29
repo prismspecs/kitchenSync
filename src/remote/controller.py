@@ -748,7 +748,7 @@ def start_remote():
     threading.Thread(target=master_clock, daemon=True).start()
 
     command_manager.start_listening()
-    command_manager.start_latency_probing()
+    # command_manager.start_latency_probing() # No longer needed
 
     web_thread = threading.Thread(
         target=lambda: RobustRemoteServer(("0.0.0.0", 8080), RemoteHandler).serve_forever(),

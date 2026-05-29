@@ -243,7 +243,7 @@ class SyncReceiver:
                             try:
                                 # Execute callback with high precision timestamp
                                 try:
-                                    self.sync_callback(leader_time, received_at, leader_id, sent_at)
+                                    self.sync_callback(leader_time, received_at, leader_id, sent_at, addr[0])
                                 except TypeError:
                                     # Fallback for older handlers
                                     self.sync_callback(leader_time, received_at, leader_id)
@@ -493,14 +493,6 @@ class CommandManager:
             if sent_at is not None:
                 rtt = time.monotonic() - sent_at
                 self._record_rtt_sample(device_id, rtt)
-                
-                # Direct Latency Reporting: 
-                # Tell the collaborator exactly what its RTT is so it can 
-                # perform local latency compensation.
-                self.send_command(
-                    {"type": "latency_report", "rtt": rtt}, 
-                    target_pi=device_id
-                )
             return
 
         # If a new ID appears from an IP that we already know, 
@@ -532,6 +524,11 @@ class CommandManager:
                     self.collaborators.get(device_id, {}).get("video_file", ""),
                 ),
             }
+            
+            # Record RTT if reported by the collaborator
+            reported_rtt = msg.get("rtt")
+            if reported_rtt is not None:
+                self._record_rtt_sample(device_id, float(reported_rtt))
             
         # Automatic Discovery: If this is a newly seen device, 
         # immediately request its config and media list.
@@ -650,7 +647,9 @@ class CommandListener:
         except Exception:
             pass
 
-    def send_heartbeat(self, device_id: str, status: str = "ready") -> None:
+    def send_heartbeat(self, device_id: str, status: str = "ready", rtt: Optional[float] = None) -> None:
         """Send heartbeat to leader"""
         heartbeat = {"type": "heartbeat", "device_id": device_id, "status": status}
+        if rtt is not None:
+            heartbeat["rtt"] = rtt
         self.send_message(heartbeat)

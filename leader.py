@@ -85,7 +85,7 @@ class LeaderPi:
         self.command_manager.register_handler("remote_set", lambda msg, addr: self.set_sync_param(msg.get("param"), msg.get("value")))
 
         self.command_manager.start_listening()
-        self.command_manager.start_latency_probing()
+        # self.command_manager.start_latency_probing() # No longer needed, collaborators report RTT
 
     def start_system(self) -> None:
         """Start the synchronized playback system"""
