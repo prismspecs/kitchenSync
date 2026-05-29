@@ -20,7 +20,7 @@ CONFIG_ROLE_SECTIONS = {
     },
     "collaborator": {
         "KITCHENSYNC": {"role", "debug", "enable_system_logging", "enable_audio", "enable_caching"},
-        "DEFAULT": {"device_id", "video_file", "video_driver", "midi_port", "sync_port", "ping_interval", "latency_factor"},
+        "DEFAULT": {"device_id", "video_file", "video_driver", "midi_port", "sync_port"},
     },
     "bystander": {
         "KITCHENSYNC": {"role", "device_id", "debug", "enable_system_logging"},
@@ -55,8 +55,6 @@ EDITABLE_CONFIG_FIELDS = {
         {"key": "enable_audio", "section": "KITCHENSYNC", "type": "bool", "label": "Enable Audio", "default": True, "tooltip": "Toggle audio playback on/off."},
         {"key": "audio_output", "section": "KITCHENSYNC", "type": "choice", "label": "Audio Output", "default": "hdmi", "options": ["hdmi", "headphone"], "tooltip": "Select audio destination: HDMI or the 3.5mm Headphone Jack."},
         {"key": "midi_port", "section": "DEFAULT", "type": "int", "label": "MIDI port", "default": 0, "tooltip": "The index of the MIDI output port to use."},
-        {"key": "ping_interval", "section": "DEFAULT", "type": "float", "label": "Ping Interval", "default": 2.0, "tooltip": "How often (seconds) to ping the leader for RTT measurement. Lower = more accurate latency compensation but more network traffic."},
-        {"key": "latency_factor", "section": "DEFAULT", "type": "float", "label": "Latency Factor", "default": 0.5, "tooltip": "Weighting for RTT compensation (0.0 to 1.0). Default is 0.5 (half RTT). Increase if node is behind leader."},
         {"key": "debug", "section": "KITCHENSYNC", "type": "bool", "label": "Debug", "default": False, "tooltip": "Enable on-screen debug overlay with sync stats."},
     ],
     "bystander": [

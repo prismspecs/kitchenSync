@@ -96,8 +96,6 @@ class CollaboratorPi:
         self.FAST_SYNC_THRESHOLD = 10
         self._settle_until = 0
         self.local_rtt = 0.0
-        self.leader_ip = None
-        self._ping_sent_at = 0.0
 
         # Sync Decoupling
         self._latest_sync_state = None
@@ -122,21 +120,6 @@ class CollaboratorPi:
             self.sync_receiver.start_listening()
             
         self.command_listener.start_listening()
-        
-        # Start the latency probe loop (pings the leader to measure RTT)
-        def latency_probe_loop():
-            interval = self.config.getfloat("ping_interval", 2.0)
-            while self.is_running:
-                if self.leader_ip:
-                    self._ping_sent_at = time.monotonic()
-                    self.command_listener.send_message(
-                        {"type": "ping", "device_id": self.config.device_id},
-                        host=self.leader_ip
-                    )
-                time.sleep(interval)
-                
-        threading.Thread(target=latency_probe_loop, daemon=True).start()
-        
         self.is_running = True
 
         try:
@@ -147,11 +130,7 @@ class CollaboratorPi:
                     status = "syncing"
                 
                 try:
-                    self.command_listener.send_heartbeat(
-                        self.config.device_id, 
-                        status, 
-                        rtt=self.local_rtt
-                    )
+                    self.command_listener.send_heartbeat(self.config.device_id, status)
                 except Exception as e:
                     log_warning(f"Failed to send heartbeat: {e}", component="collaborator")
                     
@@ -179,12 +158,7 @@ class CollaboratorPi:
                 {"type": "pong", "device_id": self.config.device_id},
                 host=addr[0],
             )
-        elif cmd_type == "pong":
-            if self._ping_sent_at > 0:
-                self.local_rtt = time.monotonic() - self._ping_sent_at
-                self._ping_sent_at = 0
         elif cmd_type == "latency_report":
-            # This is now redundant but kept for transitional compatibility
             self.local_rtt = float(msg.get("rtt", 0.0))
         elif cmd_type == "config_request":
             self._handle_config_request(msg, addr)
@@ -288,15 +262,11 @@ class CollaboratorPi:
 
         threading.Thread(target=download_task, daemon=True).start()
 
-    def _handle_sync(self, leader_time: float, received_at: float, leader_id: str = "unknown", sent_at: float = None, leader_ip: str = None) -> None:
+    def _handle_sync(self, leader_time: float, received_at: float, leader_id: str = "unknown", sent_at: float = None) -> None:
         if self.active_leader_id is None:
             self.active_leader_id = leader_id
         elif self.active_leader_id != leader_id:
             return
-            
-        if leader_ip:
-            self.leader_ip = leader_ip
-            
         self.last_sync_at = received_at
         if not self.system_state.is_running:
             return
@@ -320,11 +290,10 @@ class CollaboratorPi:
             adjusted_leader_time = leader_time
             
             # Per-device latency compensation:
-            # We use the RTT (round trip time) multiplied by a factor (default 0.5) 
-            # to estimate the one-way transport delay from Leader to this specific Collaborator.
+            # We use half the RTT (round trip time) to estimate the one-way 
+            # transport delay from Leader to this specific Collaborator.
             if self.local_rtt > 0:
-                factor = self.config.getfloat("latency_factor", 0.5)
-                adjusted_leader_time += (self.local_rtt * factor)
+                adjusted_leader_time += (self.local_rtt / 2.0)
             
             # Account for the time passed since the packet was received
             adjusted_leader_time += max(0.0, time.time() - received_at)

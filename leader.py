@@ -59,7 +59,6 @@ class LeaderPi:
             tick_interval=0.1,
         )
         self.command_manager = CommandManager()
-        self.command_manager.device_id = self.config.device_id
 
         # Initialize Protocols (MIDI/OSC)
         self.midi_manager = None
@@ -86,7 +85,7 @@ class LeaderPi:
         self.command_manager.register_handler("remote_set", lambda msg, addr: self.set_sync_param(msg.get("param"), msg.get("value")))
 
         self.command_manager.start_listening()
-        # self.command_manager.start_latency_probing() # No longer needed, collaborators report RTT
+        self.command_manager.start_latency_probing()
 
     def start_system(self) -> None:
         """Start the synchronized playback system"""

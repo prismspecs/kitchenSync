@@ -36,7 +36,6 @@ cluster_state = ClusterState()
 config = ConfigManager("leader_config.ini")
 video_manager = VideoFileManager(config.video_file, config.usb_mount_point)
 command_manager = CommandManager()
-command_manager.device_id = LOCAL_LEADER_ID
 sync_broadcaster = SyncBroadcaster()
 sync_broadcaster.leader_id = LOCAL_LEADER_ID
 
@@ -749,7 +748,7 @@ def start_remote():
     threading.Thread(target=master_clock, daemon=True).start()
 
     command_manager.start_listening()
-    # command_manager.start_latency_probing() # No longer needed
+    command_manager.start_latency_probing()
 
     web_thread = threading.Thread(
         target=lambda: RobustRemoteServer(("0.0.0.0", 8080), RemoteHandler).serve_forever(),
