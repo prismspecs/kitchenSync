@@ -670,9 +670,32 @@ class RobustRemoteServer(ThreadingHTTPServer):
         super().handle_error(request, client_address)
 
 
-def start_remote():
+def update_cluster_state(is_playing: bool, video_pos: float, duration: float, master_start_time: float, is_master: bool, current_video: str):
+    global cluster_state
+    cluster_state.is_playing = is_playing
+    cluster_state.video_pos = video_pos
+    cluster_state.duration = duration
+    cluster_state.master_start_time = master_start_time
+    cluster_state.is_master = is_master
+    cluster_state.current_video = current_video
+
+
+def set_shared_resources(shared_config, shared_command_manager, shared_sync_broadcaster):
+    global config, command_manager, sync_broadcaster, video_manager, LOCAL_LEADER_ID
+    config = shared_config
+    command_manager = shared_command_manager
+    sync_broadcaster = shared_sync_broadcaster
+    LOCAL_LEADER_ID = config.device_id
+    video_manager = VideoFileManager(config.video_file, config.usb_mount_point)
+
+
+def start_remote(integrated=False):
     """Start the remote controller services."""
-    update_runtime_from_config()
+    if not integrated:
+        update_runtime_from_config()
+        command_manager.start_listening()
+        command_manager.start_latency_probing()
+        sync_broadcaster.setup_socket()
 
     command_manager.register_handler("config_state", lambda msg, addr: store_config_message(msg))
     command_manager.register_handler(
@@ -693,11 +716,19 @@ def start_remote():
         
     command_manager.on_device_discovered = auto_discover
 
-    sync_broadcaster.setup_socket()
-
     def master_clock():
         last_broadcast = 0.0
         while True:
+            # When integrated with leader.py, cluster_state should be updated by leader.py
+            # or we should just let leader.py handle its own broadcasting if it's the master.
+            # However, for now, if integrated, we can just skip this loop if leader.py handles it.
+            if integrated:
+                # The standalone master_clock loop in leader.py or collaborator.py will handle this.
+                # Actually, the remote controller has its OWN master_clock loop that 
+                # handles the 'virtual' leader if it's acting as the leader itself.
+                # If integrated with leader.py, leader.py is the leader.
+                return 
+
             if cluster_state.is_master and cluster_state.is_playing:
                 cluster_state.video_pos = time.time() - cluster_state.master_start_time
 
@@ -738,9 +769,6 @@ def start_remote():
 
     threading.Thread(target=master_clock, daemon=True).start()
 
-    command_manager.start_listening()
-    command_manager.start_latency_probing()
-
     web_thread = threading.Thread(
         target=lambda: RobustRemoteServer(("0.0.0.0", 8080), RemoteHandler).serve_forever(),
         daemon=True,
@@ -748,7 +776,8 @@ def start_remote():
     web_thread.start()
 
     log_info("Remote Controller Web UI available at http://localhost:8080", component="remote")
-    log_info(f"Default video from config: {cluster_state.current_video}", component="remote")
+    if not integrated:
+        log_info(f"Default video from config: {cluster_state.current_video}", component="remote")
 
 
 if __name__ == "__main__":
