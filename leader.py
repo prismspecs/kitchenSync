@@ -46,7 +46,8 @@ class LeaderPi:
         self.video_player = get_video_driver(
             driver_name,
             debug_mode=self.config.debug_mode,
-            enable_audio=self.config.enable_audio
+            enable_audio=self.config.enable_audio,
+            config=self.config
         )
 
         if not self.video_player:

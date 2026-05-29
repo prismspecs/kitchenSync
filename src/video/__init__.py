@@ -4,12 +4,12 @@ Video Driver Factory for kSync
 Loads the appropriate driver backend based on configuration.
 """
 
-from typing import Optional
+from typing import Optional, Any
 from video.driver import VideoDriver
 from video.file_manager import VideoFileManager
 from core.logger import log_info, log_error, log_warning
 
-def get_video_driver(driver_name: str, debug_mode: bool = False, enable_audio: bool = True) -> Optional[VideoDriver]:
+def get_video_driver(driver_name: str, debug_mode: bool = False, enable_audio: bool = True, config: Optional[Any] = None) -> Optional[VideoDriver]:
     """
     Factory function to instantiate a video driver.
     """
@@ -23,7 +23,16 @@ def get_video_driver(driver_name: str, debug_mode: bool = False, enable_audio: b
         if driver_name == "gstreamer" or driver_name == "gst":
             from video.drivers.gst_driver import GstDriver
             log_info("Video: Using GStreamer driver backend")
-            return GstDriver(debug_mode=debug_mode, enable_audio=enable_audio)
+            video_width = config.video_width if config else 0
+            video_height = config.video_height if config else 0
+            poll_interval = config.position_poll_interval if (config and hasattr(config, "position_poll_interval")) else 0.05
+            return GstDriver(
+                debug_mode=debug_mode,
+                enable_audio=enable_audio,
+                video_width=video_width,
+                video_height=video_height,
+                poll_interval=poll_interval
+            )
             
         elif driver_name == "mock":
             from video.drivers.mock_driver import MockVideoDriver

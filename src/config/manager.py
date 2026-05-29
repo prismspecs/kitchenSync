@@ -16,11 +16,11 @@ from core.logger import log_info, log_warning, log_error
 CONFIG_ROLE_SECTIONS = {
     "leader": {
         "KITCHENSYNC": {"role", "device_id", "debug", "enable_system_logging", "enable_audio", "audio_output", "enable_midi", "enable_osc", "enable_caching"},
-        "DEFAULT": {"video_file", "schedule_file", "video_driver", "sync_port", "tick_interval", "max_drift", "min_drift", "kp", "min_rate", "max_rate", "max_samples"},
+        "DEFAULT": {"video_file", "schedule_file", "video_driver", "sync_port", "tick_interval", "max_drift", "min_drift", "kp", "min_rate", "max_rate", "max_samples", "video_width", "video_height", "position_poll_interval"},
     },
     "collaborator": {
         "KITCHENSYNC": {"role", "debug", "enable_system_logging", "enable_audio", "enable_caching", "enable_latency_compensation"},
-        "DEFAULT": {"device_id", "video_file", "video_driver", "midi_port", "sync_port"},
+        "DEFAULT": {"device_id", "video_file", "video_driver", "midi_port", "sync_port", "video_width", "video_height", "position_poll_interval"},
     },
     "bystander": {
         "KITCHENSYNC": {"role", "device_id", "debug", "enable_system_logging"},
@@ -46,6 +46,9 @@ EDITABLE_CONFIG_FIELDS = {
         {"key": "min_rate", "section": "DEFAULT", "type": "float", "label": "Min Rate", "default": 0.9, "tooltip": "Minimum playback speed allowed for slow-down correction."},
         {"key": "max_rate", "section": "DEFAULT", "type": "float", "label": "Max Rate", "default": 1.2, "tooltip": "Maximum playback speed allowed for catch-up correction."},
         {"key": "enable_system_logging", "section": "KITCHENSYNC", "type": "bool", "label": "Verbose logging", "default": False, "tooltip": "Enable detailed logging to kitchensync.log for troubleshooting."},
+        {"key": "video_width", "section": "DEFAULT", "type": "int", "label": "Video Width", "default": 0, "tooltip": "Force video width (0 = auto/native, default)."},
+        {"key": "video_height", "section": "DEFAULT", "type": "int", "label": "Video Height", "default": 0, "tooltip": "Force video height (0 = auto/native, default)."},
+        {"key": "position_poll_interval", "section": "DEFAULT", "type": "float", "label": "Position Poll Interval", "default": 0.05, "tooltip": "Frequency (seconds) for GStreamer position polling (default 0.05s / 20Hz)."},
     ],
     "collaborator": [
         {"key": "role", "section": "KITCHENSYNC", "type": "choice", "label": "Role", "default": "collaborator", "options": ["leader", "collaborator", "bystander"], "tooltip": "Leader: Master clock and media server. Collaborator: Syncs to leader. Bystander: Idle, waits for provisioning."},
@@ -56,6 +59,9 @@ EDITABLE_CONFIG_FIELDS = {
         {"key": "enable_latency_compensation", "section": "KITCHENSYNC", "type": "bool", "label": "Latency Compensation", "default": True, "tooltip": "Enable high-precision per-device latency compensation."},
         {"key": "midi_port", "section": "DEFAULT", "type": "int", "label": "MIDI port", "default": 0, "tooltip": "The index of the MIDI output port to use."},
         {"key": "debug", "section": "KITCHENSYNC", "type": "bool", "label": "Debug Overlay", "default": False, "tooltip": "Show real-time synchronization statistics as an on-screen video overlay."},
+        {"key": "video_width", "section": "DEFAULT", "type": "int", "label": "Video Width", "default": 0, "tooltip": "Force video width (0 = auto/native, default)."},
+        {"key": "video_height", "section": "DEFAULT", "type": "int", "label": "Video Height", "default": 0, "tooltip": "Force video height (0 = auto/native, default)."},
+        {"key": "position_poll_interval", "section": "DEFAULT", "type": "float", "label": "Position Poll Interval", "default": 0.05, "tooltip": "Frequency (seconds) for GStreamer position polling (default 0.05s / 20Hz)."},
     ],
     "bystander": [
         {"key": "role", "section": "KITCHENSYNC", "type": "choice", "label": "Role", "default": "bystander", "options": ["leader", "collaborator", "bystander"], "tooltip": "Leader: Master clock and media server. Collaborator: Syncs to leader. Bystander: Idle, waits for provisioning."},
@@ -390,3 +396,12 @@ class ConfigManager:
 
     @property
     def enable_caching(self) -> bool: return self.getboolean("enable_caching", False)
+
+    @property
+    def video_width(self) -> int: return self.getint("video_width", 0)
+
+    @property
+    def video_height(self) -> int: return self.getint("video_height", 0)
+
+    @property
+    def position_poll_interval(self) -> float: return self.getfloat("position_poll_interval", 0.05)

@@ -28,13 +28,16 @@ class GstDriver(VideoDriver):
     Uses playbin for robustness and custom seek events for seamless rate control.
     """
 
-    def __init__(self, debug_mode: bool = False, enable_audio: bool = True):
+    def __init__(self, debug_mode: bool = False, enable_audio: bool = True, video_width: int = 0, video_height: int = 0, poll_interval: float = 0.05):
         if not GST_AVAILABLE:
             raise ImportError("GStreamer or GObject Introspection not found. Install via OS_SETUP.md.")
 
         Gst.init(None)
         self.debug_mode = debug_mode
         self.enable_audio = enable_audio
+        self.video_width = video_width
+        self.video_height = video_height
+        self.poll_interval = poll_interval
         self.pipeline = None
         self.video_path = None
         self.state = PlayerState.STOPPED
@@ -68,7 +71,7 @@ class GstDriver(VideoDriver):
                         self._last_poll_time = time.time()
             except Exception:
                 pass
-            time.sleep(0.01) # 100Hz polling
+            time.sleep(self.poll_interval)
 
     def _start_polling(self):
         if self._poll_thread and self._poll_thread.is_alive():
@@ -222,12 +225,18 @@ class GstDriver(VideoDriver):
         if os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"):
             # build a GL bin with native window size control
             try:
-                # Use videoscale + capsfilter to FORCE the window size at the GStreamer level
-                bin_desc = (
-                    "videoconvert ! videoscale ! "
-                    "capsfilter caps=\"video/x-raw, width=1280, height=720\" ! "
-                    "glupload ! glcolorconvert ! glimagesink name=sink"
-                )
+                if self.video_width > 0 and self.video_height > 0:
+                    # Use videoscale + capsfilter to FORCE the window size at the GStreamer level
+                    bin_desc = (
+                        "videoconvert ! videoscale ! "
+                        f"capsfilter caps=\"video/x-raw, width={self.video_width}, height={self.video_height}\" ! "
+                        "glupload ! glcolorconvert ! glimagesink name=sink"
+                    )
+                else:
+                    # High-performance zero-copy path without CPU scaling overhead
+                    bin_desc = (
+                        "videoconvert ! glupload ! glcolorconvert ! glimagesink name=sink"
+                    )
                 sink_bin = Gst.parse_bin_from_description(bin_desc, True)
                 if sink_bin:
                     self._start_window_management_task()
@@ -251,6 +260,8 @@ class GstDriver(VideoDriver):
                 
                 # Sane defaults for desktop
                 target_w, target_h = 1280, 720
+                if self.video_width > 0 and self.video_height > 0:
+                    target_w, target_h = self.video_width, self.video_height
                 
                 # Potential window titles
                 search_terms = ["OpenGL Renderer", "player", "GStreamer"]
