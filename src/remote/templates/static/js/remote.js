@@ -505,7 +505,11 @@ function renderState(state) {
     // Update Status Header
     const clusterStatus = document.getElementById('clusterStatus');
     if (clusterStatus) {
-        const newStatusText = `Status: ${state.status} | Time: ${state.video_pos.toFixed(2)}s | Video: ${state.current_video}`;
+        const latency = state.latency || {};
+        const latencyText = latency.enabled
+            ? ` | RTT: ${latency.avg_rtt_ms ?? 'n/a'}ms | Compensation: ${latency.compensation_ms ?? 0}ms`
+            : ' | RTT compensation: off';
+        const newStatusText = `Status: ${state.status} | Time: ${state.video_pos.toFixed(2)}s | Video: ${state.current_video}${latencyText}`;
         if (clusterStatus.textContent !== newStatusText) {
             clusterStatus.textContent = newStatusText;
         }

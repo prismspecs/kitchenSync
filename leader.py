@@ -26,7 +26,6 @@ from core.logger import log_info, log_error, log_warning, enable_system_logging
 from ui.interface import CommandInterface, StatusDisplay
 from ui.window_manager import hide_mouse_cursor
 from protocols.midi_handler import MidiManager, MidiScheduler
-from remote.controller import start_remote, set_shared_resources, update_cluster_state
 
 
 class LeaderPi:
@@ -83,32 +82,7 @@ class LeaderPi:
         self.command_manager.register_handler("remote_start", lambda msg, addr: self.start_system())
         self.command_manager.register_handler("remote_stop", lambda msg, addr: self.stop_system())
         self.command_manager.register_handler("remote_seek", lambda msg, addr: self.seek_video(str(msg.get("value", 0))))
-        self.command_manager.register_handler("remote_set", lambda msg, addr: self.set_sync_param(param=msg.get("param"), value=msg.get("value")))
-
-        # Initialize and start the integrated Remote Controller
-        set_shared_resources(self.config, self.command_manager, self.sync_broadcaster, shared_leader=self)
-        start_remote(integrated=True)
-        
-        # Register handlers for leader-side media and config requests
-        self.command_manager.register_handler("file_list_request", self._handle_file_list_request)
-        self.command_manager.register_handler("file_delete_request", self._handle_file_delete_request)
-        self.command_manager.register_handler("config_request", self._handle_config_request)
-        self.command_manager.register_handler("config_update", self._handle_config_update)
-
-        # Update remote UI state loop - runs forever to keep Boss UI in sync
-        def ui_state_sync_loop():
-            while True:
-                update_cluster_state(
-                    is_playing=self.system_state.is_running,
-                    video_pos=self.video_player.get_position() or 0.0,
-                    duration=self.video_player.get_duration() or 0.0,
-                    master_start_time=self.system_state.start_time or 0.0,
-                    is_master=True,
-                    current_video=Path(self.video_path).name if self.video_path else ""
-                )
-                time.sleep(0.5)
-        
-        threading.Thread(target=ui_state_sync_loop, daemon=True).start()
+        self.command_manager.register_handler("remote_set", lambda msg, addr: self.set_sync_param(msg.get("param"), msg.get("value")))
 
         self.command_manager.start_listening()
         self.command_manager.start_latency_probing()
@@ -147,7 +121,15 @@ class LeaderPi:
                 if base_time is None:
                     return None
                 
-                # Latency compensation is now handled by the collaborator per-device
+                # Automatic Latency Compensation
+                if self.config.enable_latency_compensation:
+                    # RTT is round trip; multiplier adjusts for one-way and jitter.
+                    # By adding this to the broadcast time, we 'pre-advance' the packet.
+                    avg_rtt = self.command_manager.get_average_rtt()
+                    if avg_rtt > 0:
+                        compensation = avg_rtt * self.config.latency_factor
+                        return base_time + compensation
+                
                 return base_time
             except Exception:
                 return None

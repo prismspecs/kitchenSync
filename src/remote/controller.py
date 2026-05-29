@@ -46,6 +46,12 @@ config_messages: Dict[str, Dict[str, Any]] = {}
 media_snapshots: Dict[str, List[Dict[str, Any]]] = {}
 
 
+def compute_latency_compensation(avg_rtt: float, enabled: bool, latency_factor: float) -> float:
+    """Return the leader sync pre-advance in seconds."""
+    if not enabled or avg_rtt <= 0:
+        return 0.0
+    return avg_rtt * latency_factor
+
 TEMPLATE_DIR = Path(__file__).resolve().parent / "templates"
 
 
@@ -157,6 +163,11 @@ def build_ui_state() -> Dict[str, Any]:
     refresh_local_snapshot()
     collaborators = command_manager.get_collaborators()
     avg_rtt = command_manager.get_average_rtt()
+    compensation = compute_latency_compensation(
+        avg_rtt,
+        config.enable_latency_compensation,
+        config.latency_factor,
+    )
 
     if not cluster_state.is_playing:
         current_status = "Stopped"
@@ -217,6 +228,11 @@ def build_ui_state() -> Dict[str, Any]:
         "is_playing": cluster_state.is_playing,
         "is_master": cluster_state.is_master,
         "current_video": cluster_state.current_video,
+        "latency": {
+            "enabled": config.enable_latency_compensation,
+            "avg_rtt_ms": round(avg_rtt * 1000, 1) if avg_rtt > 0 else None,
+            "compensation_ms": round(compensation * 1000, 1),
+        },
         "available_videos": list_available_videos(),
         "available_schedules": list_available_schedules(),
         "devices": devices,
@@ -521,12 +537,6 @@ class RemoteHandler(BaseHTTPRequestHandler):
             return
 
         if action in {"play", "api/play"}:
-            if leader_instance:
-                leader_instance.start_system()
-                self.send_response(204)
-                self.end_headers()
-                return
-
             cluster_state.is_playing = True
             cluster_state.is_master = True
             cluster_state.master_start_time = time.time()
@@ -553,12 +563,6 @@ class RemoteHandler(BaseHTTPRequestHandler):
             return
 
         if action in {"stop", "api/stop"}:
-            if leader_instance:
-                leader_instance.stop_system()
-                self.send_response(204)
-                self.end_headers()
-                return
-
             cluster_state.is_playing = False
             cluster_state.is_master = False
             command_manager.send_command({"type": "stop"})
@@ -569,32 +573,11 @@ class RemoteHandler(BaseHTTPRequestHandler):
 
         if action == "api/seek":
             new_pos = payload.get("value", 0)
-            if leader_instance:
-                leader_instance.seek_video(str(new_pos))
-                self.send_response(204)
-                self.end_headers()
-                return
-
             cluster_state.video_pos = float(new_pos)
             cluster_state.master_start_time = time.time() - cluster_state.video_pos
             
             command_manager.send_command({"type": "remote_seek", "value": cluster_state.video_pos})
             log_info(f"Cluster SEEK: {cluster_state.video_pos:.2f}s", component="remote")
-            self.send_response(204)
-            self.end_headers()
-            return
-
-        if action == "api/set":
-            param = payload.get("param")
-            value = payload.get("value")
-            
-            if leader_instance:
-                leader_instance.set_sync_param(param, value)
-                self.send_response(204)
-                self.end_headers()
-                return
-
-            command_manager.send_command({"type": "set", "param": param, "value": value})
             self.send_response(204)
             self.end_headers()
             return
@@ -703,37 +686,9 @@ class RobustRemoteServer(ThreadingHTTPServer):
         super().handle_error(request, client_address)
 
 
-# Leader instance for integrated mode
-leader_instance = None
-
-
-def update_cluster_state(is_playing: bool, video_pos: float, duration: float, master_start_time: float, is_master: bool, current_video: str):
-    global cluster_state
-    cluster_state.is_playing = is_playing
-    cluster_state.video_pos = video_pos
-    cluster_state.duration = duration
-    cluster_state.master_start_time = master_start_time
-    cluster_state.is_master = is_master
-    cluster_state.current_video = current_video
-
-
-def set_shared_resources(shared_config, shared_command_manager, shared_sync_broadcaster, shared_leader=None):
-    global config, command_manager, sync_broadcaster, video_manager, LOCAL_LEADER_ID, leader_instance
-    config = shared_config
-    command_manager = shared_command_manager
-    sync_broadcaster = shared_sync_broadcaster
-    leader_instance = shared_leader
-    LOCAL_LEADER_ID = config.device_id
-    video_manager = VideoFileManager(config.video_file, config.usb_mount_point)
-
-
-def start_remote(integrated=False):
+def start_remote():
     """Start the remote controller services."""
-    if not integrated:
-        update_runtime_from_config()
-        command_manager.start_listening()
-        command_manager.start_latency_probing()
-        sync_broadcaster.setup_socket()
+    update_runtime_from_config()
 
     command_manager.register_handler("config_state", lambda msg, addr: store_config_message(msg))
     command_manager.register_handler(
@@ -747,28 +702,18 @@ def start_remote(integrated=False):
             
     command_manager.register_handler("file_list_response", lambda msg, addr: store_media_message(msg))
 
-    def auto_discover(device_id, ip):
-        log_info(f"Auto-discovered new device: {device_id} at {ip}. Requesting state...", component="remote")
-        command_manager.send_command({"type": "file_list_request"}, target_pi=device_id)
-        command_manager.send_command({"type": "config_request"}, target_pi=device_id)
-        
-    command_manager.on_device_discovered = auto_discover
+    sync_broadcaster.setup_socket()
 
     def master_clock():
         last_broadcast = 0.0
         while True:
-            # When integrated with leader.py, cluster_state should be updated by leader.py
-            # or we should just let leader.py handle its own broadcasting if it's the master.
-            # However, for now, if integrated, we can just skip this loop if leader.py handles it.
-            if integrated:
-                # The standalone master_clock loop in leader.py or collaborator.py will handle this.
-                # Actually, the remote controller has its OWN master_clock loop that 
-                # handles the 'virtual' leader if it's acting as the leader itself.
-                # If integrated with leader.py, leader.py is the leader.
-                return 
-
             if cluster_state.is_master and cluster_state.is_playing:
                 cluster_state.video_pos = time.time() - cluster_state.master_start_time
+                compensation = compute_latency_compensation(
+                    command_manager.get_average_rtt(),
+                    config.enable_latency_compensation,
+                    config.latency_factor,
+                )
 
                 if time.time() - last_broadcast > 2.0:
                     start_cmd = {
@@ -792,7 +737,7 @@ def start_remote(integrated=False):
                 sync_packet = json.dumps(
                     {
                         "type": "sync",
-                        "time": cluster_state.video_pos,
+                        "time": cluster_state.video_pos + compensation,
                         "leader_id": sync_broadcaster.leader_id,
                         "source": "wall",
                         "sent_at": time.time(),
@@ -807,6 +752,9 @@ def start_remote(integrated=False):
 
     threading.Thread(target=master_clock, daemon=True).start()
 
+    command_manager.start_listening()
+    command_manager.start_latency_probing()
+
     web_thread = threading.Thread(
         target=lambda: RobustRemoteServer(("0.0.0.0", 8080), RemoteHandler).serve_forever(),
         daemon=True,
@@ -814,8 +762,7 @@ def start_remote(integrated=False):
     web_thread.start()
 
     log_info("Remote Controller Web UI available at http://localhost:8080", component="remote")
-    if not integrated:
-        log_info(f"Default video from config: {cluster_state.current_video}", component="remote")
+    log_info(f"Default video from config: {cluster_state.current_video}", component="remote")
 
 
 if __name__ == "__main__":
