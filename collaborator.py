@@ -32,7 +32,7 @@ class CollaboratorPi:
         # Default to ksync.ini if not specified
         config_file = config_file or "ksync.ini"
         self.config = ConfigManager(config_file)
-        enable_system_logging(self.config.debug_mode)
+        enable_system_logging(self.config.debug_mode or self.config.enable_system_logging)
 
         log_info(f"Starting kSync Node '{self.config.device_id}' (Role: {self.config.role_name()})", component="collaborator")
 

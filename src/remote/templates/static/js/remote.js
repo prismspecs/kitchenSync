@@ -2,6 +2,7 @@ const requestedConfigs = new Set();
 const lastSaveAt = new Map();
 const draftConfigValues = new Map();
 const openConfigPanels = new Set();
+const openMediaPanels = new Set();
 let latestState = null;
 
 const REFRESH_ICON_SVG = `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"></path><path d="M1 20v-6h6"></path><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>`;
@@ -295,7 +296,41 @@ function renderConfigCell(device, videoOptions, scheduleOptions) {
     const draftValues = draftConfigValues.get(device.device_id) || {};
     const values = { ...baseValues, ...draftValues };
     const isOpen = openConfigPanels.has(device.device_id) || device.role === 'leader';
-    const fields = config.fields.map((field) => renderField(device.device_id, field, values[field.key], videoOptions, scheduleOptions)).join('');
+
+    const ADVANCED_KEYS = new Set([
+        'tick_interval',
+        'latency_factor',
+        'max_drift',
+        'min_drift',
+        'kp',
+        'max_samples',
+        'min_rate',
+        'max_rate'
+    ]);
+
+    const standardFieldsHtml = [];
+    const advancedFieldsHtml = [];
+
+    config.fields.forEach((field) => {
+        const rendered = renderField(device.device_id, field, values[field.key], videoOptions, scheduleOptions);
+        if (ADVANCED_KEYS.has(field.key)) {
+            advancedFieldsHtml.push(rendered);
+        } else {
+            standardFieldsHtml.push(rendered);
+        }
+    });
+
+    let advancedSectionHtml = '';
+    if (advancedFieldsHtml.length > 0) {
+        advancedSectionHtml = `
+            <div class="advanced-section">
+                <div class="advanced-header">Advanced Settings</div>
+                <div class="advanced-fields">
+                    ${advancedFieldsHtml.join('')}
+                </div>
+            </div>
+        `;
+    }
 
     return `
         <div class="cell-container">
@@ -306,7 +341,8 @@ function renderConfigCell(device, videoOptions, scheduleOptions) {
                     <span class="config-meta">${escapeHtml(config.config_path || '')}</span>
                 </summary>
                 <form onsubmit="saveConfig(event, '${device.device_id}', '${config.role}')">
-                    ${fields}
+                    ${standardFieldsHtml.join('')}
+                    ${advancedSectionHtml}
                     <div class="row actions-row">
                         <button type="submit">Save</button>
                         <button type="button" onclick="loadDefaults('${device.device_id}')">Defaults</button>
@@ -397,16 +433,20 @@ function renderMediaCell(device, leaderMedia) {
         }
     }
 
+    const isMediaOpen = openMediaPanels.has(device.device_id);
+
     return `
         <div class="cell-container">
             ${refreshIcon}
-            <div class="media-panel">
-                <h4>Available Videos</h4>
+            <details class="media-panel" data-device-id="${device.device_id}" ${isMediaOpen ? 'open' : ''}>
+                <summary>
+                    <h4>Available Videos</h4>
+                </summary>
                 <div class="media-list">
                     ${mediaListHtml || '<div class="message info">No videos found</div>'}
                 </div>
                 ${syncSection}
-            </div>
+            </details>
         </div>
     `;
 }
@@ -542,11 +582,25 @@ function renderState(state) {
             const latencyLabel = device.role === 'leader' ? 'Cluster RTT avg' : 'Ping';
             const latencyText = device.latency_ms != null ? `${latencyLabel}: ${device.latency_ms} ms` : `${latencyLabel}: n/a`;
             const statusText = `${device.status} (${device.online ? 'Online' : 'Offline'})`;
+            const statusTooltip = `
+                <span class="tooltip" tabindex="0" aria-label="Status Explanation">
+                    <span class="tooltip-icon" style="margin-left: 4px;">?</span>
+                    <span class="tooltip-bubble" style="font-weight: normal; color: #000; background: #fff;">
+                        <b>Green (Ready):</b> Device is online and idle (playback stopped).<br>
+                        <b>Yellow (Syncing):</b> Device is actively playing and synchronizing with the Leader.<br>
+                        <b>Blue (Leading):</b> This is the Leader node directing the cluster.<br>
+                        <b>Red (Offline):</b> Device is disconnected or unreachable.
+                    </span>
+                </span>
+            `;
             
             const newSummaryHtml = `
                 <div class="cell-container">
                     <div class="device-summary-primary">${escapeHtml(device.label)}</div>
-                    <div class="device-summary-line device-summary-status ${getStatusClass(device)}">${escapeHtml(statusText)}</div>
+                    <div class="device-summary-line device-summary-status ${getStatusClass(device)}">
+                        ${escapeHtml(statusText)}
+                        ${statusTooltip}
+                    </div>
                     <div class="device-summary-line device-summary-role">${escapeHtml(device.role)}</div>
                     <div class="device-summary-line device-summary-ip">${escapeHtml(device.ip)}</div>
                     <div class="device-summary-line device-summary-latency">${escapeHtml(latencyText)}</div>
@@ -562,9 +616,12 @@ function renderState(state) {
             // 2. Update Config Cell (Surgical)
             const snapshotTime = device.config?.updated_at || 0;
             const saveTime = lastSaveAt.get(device.device_id) || 0;
-            const isPending = saveTime > snapshotTime && (Date.now() / 1000 - saveTime < 8);
-            if (!isPending && snapshotTime >= saveTime) {
-                draftConfigValues.delete(device.device_id);
+            if (saveTime > 0) {
+                const isPending = saveTime > snapshotTime && (Date.now() / 1000 - saveTime < 8);
+                if (!isPending && snapshotTime >= saveTime) {
+                    draftConfigValues.delete(device.device_id);
+                    lastSaveAt.delete(device.device_id);
+                }
             }
 
             const newConfigHtml = renderConfigCell(device, state.available_videos || [], state.available_schedules || []);
@@ -593,6 +650,16 @@ function renderState(state) {
             // 3. Update Media Cell (Surgical)
             const newMediaHtml = renderMediaCell(device, state.leader_media);
             reconcileCell(cells[2], newMediaHtml);
+
+            // Update Media Toggle State
+            const mediaPanel = cells[2].querySelector('.media-panel');
+            if (mediaPanel && !mediaPanel.dataset.bound) {
+                mediaPanel.addEventListener('toggle', () => {
+                    if (mediaPanel.open) openMediaPanels.add(device.device_id);
+                    else openMediaPanels.delete(device.device_id);
+                });
+                mediaPanel.dataset.bound = "true";
+            }
         });
 
         // Prune dead rows

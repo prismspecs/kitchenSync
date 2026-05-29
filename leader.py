@@ -32,7 +32,7 @@ class LeaderPi:
     def __init__(self, config_file=None):
         # Load configuration
         self.config = ConfigManager(config_file)
-        enable_system_logging(self.config.debug_mode)
+        enable_system_logging(self.config.debug_mode or self.config.enable_system_logging)
 
         log_info("Starting kSync Leader...", component="leader")
 

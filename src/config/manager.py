@@ -37,7 +37,7 @@ EDITABLE_CONFIG_FIELDS = {
         {"key": "audio_output", "section": "KITCHENSYNC", "type": "choice", "label": "Audio Output", "default": "hdmi", "options": ["hdmi", "headphone"], "tooltip": "Select audio destination: HDMI or the 3.5mm Headphone Jack."},
         {"key": "enable_midi", "section": "KITCHENSYNC", "type": "bool", "label": "Enable MIDI", "default": True, "tooltip": "Enable MIDI output triggers via USB or Serial."},
         {"key": "enable_caching", "section": "KITCHENSYNC", "type": "bool", "label": "Local Caching", "default": False, "tooltip": "If enabled, external USB videos will be copied to SD card for smoother playback."},
-        {"key": "debug", "section": "KITCHENSYNC", "type": "bool", "label": "Debug", "default": False, "tooltip": "Enable on-screen debug overlay with sync stats."},
+        {"key": "debug", "section": "KITCHENSYNC", "type": "bool", "label": "Debug Overlay", "default": False, "tooltip": "Show real-time synchronization statistics as an on-screen video overlay."},
         {"key": "tick_interval", "section": "DEFAULT", "type": "float", "label": "Sync Interval", "default": 0.05, "tooltip": "How often (seconds) to broadcast time sync messages. Lower = tighter sync but more network traffic."},
         {"key": "enable_latency_compensation", "section": "KITCHENSYNC", "type": "bool", "label": "Latency Compensation", "default": True, "tooltip": "Automatically adjust for network RTT delay."},
         {"key": "latency_factor", "section": "DEFAULT", "type": "float", "label": "Latency Factor", "default": 0.5, "tooltip": "Weighting for RTT compensation (0.0 to 1.0)."},
@@ -54,12 +54,13 @@ EDITABLE_CONFIG_FIELDS = {
         {"key": "video_file", "section": "DEFAULT", "type": "string", "label": "Video file", "default": "videos/sync_test.mp4", "tooltip": "Local video file to play when sync starts."},
         {"key": "enable_audio", "section": "KITCHENSYNC", "type": "bool", "label": "Enable Audio", "default": True, "tooltip": "Toggle audio playback on/off."},
         {"key": "audio_output", "section": "KITCHENSYNC", "type": "choice", "label": "Audio Output", "default": "hdmi", "options": ["hdmi", "headphone"], "tooltip": "Select audio destination: HDMI or the 3.5mm Headphone Jack."},
+        {"key": "enable_caching", "section": "KITCHENSYNC", "type": "bool", "label": "Local Caching", "default": False, "tooltip": "If enabled, external USB videos will be copied to SD card for smoother playback."},
         {"key": "midi_port", "section": "DEFAULT", "type": "int", "label": "MIDI port", "default": 0, "tooltip": "The index of the MIDI output port to use."},
-        {"key": "debug", "section": "KITCHENSYNC", "type": "bool", "label": "Debug", "default": False, "tooltip": "Enable on-screen debug overlay with sync stats."},
+        {"key": "debug", "section": "KITCHENSYNC", "type": "bool", "label": "Debug Overlay", "default": False, "tooltip": "Show real-time synchronization statistics as an on-screen video overlay."},
     ],
     "bystander": [
         {"key": "role", "section": "KITCHENSYNC", "type": "choice", "label": "Role", "default": "bystander", "options": ["leader", "collaborator", "bystander"], "tooltip": "Leader: Master clock and media server. Collaborator: Syncs to leader. Bystander: Idle, waits for provisioning."},
-        {"key": "debug", "section": "KITCHENSYNC", "type": "bool", "label": "Debug", "default": False, "tooltip": "Enable on-screen debug overlay with sync stats."},
+        {"key": "debug", "section": "KITCHENSYNC", "type": "bool", "label": "Debug Overlay", "default": False, "tooltip": "Show real-time synchronization statistics as an on-screen video overlay."},
     ],
 }
 
