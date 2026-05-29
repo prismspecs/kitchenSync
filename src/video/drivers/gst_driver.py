@@ -45,6 +45,7 @@ class GstDriver(VideoDriver):
         self.decoder_candidates = []
         self.pipeline_kind = "playbin"
         self.is_seeking = False
+        self._gapless_looping = False
         
         # Position polling
         self._cached_position = 0.0
@@ -345,12 +346,55 @@ class GstDriver(VideoDriver):
         log_info(f"Gst: Loaded {video_path} with pipeline '{self.pipeline_kind}'")
         return True
 
+    def _enable_gapless_looping(self):
+        """Configure the pipeline for gapless looping using SEGMENT seeks.
+        
+        Instead of EOS → flushing seek (which causes a position discontinuity
+        and breaks collaborator sync), this makes GStreamer emit SEGMENT_DONE
+        at the end, allowing a non-flushing seek back to 0.
+        """
+        if not self._is_ready(timeout_ms=1000):
+            log_warning("Gst: Pipeline not ready for SEGMENT seek setup")
+            return False
+
+        duration_ns = -1
+        success, dur = self.pipeline.query_duration(Gst.Format.TIME)
+        if success and dur > 0:
+            duration_ns = dur
+
+        result = self.pipeline.seek(
+            self.current_rate,
+            Gst.Format.TIME,
+            Gst.SeekFlags.FLUSH | Gst.SeekFlags.SEGMENT,
+            Gst.SeekType.SET, 0,
+            Gst.SeekType.SET, duration_ns
+        )
+
+        if result:
+            self._gapless_looping = True
+            log_info("Gst: Gapless looping enabled via SEGMENT seek")
+        else:
+            self._gapless_looping = False
+            log_warning("Gst: SEGMENT seek not supported, using EOS-based looping")
+        return result
+
     def _on_bus_message(self, bus, message):
         t = message.type
-        if t == Gst.MessageType.EOS:
-            log_info("Gst: End of stream reached, looping...")
-            # Reset cached position immediately so sync consumers do not keep
-            # seeing a stale tail-frame timestamp while the loop seek settles.
+        if t == Gst.MessageType.SEGMENT_DONE:
+            # Gapless loop: non-flushing seek back to start
+            self.pipeline.seek(
+                self.current_rate,
+                Gst.Format.TIME,
+                Gst.SeekFlags.SEGMENT,  # No FLUSH = gapless
+                Gst.SeekType.SET, 0,
+                Gst.SeekType.NONE, -1
+            )
+            self._cached_position = 0.0
+            self._last_poll_time = time.time()
+            log_info("Gst: Gapless loop point")
+        elif t == Gst.MessageType.EOS:
+            # Fallback path for hardware that doesn't support SEGMENT seeks
+            log_info("Gst: End of stream reached, looping (flush fallback)...")
             self._cached_position = 0.0
             self._last_poll_time = time.time()
             self.seek(0)
@@ -429,6 +473,9 @@ class GstDriver(VideoDriver):
                 log_info(f"Gst: Active hardware decoder '{self.decoder_name}'")
         else:
             log_warning("Gst: Could not identify active decoder element")
+
+        # Enable gapless looping after pipeline is stable
+        self._enable_gapless_looping()
             
         return True
 

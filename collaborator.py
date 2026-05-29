@@ -95,6 +95,7 @@ class CollaboratorPi:
         self.startup_sync_count = 0
         self.FAST_SYNC_THRESHOLD = 10
         self._settle_until = 0
+        self._smoothed_latency = None  # EWMA-smoothed per-device transport latency
 
         # Sync Decoupling
         self._latest_sync_state = None
@@ -287,8 +288,15 @@ class CollaboratorPi:
             adjusted_leader_time = leader_time
             if sent_at:
                 transport_latency = received_at - float(sent_at)
-                if 0.0 <= transport_latency <= 0.25:
-                    adjusted_leader_time += transport_latency
+                if 0.0 <= transport_latency <= 0.1:
+                    # EWMA smoothing to reduce jitter in per-device latency
+                    if self._smoothed_latency is None:
+                        self._smoothed_latency = transport_latency
+                    else:
+                        alpha = 0.3
+                        self._smoothed_latency = alpha * transport_latency + (1 - alpha) * self._smoothed_latency
+                    adjusted_leader_time += self._smoothed_latency
+            # Account for time elapsed since packet arrived (processing lag)
             adjusted_leader_time += max(0.0, time.time() - received_at)
             self.system_state.current_time = adjusted_leader_time
             if self.midi_scheduler:
@@ -314,6 +322,13 @@ class CollaboratorPi:
         if duration and duration > 0:
             if deviation > duration/2: deviation -= duration
             elif deviation < -duration/2: deviation += duration
+
+        # Suppress hard corrections near loop boundary (within ~0.5s of seam)
+        # to avoid fighting the gapless loop transition
+        if duration and duration > 0:
+            if video_pos < 0.5 or video_pos > (duration - 0.5):
+                if abs(deviation) > 1.0:
+                    return
 
         self.deviation_samples.append(deviation)
         if len(self.deviation_samples) > self.max_samples:
