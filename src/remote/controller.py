@@ -46,12 +46,6 @@ config_messages: Dict[str, Dict[str, Any]] = {}
 media_snapshots: Dict[str, List[Dict[str, Any]]] = {}
 
 
-def compute_latency_compensation(avg_rtt: float, enabled: bool, latency_factor: float) -> float:
-    """Return the leader sync pre-advance in seconds."""
-    if not enabled or avg_rtt <= 0:
-        return 0.0
-    return avg_rtt * latency_factor
-
 TEMPLATE_DIR = Path(__file__).resolve().parent / "templates"
 
 
@@ -162,12 +156,6 @@ def store_config_message(payload: Dict[str, Any]) -> None:
 def build_ui_state() -> Dict[str, Any]:
     refresh_local_snapshot()
     collaborators = command_manager.get_collaborators()
-    avg_rtt = command_manager.get_average_rtt()
-    compensation = compute_latency_compensation(
-        avg_rtt,
-        config.enable_latency_compensation,
-        config.latency_factor,
-    )
 
     if not cluster_state.is_playing:
         current_status = "Stopped"
@@ -228,11 +216,6 @@ def build_ui_state() -> Dict[str, Any]:
         "is_playing": cluster_state.is_playing,
         "is_master": cluster_state.is_master,
         "current_video": cluster_state.current_video,
-        "latency": {
-            "enabled": config.enable_latency_compensation,
-            "avg_rtt_ms": round(avg_rtt * 1000, 1) if avg_rtt > 0 else None,
-            "compensation_ms": round(compensation * 1000, 1),
-        },
         "available_videos": list_available_videos(),
         "available_schedules": list_available_schedules(),
         "devices": devices,

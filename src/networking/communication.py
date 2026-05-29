@@ -433,7 +433,7 @@ class CommandManager:
             if target_pi in self.collaborators:
                 ip = self.collaborators[target_pi]["ip"]
                 try:
-                    self._ping_sent_at[target_pi] = time.time()
+                    self._ping_sent_at[target_pi] = time.monotonic()
                     self.control_sock.sendto(payload.encode(), (ip, self.control_port))
                     print(f"[NET] Sent {command['type']} directly to {target_pi} ({ip})")
                 except Exception:
@@ -442,7 +442,7 @@ class CommandManager:
             # Send to every registered IP directly for maximum reliability
             for device_id, info in self.collaborators.items():
                 try:
-                    self._ping_sent_at[device_id] = time.time()
+                    self._ping_sent_at[device_id] = time.monotonic()
                     self.control_sock.sendto(payload.encode(), (info["ip"], self.control_port))
                     print(f"[NET] Sent {command['type']} directly to {device_id} ({info['ip']})")
                 except Exception:
@@ -485,6 +485,34 @@ class CommandManager:
             except Exception:
                 self._ping_sent_at.pop(device_id, None)
 
+    def _update_collaborator_info(self, msg: Dict[str, Any], addr: tuple) -> None:
+        """Update collaborator registry based on any incoming message"""
+        device_id = msg.get("device_id")
+        if not device_id:
+            return
+
+        is_new = device_id not in self.collaborators
+        
+        # If a new ID appears from an IP that we already know, 
+        # it's likely a device that restarted and changed its ID.
+        for old_id, info in list(self.collaborators.items()):
+            if info["ip"] == addr[0] and old_id != device_id:
+                log_info(f"Net: Device at {addr[0]} changed ID from {old_id} to {device_id}. Pruning old entry.", component="network")
+                del self.collaborators[old_id]
+                is_new = True
+
+        info = self.collaborators.get(device_id, {})
+        info.update({
+            "ip": addr[0],
+            "last_seen": time.time(),
+            "status": msg.get("status", info.get("status", "ready")),
+            "video_file": msg.get("video_file", info.get("video_file", "")),
+        })
+        self.collaborators[device_id] = info
+
+        if is_new and self.on_device_discovered:
+            self.on_device_discovered(device_id, addr[0])
+
     def _handle_default_message(self, msg: Dict[str, Any], addr: tuple) -> None:
         """Handle default message types"""
         msg_type = msg.get("type")
@@ -492,54 +520,19 @@ class CommandManager:
         if not device_id:
             return
 
-        is_new = device_id not in self.collaborators
-
         if msg_type == "pong":
             sent_at = self._ping_sent_at.pop(device_id, None)
             if sent_at is not None:
                 self._record_rtt_sample(device_id, time.monotonic() - sent_at)
-            
-            # Use pong as heartbeat - update status and video info
-            self.collaborators[device_id] = {
-                "ip": addr[0],
-                "last_seen": time.time(),
-                "status": msg.get("status", "ready"),
-                "video_file": msg.get("video_file", self.collaborators.get(device_id, {}).get("video_file", "")),
-            }
-            if is_new and self.on_device_discovered:
-                self.on_device_discovered(device_id, addr[0])
             return
 
-        # If a new ID appears from an IP that we already know, 
-        # it's likely a device that restarted and changed its ID.
-        # Prune the old ID from that IP to avoid duplicate 'start' commands.
-        for old_id, info in list(self.collaborators.items()):
-            if info["ip"] == addr[0] and old_id != device_id:
-                log_info(f"Net: Device at {addr[0]} changed ID from {old_id} to {device_id}. Pruning old entry.", component="network")
-                del self.collaborators[old_id]
-
         if msg_type == "register":
-            self.collaborators[device_id] = {
-                "ip": addr[0],
-                "last_seen": time.time(),
-                "status": msg.get("status", "unknown"),
-                "video_file": msg.get("video_file", ""),
-            }
-            if is_new and self.on_device_discovered:
-                self.on_device_discovered(device_id, addr[0])
+            # Registry already updated by _update_collaborator_info
+            pass
 
         elif msg_type == "heartbeat":
-            self.collaborators[device_id] = {
-                "ip": addr[0],
-                "last_seen": time.time(),
-                "status": msg.get("status", "ready"),
-                "video_file": msg.get(
-                    "video_file",
-                    self.collaborators.get(device_id, {}).get("video_file", ""),
-                ),
-            }
-            if is_new and self.on_device_discovered:
-                self.on_device_discovered(device_id, addr[0])
+            # Registry already updated by _update_collaborator_info
+            pass
 
     def get_collaborators(self) -> Dict[str, Dict]:
         """Get current collaborator status and prune long-dead ones"""
@@ -585,11 +578,16 @@ class CommandListener:
                     data, addr = self.control_sock.recvfrom(UDP_MAX_DATAGRAM_SIZE)
                     msg = json.loads(data.decode())
                     
+                    # Always update registry for any valid message from a device
+                    self._update_collaborator_info(msg, addr)
+
                     msg_type = msg.get("type")
                     if msg_type in self.message_handlers:
                         self.message_handlers[msg_type](msg, addr)
                     elif "__all__" in self.message_handlers:
                         self.message_handlers["__all__"](msg, addr)
+                    else:
+                        self._handle_default_message(msg, addr)
 
                 except json.JSONDecodeError:
                     continue
