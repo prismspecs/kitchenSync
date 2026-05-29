@@ -468,7 +468,9 @@ class RemoteHandler(BaseHTTPRequestHandler):
                     if os.path.exists(sys_log_path):
                         with open(sys_log_path, "r", errors="replace") as f:
                             lines = f.readlines()
-                            log_content = "".join(lines[-500:])
+                            log_content = "".join(lines[-100:])
+                            if len(log_content) > 30000:
+                                log_content = "... [TRUNCATED] ...\n" + log_content[-30000:]
                     else:
                         log_content = "No log file found on leader."
                     self._send_json({"status": "ok", "logs": log_content})
