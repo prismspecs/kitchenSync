@@ -156,6 +156,7 @@ def store_config_message(payload: Dict[str, Any]) -> None:
 def build_ui_state() -> Dict[str, Any]:
     refresh_local_snapshot()
     collaborators = command_manager.get_collaborators()
+    avg_rtt = command_manager.get_average_rtt()
 
     if not cluster_state.is_playing:
         current_status = "Stopped"
