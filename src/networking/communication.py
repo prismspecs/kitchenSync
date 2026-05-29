@@ -491,7 +491,16 @@ class CommandManager:
         if msg_type == "pong":
             sent_at = self._ping_sent_at.pop(device_id, None)
             if sent_at is not None:
-                self._record_rtt_sample(device_id, time.monotonic() - sent_at)
+                rtt = time.monotonic() - sent_at
+                self._record_rtt_sample(device_id, rtt)
+                
+                # Direct Latency Reporting: 
+                # Tell the collaborator exactly what its RTT is so it can 
+                # perform local latency compensation.
+                self.send_command(
+                    {"type": "latency_report", "rtt": rtt}, 
+                    target_pi=device_id
+                )
             return
 
         # If a new ID appears from an IP that we already know, 

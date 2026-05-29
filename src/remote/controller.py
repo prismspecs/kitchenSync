@@ -709,11 +709,6 @@ def start_remote():
         while True:
             if cluster_state.is_master and cluster_state.is_playing:
                 cluster_state.video_pos = time.time() - cluster_state.master_start_time
-                compensation = compute_latency_compensation(
-                    command_manager.get_average_rtt(),
-                    config.enable_latency_compensation,
-                    config.latency_factor,
-                )
 
                 if time.time() - last_broadcast > 2.0:
                     start_cmd = {
@@ -737,7 +732,7 @@ def start_remote():
                 sync_packet = json.dumps(
                     {
                         "type": "sync",
-                        "time": cluster_state.video_pos + compensation,
+                        "time": cluster_state.video_pos,
                         "leader_id": sync_broadcaster.leader_id,
                         "source": "wall",
                         "sent_at": time.time(),
