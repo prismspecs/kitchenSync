@@ -550,6 +550,9 @@ function renderState(state) {
                     <div class="device-summary-line device-summary-role">${escapeHtml(device.role)}</div>
                     <div class="device-summary-line device-summary-ip">${escapeHtml(device.ip)}</div>
                     <div class="device-summary-line device-summary-latency">${escapeHtml(latencyText)}</div>
+                    <div class="device-summary-line" style="margin-top: 8px;">
+                        <button class="btn-small" onclick="viewDeviceLogs('${device.device_id}')">View Logs</button>
+                    </div>
                 </div>
             `;
             if (cells[0].innerHTML !== newSummaryHtml) {
@@ -667,5 +670,55 @@ document.addEventListener('DOMContentLoaded', () => {
         preview.addEventListener('seeked', () => {
             seekCluster(preview.currentTime);
         });
+    }
+});
+
+let activeLogDeviceId = null;
+
+async function viewDeviceLogs(deviceId) {
+    activeLogDeviceId = deviceId;
+    const modal = document.getElementById('logModal');
+    const title = document.getElementById('logModalTitle');
+    const body = document.getElementById('logModalBody');
+    
+    if (modal && title && body) {
+        title.textContent = `Logs for ${deviceId}`;
+        body.textContent = 'Loading logs...';
+        modal.style.display = 'block';
+        
+        try {
+            const response = await fetch(`/api/logs?device_id=${encodeURIComponent(deviceId)}`);
+            if (response.ok) {
+                const data = await response.json();
+                body.textContent = data.logs || 'No logs returned.';
+                body.scrollTop = body.scrollHeight;
+            } else {
+                const data = await response.json();
+                body.textContent = `Error loading logs: ${data.message || 'Unknown error'}`;
+            }
+        } catch (err) {
+            body.textContent = `Error: ${err.message}`;
+        }
+    }
+}
+
+function closeLogModal() {
+    const modal = document.getElementById('logModal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+    activeLogDeviceId = null;
+}
+
+async function refreshLogs() {
+    if (activeLogDeviceId) {
+        await viewDeviceLogs(activeLogDeviceId);
+    }
+}
+
+window.addEventListener('click', (event) => {
+    const modal = document.getElementById('logModal');
+    if (event.target === modal) {
+        closeLogModal();
     }
 });

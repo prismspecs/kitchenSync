@@ -57,6 +57,21 @@
     <datalist id="videoSuggestions"></datalist>
     <datalist id="scheduleSuggestions"></datalist>
 
+    <!-- Log Modal -->
+    <div id="logModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="logModalTitle">Device Logs</h3>
+                <span class="close-modal" onclick="closeLogModal()">&times;</span>
+            </div>
+            <pre id="logModalBody" class="log-view">Loading...</pre>
+            <div class="modal-footer">
+                <button onclick="refreshLogs()">Refresh</button>
+                <button onclick="closeLogModal()">Close</button>
+            </div>
+        </div>
+    </div>
+
     <script src="/static/js/remote.js?v=9"></script>
 </body>
 </html>

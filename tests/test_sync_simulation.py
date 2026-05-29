@@ -39,6 +39,9 @@ class MockConfig:
     def getint(self, key, default, section=None):
         return getattr(self, key, default)
 
+    def role_name(self) -> str:
+        return "collaborator"
+
 class SyncSimulationTest(unittest.TestCase):
     def get_collaborator(self, config):
         """Helper to create a collaborator with a mock driver."""

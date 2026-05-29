@@ -126,6 +126,7 @@ class TestCollaboratorStartHandling(unittest.TestCase):
 
     def test_duplicate_running_start_same_session_is_ignored(self):
         dummy = SimpleNamespace(
+            config=SimpleNamespace(video_file="test_video.mp4"),
             system_state=SimpleNamespace(is_running=True),
             video_path="videos/test_video.mp4",
             active_session_key=("leader-1", "test_video.mp4", 100.0),
@@ -153,6 +154,7 @@ class TestCollaboratorStartHandling(unittest.TestCase):
 
     def test_duplicate_running_start_without_identity_is_ignored(self):
         dummy = SimpleNamespace(
+            config=SimpleNamespace(video_file="test_video.mp4"),
             system_state=SimpleNamespace(is_running=True),
             video_path="videos/test_video.mp4",
             active_session_key=None,
@@ -174,6 +176,7 @@ class TestCollaboratorStartHandling(unittest.TestCase):
 
     def test_duplicate_running_start_new_session_restarts_playback(self):
         dummy = SimpleNamespace(
+            config=SimpleNamespace(video_file="test_video.mp4"),
             system_state=SimpleNamespace(is_running=True),
             video_path="videos/test_video.mp4",
             active_session_key=("leader-1", "test_video.mp4", 100.0),
@@ -239,7 +242,7 @@ class TestGstDriverLooping(unittest.TestCase):
     def test_eos_resets_cached_position_before_seek(self):
         original_gst = gst_driver.Gst
         original_available = gst_driver.GST_AVAILABLE
-        gst_driver.Gst = SimpleNamespace(MessageType=SimpleNamespace(EOS="eos"))
+        gst_driver.Gst = SimpleNamespace(MessageType=SimpleNamespace(EOS="eos", SEGMENT_DONE="segment_done"))
         gst_driver.GST_AVAILABLE = True
 
         try:

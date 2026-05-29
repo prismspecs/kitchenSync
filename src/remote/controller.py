@@ -15,7 +15,7 @@ import socket
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 from config.manager import ConfigManager
-from core.logger import enable_system_logging, log_info, log_warning
+from core.logger import enable_system_logging, log_info, log_warning, log_file_paths
 from networking.communication import CommandManager, SyncBroadcaster
 from video.file_manager import VideoFileManager
 
@@ -41,6 +41,10 @@ sync_broadcaster.leader_id = LOCAL_LEADER_ID
 
 config_snapshots: Dict[str, Dict[str, Any]] = {}
 config_messages: Dict[str, Dict[str, Any]] = {}
+
+# Log state caches
+log_snapshots: Dict[str, str] = {}
+log_events: Dict[str, threading.Event] = {}
 
 # Media state cache
 media_snapshots: Dict[str, List[Dict[str, Any]]] = {}
@@ -450,6 +454,50 @@ class RemoteHandler(BaseHTTPRequestHandler):
                 log_info(f"Stream error: {exc}", component="remote")
             return
 
+        if path == "/api/logs":
+            query = parse_qs(parsed_path.query)
+            device_id = query.get("device_id", [None])[0]
+            if not device_id:
+                self._send_json({"status": "error", "message": "device_id required"}, status=400)
+                return
+
+            if device_id == LOCAL_LEADER_ID:
+                try:
+                    log_paths = log_file_paths()
+                    sys_log_path = log_paths.get("system", "logs/kitchensync.log")
+                    if os.path.exists(sys_log_path):
+                        with open(sys_log_path, "r", errors="replace") as f:
+                            lines = f.readlines()
+                            log_content = "".join(lines[-500:])
+                    else:
+                        log_content = "No log file found on leader."
+                    self._send_json({"status": "ok", "logs": log_content})
+                except Exception as exc:
+                    self._send_json({"status": "error", "message": f"Failed to read leader logs: {exc}"}, status=500)
+                return
+            else:
+                event = threading.Event()
+                log_events[device_id] = event
+                
+                if device_id in log_snapshots:
+                    del log_snapshots[device_id]
+                
+                command_manager.send_command(
+                    {"type": "log_request", "target_device_id": device_id},
+                    target_pi=device_id
+                )
+                
+                event_set = event.wait(1.5)
+                if event_set and device_id in log_snapshots:
+                    self._send_json({"status": "ok", "logs": log_snapshots[device_id]})
+                else:
+                    cached_log = log_snapshots.get(device_id, "Timeout: No response from collaborator.")
+                    self._send_json({"status": "ok", "logs": cached_log})
+                
+                if device_id in log_events:
+                    del log_events[device_id]
+                return
+
         self.send_error(404)
 
     def do_DELETE(self):
@@ -701,6 +749,15 @@ def start_remote():
             media_snapshots[device_id] = payload.get("media", [])
             
     command_manager.register_handler("file_list_response", lambda msg, addr: store_media_message(msg))
+
+    def store_log_message(payload):
+        device_id = payload.get("device_id")
+        if device_id:
+            log_snapshots[device_id] = payload.get("logs", "")
+            if device_id in log_events:
+                log_events[device_id].set()
+
+    command_manager.register_handler("log_response", lambda msg, addr: store_log_message(msg))
 
     sync_broadcaster.setup_socket()
 

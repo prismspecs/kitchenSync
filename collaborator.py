@@ -23,7 +23,7 @@ from video import get_video_driver
 from video.file_manager import VideoFileManager
 from networking.communication import CommandListener, SyncReceiver
 from core.system_state import SystemState
-from core.logger import log_info, log_error, log_warning, enable_system_logging
+from core.logger import log_info, log_error, log_warning, enable_system_logging, log_file_paths
 from ui.window_manager import hide_mouse_cursor
 
 
@@ -170,6 +170,8 @@ class CollaboratorPi:
             self._handle_file_delete_request(msg, addr)
         elif cmd_type == "file_upload_notify":
             self._handle_file_upload_notify(msg, addr)
+        elif cmd_type == "log_request":
+            self._handle_log_request(msg, addr)
 
     def _message_targets_this_device(self, msg: dict) -> bool:
         target_device_id = msg.get("target_device_id")
@@ -230,6 +232,29 @@ class CollaboratorPi:
         if not self._message_targets_this_device(msg):
             return
         response = {"type": "file_list_response", "device_id": self.config.device_id, "media": self.video_manager.list_videos()}
+        self.command_listener.send_message(response, host=addr[0])
+
+    def _handle_log_request(self, msg: dict, addr: tuple) -> None:
+        if not self._message_targets_this_device(msg):
+            return
+        
+        try:
+            log_paths = log_file_paths()
+            sys_log_path = log_paths.get("system", "logs/kitchensync.log")
+            if os.path.exists(sys_log_path):
+                with open(sys_log_path, "r", errors="replace") as f:
+                    lines = f.readlines()
+                    log_content = "".join(lines[-500:])
+            else:
+                log_content = "No log file found on collaborator."
+        except Exception as exc:
+            log_content = f"Error reading logs: {exc}"
+
+        response = {
+            "type": "log_response",
+            "device_id": self.config.device_id,
+            "logs": log_content
+        }
         self.command_listener.send_message(response, host=addr[0])
 
     def _handle_file_delete_request(self, msg: dict, addr: tuple) -> None:
@@ -367,19 +392,22 @@ class CollaboratorPi:
         leader_id = msg.get("leader_id", "unknown")
         start_time = msg.get("start_time", 0.0)
         
-        # Identity session for deduplication
-        # If we are already running the SAME session (same leader, file, and base time), ignore.
-        session_key = (leader_id, leader_file, start_time)
-        if self.system_state.is_running and self.active_session_key == session_key:
-            # We are already in this session, do not restart
-            return
-
         configured_file = self.config.video_file
         target_file = configured_file or leader_file
-        local_video_path = self.video_manager.find_video_file(target_file=target_file)
         
+        local_video_path = self.video_manager.find_video_file(target_file=target_file)
         if not local_video_path and leader_file:
             local_video_path = self.video_manager.find_video_file(target_file=leader_file)
+            
+        # Identity session for deduplication
+        # If we are already running the SAME session (same leader, file, and base time), ignore.
+        session_key = (leader_id, target_file, start_time)
+        if self.system_state.is_running:
+            if getattr(self, "active_session_key", None) == session_key:
+                return
+            # Legacy fallback: if message has no identity, check if we are already playing the resolved file
+            if leader_id == "unknown" and getattr(self, "video_path", None) == local_video_path:
+                return
             
         if not local_video_path:
             log_error(f"Could not find video: {target_file}", component="collaborator")
@@ -388,7 +416,7 @@ class CollaboratorPi:
         if self.system_state.is_running:
             self.stop_playback()
 
-        if self.midi_scheduler:
+        if getattr(self, "midi_scheduler", None):
             self.midi_scheduler.load_schedule(msg.get("schedule", []))
 
         self.video_path = local_video_path
@@ -435,7 +463,9 @@ def main():
 
     try:
         node = CollaboratorPi(args.config_file)
-        if args.debug: enable_system_logging(True)
+        if args.debug:
+            enable_system_logging(True)
+            node.config.debug_mode = True
         node.run()
     except Exception as e:
         print(f"Fatal error: {e}")
