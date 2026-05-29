@@ -81,11 +81,6 @@ class VideoDriver(ABC):
         """Release hardware resources."""
         pass
 
-    @abstractmethod
-    def set_overlay_text(self, text: str) -> None:
-        """Set on-screen telemetry overlay text. If empty or not supported, it is a no-op."""
-        pass
-
     @property
     def is_playing(self) -> bool:
         """Check if the player is currently playing."""

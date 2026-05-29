@@ -52,8 +52,6 @@ class CollaboratorPi:
             log_error("Failed to initialize video driver", component="collaborator")
             sys.exit(1)
 
-        self.overlay_manager = None
-
         # Initialize Protocols (MIDI/OSC)
         self.midi_manager = None
         self.midi_scheduler = None
@@ -174,8 +172,6 @@ class CollaboratorPi:
             self._handle_file_upload_notify(msg, addr)
         elif cmd_type == "log_request":
             self._handle_log_request(msg, addr)
-        elif cmd_type == "set_debug":
-            self._handle_set_debug(msg, addr)
 
     def _message_targets_this_device(self, msg: dict) -> bool:
         target_device_id = msg.get("target_device_id")
@@ -441,13 +437,8 @@ class CollaboratorPi:
             self._sync_thread.start()
             if self.midi_scheduler:
                 self.midi_scheduler.start_playback(self.system_state.start_time, self.video_player.get_duration())
-            
-            # Start dynamic Tkinter overlay if enabled
-            if self.config.debug_mode:
-                self.start_overlay()
 
     def stop_playback(self) -> None:
-        self.stop_overlay()
         self._stop_sync_thread.set()
         if self._sync_thread:
             self._sync_thread.join(timeout=1.0)
@@ -456,37 +447,6 @@ class CollaboratorPi:
         if self.midi_scheduler:
             self.midi_scheduler.stop_playback()
         self.system_state.stop_session()
-
-    def _handle_set_debug(self, msg: dict, addr: tuple) -> None:
-        if not self._message_targets_this_device(msg):
-            return
-        
-        enabled = msg.get("enabled", False)
-        # Update dynamic config setting
-        self.config.set_param("debug", enabled)
-        log_info(f"Overlay: debug mode set to {enabled} (Tkinter dynamic toggling)", component="collaborator")
-        
-        if enabled:
-            self.start_overlay()
-        else:
-            self.stop_overlay()
-
-    def start_overlay(self) -> None:
-        if not self.overlay_manager:
-            try:
-                from ui.native_overlay import NativeDebugOverlay
-                self.overlay_manager = NativeDebugOverlay(self, role="collaborator")
-                self.overlay_manager.start()
-            except Exception as e:
-                log_error(f"Failed to start native Tkinter overlay: {e}", component="collaborator")
-
-    def stop_overlay(self) -> None:
-        if self.overlay_manager:
-            try:
-                self.overlay_manager.stop()
-            except Exception as e:
-                pass
-            self.overlay_manager = None
 
     def cleanup(self) -> None:
         self.is_running = False

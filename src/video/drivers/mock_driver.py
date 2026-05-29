@@ -74,6 +74,3 @@ class MockVideoDriver(VideoDriver):
 
     def cleanup(self) -> None:
         self.stop()
-
-    def set_overlay_text(self, text: str) -> None:
-        pass

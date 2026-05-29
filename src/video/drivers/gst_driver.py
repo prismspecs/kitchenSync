@@ -40,7 +40,6 @@ class GstDriver(VideoDriver):
         self.state = PlayerState.STOPPED
         self.current_rate = 1.0
         self.video_sink_name = None
-        self.video_sink = None
         self.hardware_accel_preferred = False
         self.decoder_name = None
         self.decoder_candidates = []
@@ -223,7 +222,10 @@ class GstDriver(VideoDriver):
         if os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"):
             # build a GL bin with native window size control
             try:
+                # Use videoscale + capsfilter to FORCE the window size at the GStreamer level
                 bin_desc = (
+                    "videoconvert ! videoscale ! "
+                    "capsfilter caps=\"video/x-raw, width=1280, height=720\" ! "
                     "glupload ! glcolorconvert ! glimagesink name=sink"
                 )
                 sink_bin = Gst.parse_bin_from_description(bin_desc, True)
@@ -234,7 +236,6 @@ class GstDriver(VideoDriver):
                 log_warning(f"Gst: Failed to create GL sink bin: {e}")
 
         for sink_name in self._preferred_sink_names():
-            # Standard zero-copy fallback element
             sink = Gst.ElementFactory.make(sink_name, "videosink")
             if sink:
                 self._start_window_management_task()
@@ -314,7 +315,6 @@ class GstDriver(VideoDriver):
 
         sink, sink_name = self._create_video_sink()
         if sink:
-            self.video_sink = sink
             self.pipeline.set_property("video-sink", sink)
 
         self.decoder_candidates = []
@@ -664,10 +664,6 @@ class GstDriver(VideoDriver):
 
         # Run in background to not block the pipeline startup
         threading.Thread(target=fullscreen_task, daemon=True).start()
-
-    def set_overlay_text(self, text: str) -> None:
-        """Set dynamic on-screen telemetry overlay text (no-op, handled by native X11 overlay)."""
-        pass
 
     def cleanup(self) -> None:
         self.stop()
