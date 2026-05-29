@@ -8,9 +8,9 @@
 
 ## 2. Core Development Principles
 - **Universal Architecture:** A single codebase powers all roles. Nodes pivot between roles using `os.execv` to ensure a clean state transition.
-- **Robust Discovery:** Video discovery is hardened using absolute path resolution. **Automated Discovery** logic ensures that when a new device joins the cluster, the leader/controller immediately requests its media and config.
-- **Surgical UI:** The Web UI utilizes a custom DOM reconciliation strategy (`reconcileCell`) to allow real-time status updates without disrupting user input or focus.
-- **Stable Identity:** Device IDs are derived from hardware serial numbers to ensure consistent identification across restarts.
+- **Robust Discovery:** Video discovery is hardened using absolute path resolution across USB, local `videos/` folders, and the project root.
+- **Surgical UI:** The Web UI utilizes a custom DOM reconciliation strategy to allow real-time status updates without disrupting user input or focus.
+- **Stable Identity:** Device IDs are derived from hardware serial numbers to ensure consistent identification across restarts without manual configuration.
 
 ## 3. Architecture & Core Components
 
@@ -20,13 +20,12 @@
 - **`collaborator.py`**: The playback node. Handles both `collaborator` (syncing) and `bystander` (idle) modes.
 
 ### Module Structure (`src/`)
-- **`src/config/`**: Unified configuration management (`ksync.ini`) and USB detection.
+- **`src/config/`**: Unified configuration management and USB detection.
 - **`src/core/`**: Shared logic (logging, system state, scheduling).
 - **`src/protocols/`**: Abstraction layer for MIDI and OSC output.
-- **`src/networking/`**: High-precision UDP sync. Moving to **Per-Device Latency Compensation** for sub-millisecond accuracy.
+- **`src/networking/`**: High-precision UDP sync and command management.
 - **`src/video/`**: GStreamer-based video driver with rate-based synchronization.
 - **`src/ui/`**: CLI/Terminal interface and window management.
-- **`src/remote/`**: Standalone Web UI. Features a unified refresh system (SVG icons) and non-interfering configuration toggles (left-side +/-).
 
 ## 4. Conventions
 - **Language**: Python 3.

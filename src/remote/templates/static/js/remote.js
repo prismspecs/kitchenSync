@@ -80,11 +80,6 @@ async function requestMedia(deviceId) {
     await postJson('/api/media/request', { device_id: deviceId });
 }
 
-async function requestConfig(deviceId) {
-    requestedConfigs.add(deviceId);
-    await postJson('/api/config/request', { device_id: deviceId });
-}
-
 async function playCluster() {
     await fetch('/api/play', { method: 'POST' });
     document.getElementById('preview').play().catch(() => {});
@@ -139,7 +134,13 @@ async function seekCluster(seconds) {
     await postJson('/api/seek', { value: seconds });
 }
 
+async function requestConfig(deviceId) {
+    requestedConfigs.add(deviceId);
+    await postJson('/api/config/request', { device_id: deviceId });
+}
+
 function escapeHtml(value) {
+
     return String(value ?? '')
         .replaceAll('&', '&amp;')
         .replaceAll('<', '&lt;')
@@ -165,9 +166,6 @@ function getStatusClass(device) {
     }
     if (status === 'unknown') {
         return 'status-unknown';
-    }
-    if (status === 'bystander') {
-        return 'status-bystander';
     }
     return 'status-generic';
 }
@@ -271,7 +269,7 @@ function renderMessage(message) {
         return `<div class="message error">${message.error}</div>`;
     }
     if (message.requires_restart) {
-        return '<div class="message ok">Saved. Restarting...</div>';
+        return '<div class="message ok">Saved. Restart required.</div>';
     }
     return '<div class="message ok">Saved.</div>';
 }
@@ -337,7 +335,7 @@ function renderMediaCell(device, leaderMedia) {
         `;
     }
 
-    if (!isLeader && device.media === undefined && !requestedConfigs.has(device.device_id + '-media')) {
+    if (!isLeader && !device.media && !requestedConfigs.has(device.device_id + '-media')) {
         requestedConfigs.add(device.device_id + '-media');
         requestMedia(device.device_id);
     }
@@ -393,7 +391,9 @@ function renderMediaCell(device, leaderMedia) {
                 ${uploadSection}
             `;
         } else {
-            syncSection = uploadSection;
+            syncSection = `
+                ${uploadSection}
+            `;
         }
     }
 
@@ -430,6 +430,8 @@ function reconcileCell(container, newHtml, force = false) {
     
     if (hasFocus) {
         // If it's a form element, we skip the broad innerHTML update to preserve focus/typing.
+        // We only update non-input parts of the cell if possible.
+        // For now, if focused, we only update the 'message-area' if it exists.
         const messageArea = container.querySelector('.message-area');
         if (messageArea) {
             const temp = document.createElement('div');
@@ -505,7 +507,7 @@ function renderState(state) {
     if (clusterStatus) {
         const latency = state.latency || {};
         const latencyText = latency.enabled
-            ? ` | RTT compensation: per-device`
+            ? ` | RTT: ${latency.avg_rtt_ms ?? 'n/a'}ms | Compensation: ${latency.compensation_ms ?? 0}ms`
             : ' | RTT compensation: off';
         const newStatusText = `Status: ${state.status} | Time: ${state.video_pos.toFixed(2)}s | Video: ${state.current_video}${latencyText}`;
         if (clusterStatus.textContent !== newStatusText) {
@@ -538,8 +540,7 @@ function renderState(state) {
             
             // 1. Update Summary Cell
             const latencyLabel = device.role === 'leader' ? 'Cluster RTT avg' : 'Ping';
-            const compText = (device.latency_ms != null && device.role === 'collaborator') ? ` (+${(device.latency_ms / 2).toFixed(1)}ms comp)` : '';
-            const latencyText = device.latency_ms != null ? `${latencyLabel}: ${device.latency_ms} ms${compText}` : `${latencyLabel}: n/a`;
+            const latencyText = device.latency_ms != null ? `${latencyLabel}: ${device.latency_ms} ms` : `${latencyLabel}: n/a`;
             const statusText = `${device.status} (${device.online ? 'Online' : 'Offline'})`;
             
             const newSummaryHtml = `

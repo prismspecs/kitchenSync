@@ -12,11 +12,12 @@
 - [x] Tune collaborator drift control after live hardware measurements.
 - [x] Add a focused sync test that exercises repeated corrections with the mock driver.
 - [x] Make collaborator sync loop-aware so EOS wrap does not look like a huge drift spike.
-- [ ] Implement **Per-Device Latency Compensation** (moving math to Collaborator).
-- [ ] Consolidate Heartbeat/Ping into unified **Status Update** protocol.
 
-## UI & Discovery
-- [x] Implement **Automated Discovery** (auto-request media/config on join).
-- [x] Add **Surgical DOM Reconciliation** for zero-flicker UI updates.
-- [x] Replace redundant text buttons with unified **SVG Refresh Icons**.
+## Deployment
+- [x] Add a deployment checklist for Pi imaging, X11 readiness, and USB content validation.
+
+## Backlog
+- [ ] Local content caching.
+- [x] Leader web configuration (integrated into remote controller).
+- [ ] Multi-channel MIDI improvements.
 - [ ] Bystander Status Overlay: Create a visual status screen (IP, ID, Status) for unconfigured nodes to avoid black screens during setup.

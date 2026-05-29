@@ -120,6 +120,16 @@ class LeaderPi:
                 base_time = self.video_player.get_position()
                 if base_time is None:
                     return None
+                
+                # Automatic Latency Compensation
+                if self.config.enable_latency_compensation:
+                    # RTT is round trip; multiplier adjusts for one-way and jitter.
+                    # By adding this to the broadcast time, we 'pre-advance' the packet.
+                    avg_rtt = self.command_manager.get_average_rtt()
+                    if avg_rtt > 0:
+                        compensation = avg_rtt * self.config.latency_factor
+                        return base_time + compensation
+                
                 return base_time
             except Exception:
                 return None

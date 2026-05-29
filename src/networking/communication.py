@@ -491,16 +491,7 @@ class CommandManager:
         if msg_type == "pong":
             sent_at = self._ping_sent_at.pop(device_id, None)
             if sent_at is not None:
-                rtt = time.monotonic() - sent_at
-                self._record_rtt_sample(device_id, rtt)
-                
-                # Direct Latency Reporting: 
-                # Tell the collaborator exactly what its RTT is so it can 
-                # perform local latency compensation.
-                self.send_command(
-                    {"type": "latency_report", "rtt": rtt}, 
-                    target_pi=device_id
-                )
+                self._record_rtt_sample(device_id, time.monotonic() - sent_at)
             return
 
         # If a new ID appears from an IP that we already know, 
@@ -510,9 +501,6 @@ class CommandManager:
             if info["ip"] == addr[0] and old_id != device_id:
                 log_info(f"Net: Device at {addr[0]} changed ID from {old_id} to {device_id}. Pruning old entry.", component="network")
                 del self.collaborators[old_id]
-
-        # Registry logic
-        is_new_device = device_id not in self.collaborators
 
         if msg_type == "register":
             self.collaborators[device_id] = {
@@ -532,20 +520,6 @@ class CommandManager:
                     self.collaborators.get(device_id, {}).get("video_file", ""),
                 ),
             }
-            
-        # Automatic Discovery: If this is a newly seen device, 
-        # immediately request its config and media list.
-        if is_new_device and msg_type in ["register", "heartbeat"]:
-            log_info(f"Net: New device {device_id} discovered at {addr[0]}. Auto-requesting info.", component="network")
-            # We don't want to import CommandManager/Listener circularly, 
-            # but we can use our existing send_command method.
-            # Use a short delay to ensure the node is ready for incoming UDP
-            def auto_discover():
-                time.sleep(0.5)
-                self.send_command({"type": "config_request", "target_device_id": device_id}, target_pi=device_id)
-                self.send_command({"type": "file_list_request", "target_device_id": device_id}, target_pi=device_id)
-            
-            threading.Thread(target=auto_discover, daemon=True).start()
 
     def get_collaborators(self) -> Dict[str, Dict]:
         """Get current collaborator status and prune long-dead ones"""

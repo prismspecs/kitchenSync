@@ -95,7 +95,6 @@ class CollaboratorPi:
         self.startup_sync_count = 0
         self.FAST_SYNC_THRESHOLD = 10
         self._settle_until = 0
-        self.local_rtt = 0.0
 
         # Sync Decoupling
         self._latest_sync_state = None
@@ -158,8 +157,6 @@ class CollaboratorPi:
                 {"type": "pong", "device_id": self.config.device_id},
                 host=addr[0],
             )
-        elif cmd_type == "latency_report":
-            self.local_rtt = float(msg.get("rtt", 0.0))
         elif cmd_type == "config_request":
             self._handle_config_request(msg, addr)
         elif cmd_type == "config_update":
@@ -288,16 +285,11 @@ class CollaboratorPi:
         if state and self.system_state.is_running:
             leader_time, received_at, sent_at = state
             adjusted_leader_time = leader_time
-            
-            # Per-device latency compensation:
-            # We use half the RTT (round trip time) to estimate the one-way 
-            # transport delay from Leader to this specific Collaborator.
-            if self.local_rtt > 0:
-                adjusted_leader_time += (self.local_rtt / 2.0)
-            
-            # Account for the time passed since the packet was received
+            if sent_at:
+                transport_latency = received_at - float(sent_at)
+                if 0.0 <= transport_latency <= 0.25:
+                    adjusted_leader_time += transport_latency
             adjusted_leader_time += max(0.0, time.time() - received_at)
-            
             self.system_state.current_time = adjusted_leader_time
             if self.midi_scheduler:
                 self.midi_scheduler.process_cues(adjusted_leader_time)
