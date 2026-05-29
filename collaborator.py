@@ -320,10 +320,11 @@ class CollaboratorPi:
             adjusted_leader_time = leader_time
             
             # Per-device latency compensation:
-            # We use half the RTT (round trip time) to estimate the one-way 
-            # transport delay from Leader to this specific Collaborator.
+            # We use the RTT (round trip time) multiplied by a factor (default 0.5) 
+            # to estimate the one-way transport delay from Leader to this specific Collaborator.
             if self.local_rtt > 0:
-                adjusted_leader_time += (self.local_rtt / 2.0)
+                factor = self.config.getfloat("latency_factor", 0.5)
+                adjusted_leader_time += (self.local_rtt * factor)
             
             # Account for the time passed since the packet was received
             adjusted_leader_time += max(0.0, time.time() - received_at)

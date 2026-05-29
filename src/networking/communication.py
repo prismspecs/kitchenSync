@@ -293,6 +293,7 @@ class CommandManager:
         self.collaborators = {}
         self.message_handlers = {}
         self.debug_mode = debug_mode
+        self.device_id = "leader-pi"
         
         # Latency tracking
         self._rtt_samples = {} # Dict[device_id, list]
@@ -493,6 +494,16 @@ class CommandManager:
             if sent_at is not None:
                 rtt = time.monotonic() - sent_at
                 self._record_rtt_sample(device_id, rtt)
+            return
+
+        if msg_type == "ping":
+            # Respond with our ID so the sender can track who they are pinging
+            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            sock.sendto(
+                json.dumps({"type": "pong", "device_id": self.device_id}).encode(),
+                (addr[0], self.control_port),
+            )
+            sock.close()
             return
 
         # If a new ID appears from an IP that we already know, 

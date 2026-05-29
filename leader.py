@@ -59,6 +59,7 @@ class LeaderPi:
             tick_interval=0.1,
         )
         self.command_manager = CommandManager()
+        self.command_manager.device_id = self.config.device_id
 
         # Initialize Protocols (MIDI/OSC)
         self.midi_manager = None

@@ -36,6 +36,7 @@ cluster_state = ClusterState()
 config = ConfigManager("leader_config.ini")
 video_manager = VideoFileManager(config.video_file, config.usb_mount_point)
 command_manager = CommandManager()
+command_manager.device_id = LOCAL_LEADER_ID
 sync_broadcaster = SyncBroadcaster()
 sync_broadcaster.leader_id = LOCAL_LEADER_ID
 
