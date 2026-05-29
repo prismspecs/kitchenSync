@@ -309,7 +309,7 @@ select {
     cursor: pointer;
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    justify-content: flex-start;
     gap: 12px;
     padding: 0 0 5px;
 }
@@ -318,12 +318,15 @@ select {
     display: none;
 }
 
-.config-panel summary::after {
+.config-panel summary::before {
     content: "+";
     line-height: 1;
+    font-family: monospace;
+    font-weight: bold;
+    width: 12px;
 }
 
-.config-panel[open] summary::after {
+.config-panel[open] summary::before {
     content: "-";
 }
 
