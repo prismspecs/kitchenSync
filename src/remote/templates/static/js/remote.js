@@ -1,8 +1,8 @@
 const requestedConfigs = new Set();
 const lastSaveAt = new Map();
 const draftConfigValues = new Map();
-const openConfigPanels = new Set();
-const openMediaPanels = new Set();
+const openConfigPanels = new Set(['remote-leader']);
+const openMediaPanels = new Set(['remote-leader']);
 let latestState = null;
 
 const REFRESH_ICON_SVG = `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"></path><path d="M1 20v-6h6"></path><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>`;
@@ -295,7 +295,7 @@ function renderConfigCell(device, videoOptions, scheduleOptions) {
     const baseValues = config.values || {};
     const draftValues = draftConfigValues.get(device.device_id) || {};
     const values = { ...baseValues, ...draftValues };
-    const isOpen = openConfigPanels.has(device.device_id) || device.role === 'leader';
+    const isOpen = openConfigPanels.has(device.device_id);
 
     const ADVANCED_KEYS = new Set([
         'tick_interval',
@@ -452,9 +452,77 @@ function renderMediaCell(device, leaderMedia) {
 }
 
 /**
+ * Morph - A highly surgical vanilla DOM morphing engine.
+ * Recursively diffs oldNode and newNode, updating attributes, text nodes,
+ * and form input values without rebuilding DOM elements, thus preserving
+ * active cursor/selection state, element identities, and interactive toggles.
+ */
+function morph(oldNode, newNode) {
+    if (oldNode.nodeType !== newNode.nodeType || oldNode.nodeName !== newNode.nodeName) {
+        oldNode.parentNode.replaceChild(newNode.cloneNode(true), oldNode);
+        return;
+    }
+
+    if (oldNode.nodeType === Node.TEXT_NODE) {
+        if (oldNode.nodeValue !== newNode.nodeValue) {
+            oldNode.nodeValue = newNode.nodeValue;
+        }
+        return;
+    }
+
+    // Skip morphing the currently focused input/select element to prevent cursor jumping
+    if (oldNode === document.activeElement) {
+        return;
+    }
+
+    // Sync attributes
+    for (let attr of Array.from(oldNode.attributes)) {
+        if (!newNode.hasAttribute(attr.name)) {
+            oldNode.removeAttribute(attr.name);
+        }
+    }
+    for (let attr of Array.from(newNode.attributes)) {
+        if (oldNode.getAttribute(attr.name) !== attr.value) {
+            oldNode.setAttribute(attr.name, attr.value);
+        }
+    }
+
+    // Sync form inputs safely
+    if (oldNode.nodeName === 'INPUT' || oldNode.nodeName === 'SELECT' || oldNode.nodeName === 'TEXTAREA') {
+        if (oldNode.value !== newNode.value) {
+            oldNode.value = newNode.value;
+        }
+        if (oldNode.nodeName === 'INPUT' && oldNode.type === 'checkbox') {
+            if (oldNode.checked !== newNode.checked) {
+                oldNode.checked = newNode.checked;
+            }
+        }
+        return;
+    }
+
+    // Sync child nodes recursively
+    const oldChildren = Array.from(oldNode.childNodes);
+    const newChildren = Array.from(newNode.childNodes);
+
+    const maxLen = Math.max(oldChildren.length, newChildren.length);
+    for (let i = 0; i < maxLen; i++) {
+        const oldChild = oldChildren[i];
+        const newChild = newChildren[i];
+
+        if (!oldChild && newChild) {
+            oldNode.appendChild(newChild.cloneNode(true));
+        } else if (oldChild && !newChild) {
+            oldNode.removeChild(oldChild);
+        } else if (oldChild && newChild) {
+            morph(oldChild, newChild);
+        }
+    }
+}
+
+/**
  * Surgical DOM Reconciliation
- * Replaces the content of a container ONLY if it has changed, 
- * and ALWAYS preserves focus/selection in inputs/forms.
+ * Morph the cell container content rather than writing innerHTML to preserve live details toggles
+ * and prevent input disruption.
  */
 function reconcileCell(container, newHtml, force = false) {
     if (!container) return;
@@ -463,44 +531,19 @@ function reconcileCell(container, newHtml, force = false) {
     const currentHtml = container.innerHTML;
     if (!force && currentHtml === newHtml) return;
 
-    // 2. If the user is currently interacting with something in this cell, 
-    // we must be very careful not to wipe their state.
-    const activeElement = document.activeElement;
-    const hasFocus = container.contains(activeElement);
-    
-    if (hasFocus) {
-        // If it's a form element, we skip the broad innerHTML update to preserve focus/typing.
-        // We only update non-input parts of the cell if possible.
-        // For now, if focused, we only update the 'message-area' if it exists.
-        const messageArea = container.querySelector('.message-area');
-        if (messageArea) {
-            const temp = document.createElement('div');
-            temp.innerHTML = newHtml;
-            const newMessageArea = temp.querySelector('.message-area');
-            if (newMessageArea && messageArea.innerHTML !== newMessageArea.innerHTML) {
-                messageArea.innerHTML = newMessageArea.innerHTML;
-            }
-        }
-        
-        // Also update the 'media-list' if it's a media cell and the user isn't focused there
-        const mediaList = container.querySelector('.media-list');
-        const mediaInput = container.querySelector('.file-input-small');
-        const isMediaFocused = mediaList?.contains(activeElement) || mediaInput === activeElement;
-        
-        if (!isMediaFocused) {
-            const temp = document.createElement('div');
-            temp.innerHTML = newHtml;
-            const newMediaList = temp.querySelector('.media-list');
-            if (newMediaList && mediaList && mediaList.innerHTML !== newMediaList.innerHTML) {
-                mediaList.innerHTML = newMediaList.innerHTML;
-            }
-        }
-        
-        return;
-    }
+    // 2. Parse newHtml string into a DOM node
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(newHtml, 'text/html');
+    const newDom = doc.body.firstElementChild;
+    if (!newDom) return;
 
-    // 3. No focus, safe to replace
-    container.innerHTML = newHtml;
+    // 3. Morph container's first child recursively
+    const oldDom = container.firstElementChild;
+    if (!oldDom) {
+        container.innerHTML = newHtml;
+    } else {
+        morph(oldDom, newDom);
+    }
 }
 
 function renderState(state) {
@@ -584,8 +627,8 @@ function renderState(state) {
                 <span class="tooltip" tabindex="0" aria-label="Status Explanation">
                     <span class="tooltip-icon" style="margin-left: 4px;">?</span>
                     <span class="tooltip-bubble" style="font-weight: normal; color: #000; background: #fff;">
-                        <b>Green (Ready):</b> Device is online and idle (playback stopped).<br>
-                        <b>Yellow (Syncing):</b> Device is actively playing and synchronizing with the Leader.<br>
+                        <b>Yellow (Ready):</b> Device is online and idle (playback stopped).<br>
+                        <b>Green (Syncing):</b> Device is actively playing and synchronizing with the Leader.<br>
                         <b>Blue (Leading):</b> This is the Leader node directing the cluster.<br>
                         <b>Red (Offline):</b> Device is disconnected or unreachable.
                     </span>
