@@ -4,8 +4,9 @@ These are high-priority architectural enhancements to move kSync from a prototyp
 
 ## 1. Precision Synchronization (Sub-millisecond)
 - **Goal:** Replace UDP broadcast with PTP (IEEE 1588) or GstNetClock.
+- **Progress:** Implementing **Per-Device Latency Compensation** to replace cluster-averaging. Moving compensation logic from Leader-broadcast to Collaborator-reception.
 - **Why:** Eliminates micro-stutters and ensures perfect phase-alignment between nodes.
-- **Tech:** `linuxptp`, `GstNetTimeProvider`, `GstNetClientClock`.
+- **Tech:** Individual RTT tracking, `GstNetTimeProvider`, `GstNetClientClock`.
 
 ## 2. Industry Standard Control (OSC)
 - **Goal:** Implement Open Sound Control (OSC) as the primary control protocol.
