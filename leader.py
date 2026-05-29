@@ -53,6 +53,8 @@ class LeaderPi:
             log_error("Failed to initialize video driver", component="leader")
             sys.exit(1)
 
+        self.overlay_manager = None
+
         # Initialize Networking
         self.sync_broadcaster = SyncBroadcaster(
             sync_port=self.config.getint("sync_port", 5005),
@@ -83,6 +85,7 @@ class LeaderPi:
         self.command_manager.register_handler("remote_stop", lambda msg, addr: self.stop_system())
         self.command_manager.register_handler("remote_seek", lambda msg, addr: self.seek_video(str(msg.get("value", 0))))
         self.command_manager.register_handler("remote_set", lambda msg, addr: self.set_sync_param(msg.get("param"), msg.get("value")))
+        self.command_manager.register_handler("set_debug", lambda msg, addr: self.handle_set_debug(msg))
 
         self.command_manager.start_listening()
         self.command_manager.start_latency_probing()
@@ -184,6 +187,10 @@ class LeaderPi:
         if self.midi_scheduler:
             threading.Thread(target=midi_cue_loop, daemon=True).start()
 
+        # Start dynamic Tkinter overlay if enabled
+        if self.config.debug_mode:
+            self.start_overlay()
+
         log_info("System started successfully!", component="leader")
 
     def stop_system(self) -> None:
@@ -192,6 +199,7 @@ class LeaderPi:
             return
 
         log_info("Stopping kSync system...", component="leader")
+        self.stop_overlay()
         self.video_player.stop()
         self.sync_broadcaster.stop_broadcasting()
         if self.midi_scheduler:
@@ -212,6 +220,49 @@ class LeaderPi:
                 self.midi_scheduler.reset(seconds)
         except Exception as e:
             log_error(f"An error occurred during seek: {e}", component="leader")
+
+    def handle_set_debug(self, msg: dict) -> None:
+        enabled = msg.get("enabled", False)
+        if self.config.debug_mode != enabled:
+            self.config.set_param("debug", enabled)
+            log_info(f"Leader Overlay: debug mode set to {enabled} (Tkinter dynamic toggling)", component="leader")
+            
+            if enabled:
+                self.start_overlay()
+            else:
+                self.stop_overlay()
+
+    def start_overlay(self) -> None:
+        if not self.overlay_manager:
+            try:
+                from ui.native_overlay import NativeDebugOverlay
+                self.overlay_manager = NativeDebugOverlay(self, role="leader")
+                self.overlay_manager.start()
+            except Exception as e:
+                log_error(f"Failed to start native Tkinter overlay on leader: {e}", component="leader")
+
+    def stop_overlay(self) -> None:
+        if self.overlay_manager:
+            try:
+                self.overlay_manager.stop()
+            except Exception as e:
+                pass
+            self.overlay_manager = None
+
+    def cli_set_debug(self, value: str) -> None:
+        """Toggle telemetry overlay on/off and broadcast to all collaborator nodes."""
+        enabled = value.strip().lower() in ("on", "true", "yes", "1")
+        
+        # Broadcast to all collaborator nodes
+        broadcast_msg = {
+            "type": "set_debug",
+            "enabled": enabled
+        }
+        self.command_manager.send_command(broadcast_msg)
+        log_info(f"Broadcasted set_debug={enabled} to all collaborator nodes.", component="leader")
+        
+        # Apply locally
+        self.handle_set_debug(broadcast_msg)
 
     def cleanup(self) -> None:
         """Clean up resources"""
@@ -333,6 +384,7 @@ def main():
                 leader_instance.system_state, leader_instance.command_manager.get_collaborators(), 0
             ), "Show system status")
             interface.register_command("set", leader_instance.set_sync_param, "Set sync parameter")
+            interface.register_command("debug", leader_instance.cli_set_debug, "Toggle telemetry overlay on/off (e.g. debug on/off)")
             interface.run()
         leader_instance.cleanup()
     except Exception as e:
