@@ -217,7 +217,7 @@ def build_ui_state() -> Dict[str, Any]:
                 else None,
                 "config": config_snapshots.get(device_id),
                 "message": config_messages.get(device_id),
-                "media": media_snapshots.get(device_id, []),
+                "media": media_snapshots.get(device_id),
             }
         )
 

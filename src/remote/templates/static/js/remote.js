@@ -335,7 +335,7 @@ function renderMediaCell(device, leaderMedia) {
         `;
     }
 
-    if (!isLeader && !device.media && !requestedConfigs.has(device.device_id + '-media')) {
+    if (!isLeader && device.media === null && !requestedConfigs.has(device.device_id + '-media')) {
         requestedConfigs.add(device.device_id + '-media');
         requestMedia(device.device_id);
     }
