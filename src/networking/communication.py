@@ -502,6 +502,9 @@ class CommandManager:
                 log_info(f"Net: Device at {addr[0]} changed ID from {old_id} to {device_id}. Pruning old entry.", component="network")
                 del self.collaborators[old_id]
 
+        # Registry logic
+        is_new_device = device_id not in self.collaborators
+
         if msg_type == "register":
             self.collaborators[device_id] = {
                 "ip": addr[0],
@@ -520,6 +523,20 @@ class CommandManager:
                     self.collaborators.get(device_id, {}).get("video_file", ""),
                 ),
             }
+            
+        # Automatic Discovery: If this is a newly seen device, 
+        # immediately request its config and media list.
+        if is_new_device and msg_type in ["register", "heartbeat"]:
+            log_info(f"Net: New device {device_id} discovered at {addr[0]}. Auto-requesting info.", component="network")
+            # We don't want to import CommandManager/Listener circularly, 
+            # but we can use our existing send_command method.
+            # Use a short delay to ensure the node is ready for incoming UDP
+            def auto_discover():
+                time.sleep(0.5)
+                self.send_command({"type": "config_request", "target_device_id": device_id}, target_pi=device_id)
+                self.send_command({"type": "file_list_request", "target_device_id": device_id}, target_pi=device_id)
+            
+            threading.Thread(target=auto_discover, daemon=True).start()
 
     def get_collaborators(self) -> Dict[str, Dict]:
         """Get current collaborator status and prune long-dead ones"""
