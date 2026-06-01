@@ -58,6 +58,13 @@ class TestGstDriverAudioBypass(unittest.TestCase):
             Rank=SimpleNamespace(PRIMARY=256, SECONDARY=128, NONE=0),
             ELEMENT_FACTORY_TYPE_DECODER=1,
             ELEMENT_FACTORY_TYPE_MEDIA_VIDEO=2,
+            MessageType=SimpleNamespace(
+                ERROR=1,
+                EOS=2,
+                ASYNC_DONE=3,
+                SEGMENT_DONE=4,
+            ),
+            ELEMENT_METADATA_KLASS="klass",
         )
         self.original_gst = gst_driver.Gst
         self.original_available = gst_driver.GST_AVAILABLE
@@ -120,6 +127,67 @@ class TestGstDriverAudioBypass(unittest.TestCase):
         
         # Verify no subprocess (wmctrl/wlrctl) was run
         mock_run.assert_not_called()
+
+    @patch("video.drivers.gst_driver.threading.Thread")
+    def test_audio_error_classification_restarts_for_audio_element(self, mock_thread):
+        driver = gst_driver.GstDriver(enable_audio=True)
+        driver.video_path = "movie.mp4"
+        driver._restart_minimal = MagicMock()
+        
+        # Mock GStreamer Message
+        mock_msg = MagicMock()
+        mock_msg.type = gst_driver.Gst.MessageType.ERROR
+        
+        # Set up message source to look like an audio sink
+        mock_src = MagicMock()
+        mock_src.get_name.return_value = "autoaudiosink0"
+        mock_factory = MagicMock()
+        mock_factory.get_metadata.return_value = "Sink/Audio"
+        mock_src.get_factory.return_value = mock_factory
+        mock_msg.src = mock_src
+        
+        # Mock message parse_error returning (ErrorObject, DebugString)
+        mock_err = MagicMock()
+        mock_err.message = "Unable to prepare device."
+        mock_msg.parse_error.return_value = (mock_err, "debug details")
+        
+        # Fire the message handler
+        driver._on_bus_message(None, mock_msg)
+        
+        # It should trigger restart minimal since it's an audio element
+        mock_thread.assert_called_once_with(target=driver._restart_minimal, daemon=True)
+        self.assertFalse(driver.enable_audio)
+
+    @patch("video.drivers.gst_driver.threading.Thread")
+    def test_audio_error_classification_fails_for_video_element(self, mock_thread):
+        driver = gst_driver.GstDriver(enable_audio=True)
+        driver.video_path = "movie.mp4"
+        driver._restart_minimal = MagicMock()
+        
+        # Mock GStreamer Message
+        mock_msg = MagicMock()
+        mock_msg.type = gst_driver.Gst.MessageType.ERROR
+        
+        # Set up message source to look like a video decoder
+        mock_src = MagicMock()
+        mock_src.get_name.return_value = "v4l2slh264dec0"
+        mock_factory = MagicMock()
+        mock_factory.get_metadata.return_value = "Codec/Decoder/Video"
+        mock_src.get_factory.return_value = mock_factory
+        mock_msg.src = mock_src
+        
+        # Mock message parse_error returning (ErrorObject, DebugString)
+        mock_err = MagicMock()
+        mock_err.message = "Unable to prepare device. wrong format"
+        mock_msg.parse_error.return_value = (mock_err, "debug details")
+        
+        # Fire the message handler
+        driver._on_bus_message(None, mock_msg)
+        
+        # It should NOT trigger restart minimal since it's a video element, and state should be set to ERROR
+        driver._restart_minimal.assert_not_called()
+        self.assertTrue(driver.enable_audio)
+        self.assertEqual(driver.state, gst_driver.PlayerState.ERROR)
 
 
 if __name__ == "__main__":

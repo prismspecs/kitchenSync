@@ -224,7 +224,19 @@ class GstDriver(VideoDriver):
     def _create_video_sink(self):
         """Create a hardware-optimized sink bin for the current runtime."""
         if os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"):
-            # build a GL bin with native window size control
+            # Try to build glsinkbin first to support NV12 DMA-bufs natively without breaking caps negotiation
+            try:
+                sink_bin = Gst.ElementFactory.make("glsinkbin", "videosink")
+                inner_sink = Gst.ElementFactory.make("glimagesink", "glimagesink")
+                if sink_bin and inner_sink:
+                    sink_bin.set_property("sink", inner_sink)
+                    self._start_window_management_task()
+                    log_info("Gst: Created zero-copy hardware GL sink (glsinkbin + glimagesink)")
+                    return sink_bin, "glsinkbin"
+            except Exception as e:
+                log_warning(f"Gst: Failed to create hardware GL sink bin (glsinkbin): {e}")
+
+            # Fallback GL bin description if glsinkbin fails or is unavailable
             try:
                 if self.video_width > 0 and self.video_height > 0:
                     # Use videoscale + capsfilter to FORCE the window size at the GStreamer level
@@ -243,7 +255,7 @@ class GstDriver(VideoDriver):
                     self._start_window_management_task()
                     return sink_bin, "gl-optimized-bin"
             except Exception as e:
-                log_warning(f"Gst: Failed to create GL sink bin: {e}")
+                log_warning(f"Gst: Failed to create fallback GL sink bin: {e}")
 
         for sink_name in self._preferred_sink_names():
             sink = Gst.ElementFactory.make(sink_name, "videosink")
@@ -347,7 +359,7 @@ class GstDriver(VideoDriver):
             if sink:
                 self.pipeline.set_property("video-sink", sink)
             self.video_sink_name = sink_name
-            self.hardware_accel_preferred = sink_name in {"kmssink", "gl-optimized-bin", "glimagesink", "xvimagesink"}
+            self.hardware_accel_preferred = sink_name in {"kmssink", "gl-optimized-bin", "glimagesink", "xvimagesink", "glsinkbin"}
             if sink_name:
                 if self.hardware_accel_preferred:
                     log_info(f"Gst: Using hardware-preferred video sink '{sink_name}'")
@@ -438,12 +450,24 @@ class GstDriver(VideoDriver):
             threading.Thread(target=clear_seeking, daemon=True).start()
         elif t == Gst.MessageType.ERROR:
             err, debug = message.parse_error()
-            log_error(f"Gst Error: {err.message}")
+            element_name = message.src.get_name() if message.src else "unknown"
+            log_error(f"Gst Error: {err.message} (from element: {element_name})")
             
-            # Heuristic: If we get a device or stream error while audio is enabled, 
-            # it's very likely the audio sink failing.
-            if self.enable_audio and ("device" in err.message.lower() or "format" in err.message.lower()):
-                log_warning("Gst: Critical error detected; attempting to restart WITHOUT audio.", component="video")
+            # Precise Audio Check: Verify if the failing element classification is actually Audio
+            is_audio_element = False
+            if message.src:
+                src_name = message.src.get_name().lower()
+                try:
+                    factory = message.src.get_factory()
+                    klass = factory.get_metadata(Gst.ELEMENT_METADATA_KLASS) if factory else ""
+                except Exception:
+                    klass = ""
+                is_audio_element = "Audio" in klass or any(x in src_name for x in ["audio", "alsa", "pulse", "volume", "sound"])
+            
+            # Heuristic: If we get a device or stream error from an audio element while audio is enabled,
+            # we attempt to restart without audio.
+            if self.enable_audio and is_audio_element and ("device" in err.message.lower() or "format" in err.message.lower()):
+                log_warning("Gst: Critical audio error detected; attempting to restart WITHOUT audio.", component="video")
                 self.enable_audio = False
                 # We need to restart the load in a thread to avoid bus deadlocks
                 threading.Thread(target=self._restart_minimal, daemon=True).start()
