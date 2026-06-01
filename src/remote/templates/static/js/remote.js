@@ -645,6 +645,7 @@ function renderState(state) {
                     <div class="device-summary-line device-summary-role">${escapeHtml(device.role)}</div>
                     <div class="device-summary-line device-summary-ip">${escapeHtml(device.ip)}</div>
                     <div class="device-summary-line device-summary-latency">${escapeHtml(latencyText)}</div>
+                    ${device.role === 'collaborator' ? `<div class="device-summary-line device-summary-seeks">Hard Seeks: ${device.hard_seeks || 0}</div>` : ''}
                     <div class="device-summary-line" style="margin-top: 8px;">
                         <button class="btn-small" onclick="viewDeviceLogs('${device.device_id}')">View Logs</button>
                     </div>

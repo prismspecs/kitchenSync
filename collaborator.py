@@ -96,6 +96,7 @@ class CollaboratorPi:
         self.startup_sync_count = 0
         self.FAST_SYNC_THRESHOLD = 10
         self._settle_until = 0
+        self.hard_seek_count = 0
         self._smoothed_latency = None  # EWMA-smoothed per-device transport latency
 
         # Sync Decoupling
@@ -131,7 +132,7 @@ class CollaboratorPi:
                     status = "syncing"
                 
                 try:
-                    self.command_listener.send_heartbeat(self.config.device_id, status)
+                    self.command_listener.send_heartbeat(self.config.device_id, status, hard_seeks=self.hard_seek_count)
                 except Exception as e:
                     log_warning(f"Failed to send heartbeat: {e}", component="collaborator")
                     
@@ -437,7 +438,8 @@ class CollaboratorPi:
             allow_accurate_seek = False if is_near_loop else abs(median_dev) > self.max_drift
 
             if allow_hard_seek:
-                log_info(f"Sync: Initiating hard seek to {leader_time:.3f}s (dev={median_dev:.3f}s, near_loop={is_near_loop})", component="collaborator")
+                self.hard_seek_count += 1
+                log_info(f"Sync: Initiating hard seek to {leader_time:.3f}s (dev={median_dev:.3f}s, near_loop={is_near_loop}) [Total hard seeks: {self.hard_seek_count}]", component="collaborator")
                 self.video_player.seek(leader_time, accurate=False)
                 self.deviation_samples.clear()
                 self.startup_sync_count = 0

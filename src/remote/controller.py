@@ -216,6 +216,7 @@ def build_ui_state() -> Dict[str, Any]:
                 "status": info.get("status", "unknown"),
                 "online": info.get("online", False),
                 "video_file": info.get("video_file", ""),
+                "hard_seeks": info.get("hard_seeks", 0),
                 "latency_ms": round(command_manager.get_device_average_rtt(device_id) * 1000, 1)
                 if command_manager.get_device_average_rtt(device_id) > 0
                 else None,

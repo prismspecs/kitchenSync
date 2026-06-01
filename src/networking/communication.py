@@ -508,6 +508,7 @@ class CommandManager:
                 "last_seen": time.time(),
                 "status": msg.get("status", "unknown"),
                 "video_file": msg.get("video_file", ""),
+                "hard_seeks": msg.get("hard_seeks", 0),
             }
 
         elif msg_type == "heartbeat":
@@ -519,6 +520,7 @@ class CommandManager:
                     "video_file",
                     self.collaborators.get(device_id, {}).get("video_file", ""),
                 ),
+                "hard_seeks": msg.get("hard_seeks", 0),
             }
 
     def get_collaborators(self) -> Dict[str, Dict]:
@@ -598,13 +600,14 @@ class CommandListener:
         """Register a catch-all callback for any message"""
         self.message_handlers["__all__"] = callback
 
-    def send_registration(self, device_id: str, video_file: str) -> None:
+    def send_registration(self, device_id: str, video_file: str, hard_seeks: int = 0) -> None:
         """Send registration to leader"""
         registration = {
             "type": "register",
             "device_id": device_id,
             "status": "ready",
             "video_file": video_file,
+            "hard_seeks": hard_seeks,
         }
 
         self.send_message(registration)
@@ -624,7 +627,12 @@ class CommandListener:
         except Exception:
             pass
 
-    def send_heartbeat(self, device_id: str, status: str = "ready") -> None:
+    def send_heartbeat(self, device_id: str, status: str = "ready", hard_seeks: int = 0) -> None:
         """Send heartbeat to leader"""
-        heartbeat = {"type": "heartbeat", "device_id": device_id, "status": status}
+        heartbeat = {
+            "type": "heartbeat",
+            "device_id": device_id,
+            "status": status,
+            "hard_seeks": hard_seeks,
+        }
         self.send_message(heartbeat)

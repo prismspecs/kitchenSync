@@ -51,6 +51,7 @@ class TestRemoteController(unittest.TestCase):
                         "status": "ready",
                         "online": True,
                         "video_file": "clip.mp4",
+                        "hard_seeks": 3,
                     }
                 },
                 "get_average_rtt": lambda self: 0.040,
@@ -80,6 +81,7 @@ class TestRemoteController(unittest.TestCase):
         self.assertEqual(state["latency"]["compensation_ms"], 20.0)
         collaborator = next(device for device in state["devices"] if device["device_id"] == "collab-1")
         self.assertEqual(collaborator["latency_ms"], 25.0)
+        self.assertEqual(collaborator["hard_seeks"], 3)
 
     def test_start_remote_starts_listener_before_latency_probing(self):
         call_order = []
