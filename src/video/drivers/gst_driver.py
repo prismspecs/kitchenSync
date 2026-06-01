@@ -462,7 +462,17 @@ class GstDriver(VideoDriver):
                     klass = factory.get_metadata(Gst.ELEMENT_METADATA_KLASS) if factory else ""
                 except Exception:
                     klass = ""
-                is_audio_element = "Audio" in klass or any(x in src_name for x in ["audio", "alsa", "pulse", "volume", "sound"])
+                
+                # Check if it has any video association
+                is_video = "Video" in klass or any(x in src_name for x in ["video", "kms", "gl", "xv", "image", "ximagesink", "fbdev"])
+                
+                # It is an audio element if classified as Audio or matches common audio strings
+                is_audio = "Audio" in klass or any(x in src_name for x in ["audio", "sound", "alsa", "pulse", "openal", "jack", "pipewire", "volume", "mix", "resample"])
+                
+                # If it's a sink and not a video element, it's very likely an audio sink (like openalsink)
+                is_sink = "Sink" in klass or "sink" in src_name
+                
+                is_audio_element = is_audio or (is_sink and not is_video)
             
             # Heuristic: If we get a device or stream error from an audio element while audio is enabled,
             # we attempt to restart without audio.

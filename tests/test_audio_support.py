@@ -189,6 +189,36 @@ class TestGstDriverAudioBypass(unittest.TestCase):
         self.assertTrue(driver.enable_audio)
         self.assertEqual(driver.state, gst_driver.PlayerState.ERROR)
 
+    @patch("video.drivers.gst_driver.threading.Thread")
+    def test_audio_error_classification_restarts_for_openal_sink(self, mock_thread):
+        driver = gst_driver.GstDriver(enable_audio=True)
+        driver.video_path = "movie.mp4"
+        driver._restart_minimal = MagicMock()
+        
+        # Mock GStreamer Message
+        mock_msg = MagicMock()
+        mock_msg.type = gst_driver.Gst.MessageType.ERROR
+        
+        # Set up message source to look like openalsink0
+        mock_src = MagicMock()
+        mock_src.get_name.return_value = "openalsink0"
+        mock_factory = MagicMock()
+        mock_factory.get_metadata.return_value = "Sink/Audio"
+        mock_src.get_factory.return_value = mock_factory
+        mock_msg.src = mock_src
+        
+        # Mock message parse_error returning (ErrorObject, DebugString)
+        mock_err = MagicMock()
+        mock_err.message = "Unable to prepare device."
+        mock_msg.parse_error.return_value = (mock_err, "debug details")
+        
+        # Fire the message handler
+        driver._on_bus_message(None, mock_msg)
+        
+        # It should trigger restart minimal since it's an OpenAL audio element
+        mock_thread.assert_called_once_with(target=driver._restart_minimal, daemon=True)
+        self.assertFalse(driver.enable_audio)
+
 
 if __name__ == "__main__":
     unittest.main()
