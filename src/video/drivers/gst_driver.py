@@ -50,6 +50,7 @@ class GstDriver(VideoDriver):
         self.pipeline_kind = "playbin"
         self.is_seeking = False
         self._gapless_looping = False
+        self._restart_in_progress = False
         
         # Position polling
         self._cached_position = 0.0
@@ -453,6 +454,10 @@ class GstDriver(VideoDriver):
             element_name = message.src.get_name() if message.src else "unknown"
             log_error(f"Gst Error: {err.message} (from element: {element_name})")
             
+            # If a restart is already in progress, ignore all further errors from the dying pipeline
+            if self._restart_in_progress:
+                return
+            
             # Precise Audio Check: Verify if the failing element classification is actually Audio
             is_audio_element = False
             if message.src:
@@ -477,8 +482,9 @@ class GstDriver(VideoDriver):
             # Heuristic: If we get a device or stream error from an audio element while audio is enabled,
             # we attempt to restart without audio.
             if self.enable_audio and is_audio_element and ("device" in err.message.lower() or "format" in err.message.lower()):
-                log_warning("Gst: Critical audio error detected; attempting to restart WITHOUT audio.", component="video")
+                log_warning("Gst: Audio sink failure detected; restarting pipeline WITHOUT audio.", component="video")
                 self.enable_audio = False
+                self._restart_in_progress = True
                 # We need to restart the load in a thread to avoid bus deadlocks
                 threading.Thread(target=self._restart_minimal, daemon=True).start()
             else:
@@ -486,12 +492,15 @@ class GstDriver(VideoDriver):
 
     def _restart_minimal(self):
         """Restart the pipeline with minimal settings after a crash."""
-        path = self.video_path
-        if path:
-            self.stop()
-            time.sleep(0.5)
-            self.load(path)
-            self.play()
+        try:
+            path = self.video_path
+            if path:
+                self.stop()
+                time.sleep(0.5)
+                self.load(path)
+                self.play()
+        finally:
+            self._restart_in_progress = False
 
     def _is_ready(self, timeout_ms: int = 0) -> bool:
         """Check if the pipeline is in a state that allows queries and seeks."""

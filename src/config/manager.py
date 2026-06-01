@@ -19,7 +19,7 @@ CONFIG_ROLE_SECTIONS = {
         "DEFAULT": {"video_file", "schedule_file", "video_driver", "sync_port", "tick_interval", "max_drift", "min_drift", "kp", "min_rate", "max_rate", "max_samples", "video_width", "video_height", "position_poll_interval", "remote_sync_mode"},
     },
     "collaborator": {
-        "KITCHENSYNC": {"role", "overlay", "enable_system_logging", "enable_audio", "enable_caching", "enable_latency_compensation"},
+        "KITCHENSYNC": {"role", "overlay", "enable_system_logging", "enable_audio", "audio_output", "enable_caching", "enable_latency_compensation"},
         "DEFAULT": {"device_id", "video_file", "video_driver", "midi_port", "sync_port", "video_width", "video_height", "position_poll_interval", "remote_sync_mode"},
     },
     "bystander": {
