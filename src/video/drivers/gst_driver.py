@@ -225,19 +225,7 @@ class GstDriver(VideoDriver):
     def _create_video_sink(self):
         """Create a hardware-optimized sink bin for the current runtime."""
         if os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"):
-            # Try to build glsinkbin first to support NV12 DMA-bufs natively without breaking caps negotiation
-            try:
-                sink_bin = Gst.ElementFactory.make("glsinkbin", "videosink")
-                inner_sink = Gst.ElementFactory.make("glimagesink", "glimagesink")
-                if sink_bin and inner_sink:
-                    sink_bin.set_property("sink", inner_sink)
-                    self._start_window_management_task()
-                    log_info("Gst: Created zero-copy hardware GL sink (glsinkbin + glimagesink)")
-                    return sink_bin, "glsinkbin"
-            except Exception as e:
-                log_warning(f"Gst: Failed to create hardware GL sink bin (glsinkbin): {e}")
-
-            # Fallback GL bin description if glsinkbin fails or is unavailable
+            # build a GL bin with native window size control
             try:
                 if self.video_width > 0 and self.video_height > 0:
                     # Use videoscale + capsfilter to FORCE the window size at the GStreamer level
@@ -256,7 +244,7 @@ class GstDriver(VideoDriver):
                     self._start_window_management_task()
                     return sink_bin, "gl-optimized-bin"
             except Exception as e:
-                log_warning(f"Gst: Failed to create fallback GL sink bin: {e}")
+                log_warning(f"Gst: Failed to create GL sink bin: {e}")
 
         for sink_name in self._preferred_sink_names():
             sink = Gst.ElementFactory.make(sink_name, "videosink")
@@ -360,7 +348,7 @@ class GstDriver(VideoDriver):
             if sink:
                 self.pipeline.set_property("video-sink", sink)
             self.video_sink_name = sink_name
-            self.hardware_accel_preferred = sink_name in {"kmssink", "gl-optimized-bin", "glimagesink", "xvimagesink", "glsinkbin"}
+            self.hardware_accel_preferred = sink_name in {"kmssink", "gl-optimized-bin", "glimagesink", "xvimagesink"}
             if sink_name:
                 if self.hardware_accel_preferred:
                     log_info(f"Gst: Using hardware-preferred video sink '{sink_name}'")
