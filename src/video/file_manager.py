@@ -18,7 +18,7 @@ from core.logger import log_info, log_warning, log_error
 class VideoFileManager:
     """Manages video file discovery, selection, and local caching"""
 
-    SUPPORTED_EXTENSIONS = [
+    SUPPORTED_VIDEO_EXTENSIONS = [
         ".mp4",
         ".avi",
         ".mov",
@@ -28,6 +28,23 @@ class VideoFileManager:
         ".webm",
         ".m4v",
     ]
+    SUPPORTED_AUDIO_EXTENSIONS = [
+        ".mp3",
+        ".wav",
+        ".ogg",
+        ".flac",
+        ".m4a",
+        ".aac",
+        ".aiff",
+    ]
+    SUPPORTED_EXTENSIONS = SUPPORTED_VIDEO_EXTENSIONS + SUPPORTED_AUDIO_EXTENSIONS
+
+    def is_audio_file(self, filepath: str) -> bool:
+        """Check if a file is an audio-only file based on extension"""
+        if not filepath:
+            return False
+        ext = os.path.splitext(filepath)[1].lower()
+        return ext in self.SUPPORTED_AUDIO_EXTENSIONS
 
     def __init__(
         self,

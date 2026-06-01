@@ -41,6 +41,7 @@ class GstDriver(VideoDriver):
         self.pipeline = None
         self.video_path = None
         self.state = PlayerState.STOPPED
+        self.is_audio_only = False
         self.current_rate = 1.0
         self.video_sink_name = None
         self.hardware_accel_preferred = False
@@ -296,7 +297,14 @@ class GstDriver(VideoDriver):
             return False
 
         self.video_path = video_path
-        self._reprioritize_decoders()
+        
+        # Detect audio-only format by extension
+        ext = os.path.splitext(video_path)[1].lower()
+        audio_extensions = {".mp3", ".wav", ".ogg", ".flac", ".m4a", ".aac", ".aiff"}
+        self.is_audio_only = ext in audio_extensions
+
+        if not self.is_audio_only:
+            self._reprioritize_decoders()
 
         # Always use playbin - it is much more robust at negotiating hardware 
         # buffers (DMABuf) than a manually constructed pipeline.
@@ -308,6 +316,11 @@ class GstDriver(VideoDriver):
 
         uri = "file://" + os.path.abspath(video_path)
         self.pipeline.set_property("uri", uri)
+
+        if self.is_audio_only:
+            # Force enable audio for pure sound files
+            self.enable_audio = True
+            log_info("Gst: Pure audio file detected; forcing enable_audio=True")
 
         # Conditionally disable audio in playbin to avoid PipeWire/ALSA errors 
         # when a sound card is missing or not needed.
@@ -324,25 +337,31 @@ class GstDriver(VideoDriver):
             # Using autoaudiosink is generally safe, but we can be explicit.
             log_info("Gst: Audio output enabled")
 
-        sink, sink_name = self._create_video_sink()
-        if sink:
-            self.pipeline.set_property("video-sink", sink)
+        if self.is_audio_only:
+            log_info("Gst: Playing audio-only file; bypassing video sink and window management.")
+            sink_name = "none (audio-only)"
+            self.video_sink_name = sink_name
+            self.hardware_accel_preferred = False
+        else:
+            sink, sink_name = self._create_video_sink()
+            if sink:
+                self.pipeline.set_property("video-sink", sink)
+            self.video_sink_name = sink_name
+            self.hardware_accel_preferred = sink_name in {"kmssink", "gl-optimized-bin", "glimagesink", "xvimagesink"}
+            if sink_name:
+                if self.hardware_accel_preferred:
+                    log_info(f"Gst: Using hardware-preferred video sink '{sink_name}'")
+                else:
+                    log_warning(
+                        f"Gst: Using fallback video sink '{sink_name}'; hardware acceleration is not confirmed"
+                    )
+            else:
+                log_warning("Gst: No explicit video sink available; using default sink")
 
         self.decoder_candidates = []
         self.decoder_name = None
-        self.pipeline.connect("deep-element-added", self._on_deep_element_added)
-
-        self.video_sink_name = sink_name
-        self.hardware_accel_preferred = sink_name in {"kmssink", "gl-optimized-bin", "glimagesink", "xvimagesink"}
-        if sink_name:
-            if self.hardware_accel_preferred:
-                log_info(f"Gst: Using hardware-preferred video sink '{sink_name}'")
-            else:
-                log_warning(
-                    f"Gst: Using fallback video sink '{sink_name}'; hardware acceleration is not confirmed"
-                )
-        else:
-            log_warning("Gst: No explicit video sink available; using default sink")
+        if not self.is_audio_only:
+            self.pipeline.connect("deep-element-added", self._on_deep_element_added)
 
         # Set up the bus to watch for messages
         bus = self.pipeline.get_bus()
@@ -644,7 +663,7 @@ class GstDriver(VideoDriver):
 
     def set_fullscreen(self, enabled: bool) -> None:
         """Attempt to make the video window fullscreen using window management tools."""
-        if not enabled:
+        if not enabled or self.is_audio_only:
             return
 
         def fullscreen_task():

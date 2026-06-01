@@ -422,7 +422,7 @@ function renderMediaCell(device, leaderMedia) {
             
             syncSection = `
                 <div class="sync-section">
-                    <h4>Download video from Leader</h4>
+                    <h4>Download media from Leader</h4>
                     <div class="row btn-group">
                         <select id="sync-select-${device.device_id}" class="select-small">${options}</select>
                         <button class="btn-small" onclick="syncMedia('${device.device_id}', document.getElementById('sync-select-${device.device_id}').value)">Pull</button>
@@ -444,10 +444,10 @@ function renderMediaCell(device, leaderMedia) {
             ${refreshIcon}
             <details class="media-panel" data-device-id="${device.device_id}" ${isMediaOpen ? 'open' : ''}>
                 <summary>
-                    <h4>Available Videos</h4>
+                    <h4>Available Media</h4>
                 </summary>
                 <div class="media-list">
-                    ${mediaListHtml || '<div class="message info">No videos found</div>'}
+                    ${mediaListHtml || '<div class="message info">No media files found</div>'}
                 </div>
                 ${syncSection}
             </details>
@@ -594,7 +594,7 @@ function renderState(state) {
     if (clusterStatus) {
         const latency = state.latency || {};
         const latencyText = latency.avg_rtt_ms != null ? ` | Cluster RTT avg: ${latency.avg_rtt_ms}ms` : '';
-        const newStatusText = `Status: ${state.status} | Time: ${state.video_pos.toFixed(2)}s | Video: ${state.current_video}${latencyText}`;
+        const newStatusText = `Status: ${state.status} | Time: ${state.video_pos.toFixed(2)}s | Media: ${state.current_video}${latencyText}`;
         if (clusterStatus.textContent !== newStatusText) {
             clusterStatus.textContent = newStatusText;
         }

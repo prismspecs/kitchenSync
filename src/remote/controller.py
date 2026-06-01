@@ -91,10 +91,14 @@ def list_available_videos() -> list[str]:
     video_dir = Path("videos")
     if not video_dir.exists():
         return []
+    media_extensions = {
+        ".mp4", ".avi", ".mov", ".mkv", ".wmv", ".flv", ".webm", ".m4v", ".hevc",
+        ".mp3", ".wav", ".ogg", ".flac", ".m4a", ".aac", ".aiff"
+    }
     return sorted(
         file.name
         for file in video_dir.glob("*")
-        if file.suffix.lower() in [".mp4", ".mov", ".mkv", ".hevc"]
+        if file.suffix.lower() in media_extensions
     )
 
 

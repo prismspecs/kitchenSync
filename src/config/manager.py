@@ -117,14 +117,17 @@ class USBConfigLoader:
 
     @staticmethod
     def find_video_on_usb() -> Optional[Dict[str, str]]:
-        """Find a video file on USB drives"""
-        video_extensions = [".mp4", ".mov", ".mkv"]
+        """Find a video or audio file on USB drives"""
+        media_extensions = [
+            ".mp4", ".mov", ".mkv", ".avi", ".wmv", ".flv", ".webm", ".m4v",
+            ".mp3", ".wav", ".ogg", ".flac", ".m4a", ".aac", ".aiff"
+        ]
         for mount_point in USBConfigLoader.find_usb_mount_points():
             for root, _, files in os.walk(mount_point):
                 for file in files:
-                    if any(file.lower().endswith(ext) for ext in video_extensions):
-                        video_path = os.path.join(root, file)
-                        log_info(f"Found video on USB: {video_path}", component="config")
+                    if any(file.lower().endswith(ext) for ext in media_extensions):
+                        media_path = os.path.join(root, file)
+                        log_info(f"Found media on USB: {media_path}", component="config")
                         return {"mount_point": mount_point, "video_file": file}
         return None
 
