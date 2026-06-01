@@ -94,7 +94,7 @@ class TestCollaboratorStartHandling(unittest.TestCase):
             video_path=None,
             active_session_key=None,
             video_manager=SimpleNamespace(
-                find_video_file=MagicMock(return_value="videos/collaborator_video.mp4")
+                find_video_file=MagicMock(return_value="media/collaborator_video.mp4")
             ),
             video_player=SimpleNamespace(
                 load=MagicMock(return_value=True),
@@ -119,18 +119,18 @@ class TestCollaboratorStartHandling(unittest.TestCase):
         dummy.video_manager.find_video_file.assert_called_once_with(
             target_file="collaborator_video.mp4", use_cache=False
         )
-        dummy.video_player.load.assert_called_once_with("videos/collaborator_video.mp4")
+        dummy.video_player.load.assert_called_once_with("media/collaborator_video.mp4")
         dummy.start_playback.assert_called_once()
-        self.assertEqual(dummy.video_path, "videos/collaborator_video.mp4")
+        self.assertEqual(dummy.video_path, "media/collaborator_video.mp4")
         self.assertEqual(dummy.active_session_key, ("leader-1", "collaborator_video.mp4", 100.0))
 
     def test_duplicate_running_start_same_session_is_ignored(self):
         dummy = SimpleNamespace(
             config=SimpleNamespace(video_file="test_video.mp4"),
             system_state=SimpleNamespace(is_running=True),
-            video_path="videos/test_video.mp4",
+            video_path="media/test_video.mp4",
             active_session_key=("leader-1", "test_video.mp4", 100.0),
-            video_manager=SimpleNamespace(find_video_file=MagicMock(return_value="videos/test_video.mp4")),
+            video_manager=SimpleNamespace(find_video_file=MagicMock(return_value="media/test_video.mp4")),
             video_player=SimpleNamespace(load=MagicMock(), get_duration=MagicMock(return_value=10.0)),
             stop_playback=MagicMock(),
             start_playback=MagicMock(),
@@ -156,9 +156,9 @@ class TestCollaboratorStartHandling(unittest.TestCase):
         dummy = SimpleNamespace(
             config=SimpleNamespace(video_file="test_video.mp4"),
             system_state=SimpleNamespace(is_running=True),
-            video_path="videos/test_video.mp4",
+            video_path="media/test_video.mp4",
             active_session_key=None,
-            video_manager=SimpleNamespace(find_video_file=MagicMock(return_value="videos/test_video.mp4")),
+            video_manager=SimpleNamespace(find_video_file=MagicMock(return_value="media/test_video.mp4")),
             video_player=SimpleNamespace(load=MagicMock(), get_duration=MagicMock(return_value=10.0)),
             stop_playback=MagicMock(),
             start_playback=MagicMock(),
@@ -178,9 +178,9 @@ class TestCollaboratorStartHandling(unittest.TestCase):
         dummy = SimpleNamespace(
             config=SimpleNamespace(video_file="test_video.mp4"),
             system_state=SimpleNamespace(is_running=True),
-            video_path="videos/test_video.mp4",
+            video_path="media/test_video.mp4",
             active_session_key=("leader-1", "test_video.mp4", 100.0),
-            video_manager=SimpleNamespace(find_video_file=MagicMock(return_value="videos/test_video.mp4")),
+            video_manager=SimpleNamespace(find_video_file=MagicMock(return_value="media/test_video.mp4")),
             video_player=SimpleNamespace(load=MagicMock(return_value=True), get_duration=MagicMock(return_value=10.0)),
             stop_playback=MagicMock(),
             start_playback=MagicMock(),
@@ -199,7 +199,7 @@ class TestCollaboratorStartHandling(unittest.TestCase):
         )
 
         dummy.stop_playback.assert_called_once()
-        dummy.video_player.load.assert_called_once_with("videos/test_video.mp4")
+        dummy.video_player.load.assert_called_once_with("media/test_video.mp4")
         dummy.start_playback.assert_called_once()
         self.assertEqual(dummy.active_session_key, ("leader-1", "test_video.mp4", 200.0))
 

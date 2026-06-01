@@ -137,8 +137,8 @@ config.ini.bak
 *.tmp
 
 # Media files (can be large)
-videos/*
-!videos/README.txt
+media/*
+!media/README.txt
 
 # OS specific
 .DS_Store

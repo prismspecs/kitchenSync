@@ -295,8 +295,8 @@ class CollaboratorPi:
                         leader_ip = addr[0]
                         log_info(f"Rsync: Attempting rsync sync for {filename} from {leader_ip}", component="collaborator")
                         try:
-                            # Try to sync from leader's videos folder (assuming standard kSync installation structure)
-                            cmd = [rsync_bin, "-avz", "--timeout=10", f"{leader_ip}:workbench/kitchenSync/videos/{filename}", target_path]
+                            # Try to sync from leader's media folder (assuming standard kSync installation structure)
+                            cmd = [rsync_bin, "-avz", "--timeout=10", f"{leader_ip}:workbench/kitchenSync/media/{filename}", target_path]
                             subprocess.run(cmd, check=True)
                             rsync_success = True
                             log_info(f"Rsync complete: {filename}", component="collaborator")

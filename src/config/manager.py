@@ -15,15 +15,15 @@ from core.logger import log_info, log_warning, log_error
 
 CONFIG_ROLE_SECTIONS = {
     "leader": {
-        "KITCHENSYNC": {"role", "device_id", "debug", "enable_system_logging", "enable_audio", "audio_output", "enable_midi", "enable_osc", "enable_caching"},
+        "KITCHENSYNC": {"role", "device_id", "overlay", "enable_system_logging", "enable_audio", "audio_output", "enable_midi", "enable_osc", "enable_caching"},
         "DEFAULT": {"video_file", "schedule_file", "video_driver", "sync_port", "tick_interval", "max_drift", "min_drift", "kp", "min_rate", "max_rate", "max_samples", "video_width", "video_height", "position_poll_interval", "remote_sync_mode"},
     },
     "collaborator": {
-        "KITCHENSYNC": {"role", "debug", "enable_system_logging", "enable_audio", "enable_caching", "enable_latency_compensation"},
+        "KITCHENSYNC": {"role", "overlay", "enable_system_logging", "enable_audio", "enable_caching", "enable_latency_compensation"},
         "DEFAULT": {"device_id", "video_file", "video_driver", "midi_port", "sync_port", "video_width", "video_height", "position_poll_interval", "remote_sync_mode"},
     },
     "bystander": {
-        "KITCHENSYNC": {"role", "device_id", "debug", "enable_system_logging"},
+        "KITCHENSYNC": {"role", "device_id", "overlay", "enable_system_logging"},
         "DEFAULT": {},
     },
 }
@@ -31,13 +31,13 @@ CONFIG_ROLE_SECTIONS = {
 EDITABLE_CONFIG_FIELDS = {
     "leader": [
         {"key": "role", "section": "KITCHENSYNC", "type": "choice", "label": "Role", "default": "leader", "options": ["leader", "collaborator", "bystander"], "tooltip": "Leader: Master clock and media server. Collaborator: Syncs to leader. Bystander: Idle, waits for provisioning."},
-        {"key": "video_file", "section": "DEFAULT", "type": "string", "label": "Video file", "default": "videos/sync_test.mp4", "tooltip": "The video file to play. Searches USB first, then local videos/ folder."},
+        {"key": "video_file", "section": "DEFAULT", "type": "string", "label": "Video file", "default": "media/sync_test.mp4", "tooltip": "The video file to play. Searches USB first, then local media/ folder."},
         {"key": "schedule_file", "section": "DEFAULT", "type": "string", "label": "Schedule file", "default": "schedule.json", "tooltip": "MIDI/OSC cue schedule file (.json or .mid)."},
         {"key": "enable_audio", "section": "KITCHENSYNC", "type": "bool", "label": "Enable Audio", "default": True, "tooltip": "Toggle audio playback on/off."},
         {"key": "audio_output", "section": "KITCHENSYNC", "type": "choice", "label": "Audio Output", "default": "hdmi", "options": ["hdmi", "headphone"], "tooltip": "Select audio destination: HDMI or the 3.5mm Headphone Jack."},
         {"key": "enable_midi", "section": "KITCHENSYNC", "type": "bool", "label": "Enable MIDI", "default": True, "tooltip": "Enable MIDI output triggers via USB or Serial."},
         {"key": "enable_caching", "section": "KITCHENSYNC", "type": "bool", "label": "Local Caching", "default": False, "tooltip": "If enabled, external USB videos will be copied to SD card for smoother playback."},
-        {"key": "debug", "section": "KITCHENSYNC", "type": "bool", "label": "Debug Overlay", "default": False, "tooltip": "Show real-time synchronization statistics as an on-screen video overlay."},
+        {"key": "overlay", "section": "KITCHENSYNC", "type": "bool", "label": "Debug Overlay", "default": False, "tooltip": "Show real-time synchronization statistics as an on-screen video overlay."},
         {"key": "tick_interval", "section": "DEFAULT", "type": "float", "label": "Sync Interval", "default": 0.05, "tooltip": "How often (seconds) to broadcast time sync messages. Lower = tighter sync but more network traffic."},
         {"key": "max_drift", "section": "DEFAULT", "type": "float", "label": "Max Drift", "default": 0.5, "tooltip": "Maximum allowed sync deviation before a hard seek (jump) is forced."},
         {"key": "min_drift", "section": "DEFAULT", "type": "float", "label": "Min Drift", "default": 0.01, "tooltip": "Minimum deviation to ignore (prevents jitter)."},
@@ -53,13 +53,13 @@ EDITABLE_CONFIG_FIELDS = {
     ],
     "collaborator": [
         {"key": "role", "section": "KITCHENSYNC", "type": "choice", "label": "Role", "default": "collaborator", "options": ["leader", "collaborator", "bystander"], "tooltip": "Leader: Master clock and media server. Collaborator: Syncs to leader. Bystander: Idle, waits for provisioning."},
-        {"key": "video_file", "section": "DEFAULT", "type": "string", "label": "Video file", "default": "videos/sync_test.mp4", "tooltip": "Local video file to play when sync starts."},
+        {"key": "video_file", "section": "DEFAULT", "type": "string", "label": "Video file", "default": "media/sync_test.mp4", "tooltip": "Local video file to play when sync starts."},
         {"key": "enable_audio", "section": "KITCHENSYNC", "type": "bool", "label": "Enable Audio", "default": True, "tooltip": "Toggle audio playback on/off."},
         {"key": "audio_output", "section": "KITCHENSYNC", "type": "choice", "label": "Audio Output", "default": "hdmi", "options": ["hdmi", "headphone"], "tooltip": "Select audio destination: HDMI or the 3.5mm Headphone Jack."},
         {"key": "enable_caching", "section": "KITCHENSYNC", "type": "bool", "label": "Local Caching", "default": False, "tooltip": "If enabled, external USB videos will be copied to SD card for smoother playback."},
         {"key": "enable_latency_compensation", "section": "KITCHENSYNC", "type": "bool", "label": "Latency Compensation", "default": True, "tooltip": "Enable high-precision per-device latency compensation."},
         {"key": "midi_port", "section": "DEFAULT", "type": "int", "label": "MIDI port", "default": 0, "tooltip": "The index of the MIDI output port to use."},
-        {"key": "debug", "section": "KITCHENSYNC", "type": "bool", "label": "Debug Overlay", "default": False, "tooltip": "Show real-time synchronization statistics as an on-screen video overlay."},
+        {"key": "overlay", "section": "KITCHENSYNC", "type": "bool", "label": "Debug Overlay", "default": False, "tooltip": "Show real-time synchronization statistics as an on-screen video overlay."},
         {"key": "video_width", "section": "DEFAULT", "type": "int", "label": "Video Width", "default": 0, "tooltip": "Force video width (0 = auto/native, default)."},
         {"key": "video_height", "section": "DEFAULT", "type": "int", "label": "Video Height", "default": 0, "tooltip": "Force video height (0 = auto/native, default)."},
         {"key": "position_poll_interval", "section": "DEFAULT", "type": "float", "label": "Position Poll Interval", "default": 0.05, "tooltip": "Frequency (seconds) for GStreamer position polling (default 0.05s / 20Hz)."},
@@ -67,7 +67,7 @@ EDITABLE_CONFIG_FIELDS = {
     ],
     "bystander": [
         {"key": "role", "section": "KITCHENSYNC", "type": "choice", "label": "Role", "default": "bystander", "options": ["leader", "collaborator", "bystander"], "tooltip": "Leader: Master clock and media server. Collaborator: Syncs to leader. Bystander: Idle, waits for provisioning."},
-        {"key": "debug", "section": "KITCHENSYNC", "type": "bool", "label": "Debug Overlay", "default": False, "tooltip": "Show real-time synchronization statistics as an on-screen video overlay."},
+        {"key": "overlay", "section": "KITCHENSYNC", "type": "bool", "label": "Debug Overlay", "default": False, "tooltip": "Show real-time synchronization statistics as an on-screen video overlay."},
     ],
 }
 
@@ -191,7 +191,7 @@ class ConfigManager:
 
         self.config["KITCHENSYNC"] = {
             "role": role,
-            "debug": "false",
+            "overlay": "false",
             "device_id": device_id,
             "video_file": video_file or "video.mp4",
             "video_driver": "gst",
@@ -335,7 +335,7 @@ class ConfigManager:
     def enable_osc(self) -> bool: return self.getboolean("enable_osc", False)
 
     @property
-    def debug_mode(self) -> bool: return self.getboolean("debug", False)
+    def debug_mode(self) -> bool: return self.getboolean("overlay", False)
 
     @property
     def device_id(self) -> str:

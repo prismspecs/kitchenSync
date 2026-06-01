@@ -48,7 +48,7 @@ class VideoFileManager:
 
     def __init__(
         self,
-        configured_file: str = "videos/sync_test.mp4",
+        configured_file: str = "media/sync_test.mp4",
         usb_mount_point: Optional[str] = None,
         cache_dir: Optional[str] = None,
     ):
@@ -64,11 +64,11 @@ class VideoFileManager:
         
         # Prioritize absolute paths for stability
         self.fallback_sources = [
-            str(self.project_root / "videos"),
-            str(Path(os.getcwd()).resolve() / "videos"),
+            str(self.project_root / "media"),
+            str(Path(os.getcwd()).resolve() / "media"),
             str(self.project_root),
             str(Path(os.getcwd()).resolve()),
-            "./videos",
+            "./media",
             "."
         ]
         
@@ -239,9 +239,9 @@ class VideoFileManager:
             if os.path.exists(source):
                 return os.path.abspath(source)
         
-        # Default to ./videos/
-        os.makedirs("./videos", exist_ok=True)
-        return os.path.abspath("./videos")
+        # Default to ./media/
+        os.makedirs("./media", exist_ok=True)
+        return os.path.abspath("./media")
 
     def list_videos(self) -> List[dict]:
         """List all available video files with metadata"""

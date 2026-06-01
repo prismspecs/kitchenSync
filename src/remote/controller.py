@@ -88,7 +88,7 @@ def resolve_byte_range(range_header: str | None, file_size: int) -> tuple[int, i
 
 
 def list_available_videos() -> list[str]:
-    video_dir = Path("videos")
+    video_dir = Path("media")
     if not video_dir.exists():
         return []
     media_extensions = {
@@ -128,7 +128,7 @@ def update_runtime_from_config() -> None:
         cluster_state.current_video = available[0]
         log_info(f"Configured video '{configured_basename}' not found. Falling back to '{available[0]}'", component="remote")
     else:
-        log_warning("No videos found in 'videos/' directory.", component="remote")
+        log_warning("No media found in 'media/' directory.", component="remote")
 
 
 def build_config_snapshot(device_id: str, role: str, manager: ConfigManager) -> Dict[str, Any]:
@@ -447,9 +447,9 @@ class RemoteHandler(BaseHTTPRequestHandler):
                 self.send_error(404, "No video selected")
                 return
                 
-            video_path = Path("videos") / cluster_state.current_video
+            video_path = Path("media") / cluster_state.current_video
             if not video_path.exists():
-                self.send_error(404, "Video file not found")
+                self.send_error(404, "Media file not found")
                 return
             try:
                 self._send_file_range(video_path)
