@@ -622,6 +622,15 @@ class RemoteHandler(BaseHTTPRequestHandler):
             self.end_headers()
             return
 
+        if action == "api/seeks/reset":
+            for device_id, info in command_manager.collaborators.items():
+                info["hard_seeks"] = 0
+            command_manager.send_command({"type": "reset_seeks"})
+            log_info("Cluster: Reset seeks command sent to all collaborators", component="remote")
+            self.send_response(204)
+            self.end_headers()
+            return
+
         if action == "api/seek":
             new_pos = payload.get("value", 0)
             cluster_state.video_pos = float(new_pos)
@@ -766,6 +775,7 @@ def start_remote():
 
     def master_clock():
         last_broadcast = 0.0
+        last_send_error_at = 0.0
         while True:
             if cluster_state.is_master and cluster_state.is_playing:
                 cluster_state.video_pos = time.time() - cluster_state.master_start_time
@@ -799,10 +809,15 @@ def start_remote():
                         "sent_at": time.time(),
                     }
                 )
-                sync_broadcaster.sync_sock.sendto(
-                    sync_packet.encode(),
-                    (sync_broadcaster.broadcast_ip, sync_broadcaster.sync_port),
-                )
+                try:
+                    sync_broadcaster.sync_sock.sendto(
+                        sync_packet.encode(),
+                        (sync_broadcaster.broadcast_ip, sync_broadcaster.sync_port),
+                    )
+                except Exception as e:
+                    if time.time() - last_send_error_at > 5.0:
+                        log_warning(f"Remote: Failed to broadcast sync packet: {e}", component="remote")
+                        last_send_error_at = time.time()
 
             time.sleep(config.tick_interval)
 

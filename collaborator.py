@@ -172,6 +172,9 @@ class CollaboratorPi:
             self._handle_file_delete_request(msg, addr)
         elif cmd_type == "file_upload_notify":
             self._handle_file_upload_notify(msg, addr)
+        elif cmd_type == "reset_seeks":
+            self.hard_seek_count = 0
+            log_info("Sync: Hard seek counter reset manually via command.", component="collaborator")
         elif cmd_type == "log_request":
             self._handle_log_request(msg, addr)
 
@@ -496,6 +499,7 @@ class CollaboratorPi:
     def start_playback(self) -> None:
         if self.video_path and self.video_player.play():
             self.system_state.start_session()
+            self.hard_seek_count = 0
             self.startup_sync_count = 0
             self.deviation_samples.clear()
             self._settle_until = time.time() + 1.5

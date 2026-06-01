@@ -93,6 +93,10 @@ async function stopCluster() {
     preview.currentTime = 0;
 }
 
+async function resetClusterSeeks() {
+    await fetch('/api/seeks/reset', { method: 'POST' });
+}
+
 async function assignVideoToAllCollaborators() {
     const selector = document.getElementById('videoSelector');
     const selectedVideo = selector?.value;
