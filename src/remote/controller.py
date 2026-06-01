@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, Dict, List
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, urlparse, quote
 import socket
 
 # Add parent directory to path to allow importing from src
@@ -374,7 +374,7 @@ class RemoteHandler(BaseHTTPRequestHandler):
                     {
                         "type": "file_upload_notify",
                         "filename": filename,
-                        "source_url": f"http://{leader_ip}:8080/api/media/download?filename={filename}",
+                        "source_url": f"http://{leader_ip}:8080/api/media/download?filename={quote(filename)}",
                         "target_device_id": target_device_id
                     },
                     target_pi=target_device_id
@@ -565,7 +565,7 @@ class RemoteHandler(BaseHTTPRequestHandler):
                 {
                     "type": "file_upload_notify",
                     "filename": filename,
-                    "source_url": f"http://{leader_ip}:8080/api/media/download?filename={filename}",
+                    "source_url": f"http://{leader_ip}:8080/api/media/download?filename={quote(filename)}",
                     "target_device_id": device_id
                 },
                 target_pi=device_id
