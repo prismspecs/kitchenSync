@@ -18,7 +18,8 @@ sys.modules['gi.repository'] = MagicMock()
 
 from video import get_video_driver
 from video.driver import PlayerState
-from core import SyncTracker, SystemState
+from core import SystemState
+from code_archive.system_state_legacy import SyncTracker
 
 class TestkSync(unittest.TestCase):
     def test_video_driver_factory(self):

@@ -117,7 +117,7 @@ class TestCollaboratorStartHandling(unittest.TestCase):
         )
 
         dummy.video_manager.find_video_file.assert_called_once_with(
-            target_file="collaborator_video.mp4"
+            target_file="collaborator_video.mp4", use_cache=False
         )
         dummy.video_player.load.assert_called_once_with("videos/collaborator_video.mp4")
         dummy.start_playback.assert_called_once()

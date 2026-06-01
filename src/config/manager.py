@@ -16,11 +16,11 @@ from core.logger import log_info, log_warning, log_error
 CONFIG_ROLE_SECTIONS = {
     "leader": {
         "KITCHENSYNC": {"role", "device_id", "debug", "enable_system_logging", "enable_audio", "audio_output", "enable_midi", "enable_osc", "enable_caching"},
-        "DEFAULT": {"video_file", "schedule_file", "video_driver", "sync_port", "tick_interval", "max_drift", "min_drift", "kp", "min_rate", "max_rate", "max_samples", "video_width", "video_height", "position_poll_interval"},
+        "DEFAULT": {"video_file", "schedule_file", "video_driver", "sync_port", "tick_interval", "max_drift", "min_drift", "kp", "min_rate", "max_rate", "max_samples", "video_width", "video_height", "position_poll_interval", "remote_sync_mode"},
     },
     "collaborator": {
         "KITCHENSYNC": {"role", "debug", "enable_system_logging", "enable_audio", "enable_caching", "enable_latency_compensation"},
-        "DEFAULT": {"device_id", "video_file", "video_driver", "midi_port", "sync_port", "video_width", "video_height", "position_poll_interval"},
+        "DEFAULT": {"device_id", "video_file", "video_driver", "midi_port", "sync_port", "video_width", "video_height", "position_poll_interval", "remote_sync_mode"},
     },
     "bystander": {
         "KITCHENSYNC": {"role", "device_id", "debug", "enable_system_logging"},
@@ -49,6 +49,7 @@ EDITABLE_CONFIG_FIELDS = {
         {"key": "video_width", "section": "DEFAULT", "type": "int", "label": "Video Width", "default": 0, "tooltip": "Force video width (0 = auto/native, default)."},
         {"key": "video_height", "section": "DEFAULT", "type": "int", "label": "Video Height", "default": 0, "tooltip": "Force video height (0 = auto/native, default)."},
         {"key": "position_poll_interval", "section": "DEFAULT", "type": "float", "label": "Position Poll Interval", "default": 0.05, "tooltip": "Frequency (seconds) for GStreamer position polling (default 0.05s / 20Hz)."},
+        {"key": "remote_sync_mode", "section": "DEFAULT", "type": "choice", "label": "Remote Sync Mode", "default": "http", "options": ["http", "rsync"], "tooltip": "Method to sync content from leader: http (standard Web UI download) or rsync (advanced folder sync)."},
     ],
     "collaborator": [
         {"key": "role", "section": "KITCHENSYNC", "type": "choice", "label": "Role", "default": "collaborator", "options": ["leader", "collaborator", "bystander"], "tooltip": "Leader: Master clock and media server. Collaborator: Syncs to leader. Bystander: Idle, waits for provisioning."},
@@ -62,6 +63,7 @@ EDITABLE_CONFIG_FIELDS = {
         {"key": "video_width", "section": "DEFAULT", "type": "int", "label": "Video Width", "default": 0, "tooltip": "Force video width (0 = auto/native, default)."},
         {"key": "video_height", "section": "DEFAULT", "type": "int", "label": "Video Height", "default": 0, "tooltip": "Force video height (0 = auto/native, default)."},
         {"key": "position_poll_interval", "section": "DEFAULT", "type": "float", "label": "Position Poll Interval", "default": 0.05, "tooltip": "Frequency (seconds) for GStreamer position polling (default 0.05s / 20Hz)."},
+        {"key": "remote_sync_mode", "section": "DEFAULT", "type": "choice", "label": "Remote Sync Mode", "default": "http", "options": ["http", "rsync"], "tooltip": "Method to sync content from leader: http (standard Web UI download) or rsync (advanced folder sync)."},
     ],
     "bystander": [
         {"key": "role", "section": "KITCHENSYNC", "type": "choice", "label": "Role", "default": "bystander", "options": ["leader", "collaborator", "bystander"], "tooltip": "Leader: Master clock and media server. Collaborator: Syncs to leader. Bystander: Idle, waits for provisioning."},
@@ -405,3 +407,6 @@ class ConfigManager:
 
     @property
     def position_poll_interval(self) -> float: return self.getfloat("position_poll_interval", 0.05)
+
+    @property
+    def remote_sync_mode(self) -> str: return self.get("remote_sync_mode", "http").lower()

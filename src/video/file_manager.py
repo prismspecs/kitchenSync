@@ -167,9 +167,20 @@ class VideoFileManager:
                     return cache_path
 
             # Copy file
-            log_info(f"Caching file to local SD: {source_path} -> {cache_path}", "video")
             start_t = time.time()
-            shutil.copy2(source_path, cache_path)
+            rsync_path = shutil.which("rsync")
+            rsync_success = False
+            if rsync_path:
+                log_info(f"Caching file to local SD via rsync: {source_path} -> {cache_path}", "video")
+                try:
+                    subprocess.run([rsync_path, "-a", source_path, cache_path], check=True)
+                    rsync_success = True
+                except Exception as re:
+                    log_warning(f"Local rsync failed ({re}). Falling back to shutil.copy2")
+            
+            if not rsync_success:
+                log_info(f"Caching file to local SD: {source_path} -> {cache_path}", "video")
+                shutil.copy2(source_path, cache_path)
             duration = time.time() - start_t
             
             size_mb = os.path.getsize(cache_path) / (1024 * 1024)

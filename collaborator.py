@@ -277,12 +277,75 @@ class CollaboratorPi:
             return
 
         def download_task():
+            import shutil
+            import subprocess
+            import urllib.error
             try:
+                sync_mode = self.config.remote_sync_mode
                 target_path = os.path.join(self.video_manager.get_primary_video_dir(), filename)
-                log_info(f"Downloading {filename} from {source_url}", component="collaborator")
-                urllib.request.urlretrieve(source_url, target_path)
-                log_info(f"Download complete: {filename}", component="collaborator")
-                self._handle_file_list_request(msg, addr)
+                rsync_success = False
+
+                if sync_mode == "rsync":
+                    rsync_bin = shutil.which("rsync")
+                    if rsync_bin:
+                        leader_ip = addr[0]
+                        log_info(f"Rsync: Attempting rsync sync for {filename} from {leader_ip}", component="collaborator")
+                        try:
+                            # Try to sync from leader's videos folder (assuming standard kSync installation structure)
+                            cmd = [rsync_bin, "-avz", "--timeout=10", f"{leader_ip}:workbench/kitchenSync/videos/{filename}", target_path]
+                            subprocess.run(cmd, check=True)
+                            rsync_success = True
+                            log_info(f"Rsync complete: {filename}", component="collaborator")
+                            self._handle_file_list_request(msg, addr)
+                        except Exception as re:
+                            log_warning(f"Rsync failed ({re}). Falling back to HTTP resume downloader", component="collaborator")
+                    else:
+                        log_warning("Rsync binary not found. Falling back to HTTP resume downloader", component="collaborator")
+
+                if not rsync_success:
+                    # Robust HTTP Resume Downloader with chunked streams
+                    req = urllib.request.Request(source_url)
+                    existing_size = 0
+                    if os.path.exists(target_path):
+                        existing_size = os.path.getsize(target_path)
+                    
+                    if existing_size > 0:
+                        req.add_header("Range", f"bytes={existing_size}-")
+                        log_info(f"HTTP: Requesting Range bytes={existing_size}- to resume download of {filename}", component="collaborator")
+                    else:
+                        log_info(f"HTTP: Downloading {filename} from scratch", component="collaborator")
+                    
+                    try:
+                        with urllib.request.urlopen(req) as response:
+                            status = response.status if hasattr(response, "status") else response.getcode()
+                            
+                            if status == 206:
+                                log_info(f"HTTP: Resuming download from byte {existing_size}", component="collaborator")
+                                mode = "ab"
+                            elif status == 416:
+                                log_info(f"HTTP: File already fully downloaded or identical.", component="collaborator")
+                                self._handle_file_list_request(msg, addr)
+                                return
+                            else:
+                                log_info(f"HTTP: Starting fresh download", component="collaborator")
+                                mode = "wb"
+                                
+                            with open(target_path, mode) as f:
+                                block_size = 1024 * 64
+                                while True:
+                                    buffer = response.read(block_size)
+                                    if not buffer:
+                                        break
+                                    f.write(buffer)
+                                    
+                        log_info(f"Download complete: {filename}", component="collaborator")
+                        self._handle_file_list_request(msg, addr)
+                    except urllib.error.HTTPError as he:
+                        if he.code == 416:
+                            log_info(f"HTTP: File already fully downloaded.", component="collaborator")
+                            self._handle_file_list_request(msg, addr)
+                        else:
+                            raise he
             except Exception as e:
                 log_error(f"Download failed: {e}", component="collaborator")
 
@@ -398,9 +461,10 @@ class CollaboratorPi:
         configured_file = self.config.video_file
         target_file = configured_file or leader_file
         
-        local_video_path = self.video_manager.find_video_file(target_file=target_file)
+        use_cache = getattr(self.config, "enable_caching", False)
+        local_video_path = self.video_manager.find_video_file(target_file=target_file, use_cache=use_cache)
         if not local_video_path and leader_file:
-            local_video_path = self.video_manager.find_video_file(target_file=leader_file)
+            local_video_path = self.video_manager.find_video_file(target_file=leader_file, use_cache=use_cache)
             
         # Identity session for deduplication
         # If we are already running the SAME session (same leader, file, and base time), ignore.
