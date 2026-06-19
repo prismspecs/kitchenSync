@@ -55,6 +55,18 @@ def get_screen_resolution() -> tuple[int, int]:
             
     return 0, 0
 
+def get_pi_model() -> str:
+    """Detect the Raspberry Pi model name if running on a Pi"""
+    for path in ["/sys/firmware/devicetree/base/model", "/proc/device-tree/model"]:
+        if os.path.exists(path):
+            try:
+                with open(path, "r") as f:
+                    return f.read().strip()
+            except Exception:
+                pass
+    return ""
+
+
 class GstDriver(VideoDriver):
     """
     GStreamer Driver for kSync.
@@ -144,8 +156,21 @@ class GstDriver(VideoDriver):
         primary_rank = int(getattr(Gst.Rank, "PRIMARY", 256))
         secondary_rank = int(getattr(Gst.Rank, "SECONDARY", 128))
 
+        hw_decoders = self._hardware_decoder_names()
+
+        # Detect Raspberry Pi 5 to disable hardware HEVC decoding (Pi 5 has no HW HEVC block)
+        pi_model = get_pi_model()
+        if "Raspberry Pi 5" in pi_model:
+            log_info(f"Gst: Detected Raspberry Pi 5 ('{pi_model}'). Disabling hardware HEVC decoders to force software decoding.")
+            hevc_hw = ["v4l2slh265dec", "v4l2slhevcdec", "v4l2h265dec", "vah265dec", "vaapih265dec", "nvh265dec"]
+            for name in hevc_hw:
+                factory = Gst.ElementFactory.find(name)
+                if factory:
+                    factory.set_rank(0)  # Gst.Rank.NONE
+            hw_decoders = [name for name in hw_decoders if name not in hevc_hw]
+
         # 1. Prioritize Hardware Decoders
-        for offset, decoder_name in enumerate(self._hardware_decoder_names()):
+        for offset, decoder_name in enumerate(hw_decoders):
             factory = Gst.ElementFactory.find(decoder_name)
             if factory is None:
                 continue
