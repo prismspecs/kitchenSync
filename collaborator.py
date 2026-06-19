@@ -321,6 +321,7 @@ class CollaboratorPi:
                             subprocess.run(cmd, check=True)
                             rsync_success = True
                             log_info(f"Rsync complete: {filename}", component="collaborator")
+                            self.video_manager.trigger_background_scan(force=True)
                             self._handle_file_list_request(msg, addr)
                         except Exception as re:
                             log_warning(f"Rsync failed ({re}). Falling back to HTTP resume downloader", component="collaborator")
@@ -349,6 +350,7 @@ class CollaboratorPi:
                                 mode = "ab"
                             elif status == 416:
                                 log_info(f"HTTP: File already fully downloaded or identical.", component="collaborator")
+                                self.video_manager.trigger_background_scan(force=True)
                                 self._handle_file_list_request(msg, addr)
                                 return
                             else:
@@ -364,10 +366,12 @@ class CollaboratorPi:
                                     f.write(buffer)
                                     
                         log_info(f"Download complete: {filename}", component="collaborator")
+                        self.video_manager.trigger_background_scan(force=True)
                         self._handle_file_list_request(msg, addr)
                     except urllib.error.HTTPError as he:
                         if he.code == 416:
                             log_info(f"HTTP: File already fully downloaded.", component="collaborator")
+                            self.video_manager.trigger_background_scan(force=True)
                             self._handle_file_list_request(msg, addr)
                         else:
                             raise he

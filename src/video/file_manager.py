@@ -437,11 +437,11 @@ class VideoFileManager:
 
     def trigger_background_scan(self, force: bool = False):
         """Trigger an asynchronous background scan of media files"""
-        now = time.time()
         with self._scan_lock:
             if self._is_scanning:
                 return
-            if not force and now - self._last_scan_time < self._scan_interval:
+            # Only perform scan if explicitly forced, or if the cache is currently empty
+            if not force and len(self._cached_video_list) > 0:
                 return
             self._is_scanning = True
 

@@ -361,6 +361,7 @@ class RemoteHandler(BaseHTTPRequestHandler):
                 f.write(file_data)
             
             log_info(f"Uploaded file saved to: {target_path}", "remote")
+            video_manager.trigger_background_scan(force=True)
             
             # If a target device was specified, trigger a sync/download to that device
             parsed_path = urlparse(self.path)
