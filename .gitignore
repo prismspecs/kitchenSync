@@ -136,17 +136,9 @@ schedule.json.bak
 config.ini.bak
 *.tmp
 
-# Video files (can be large)
-videos/*.mp4
-videos/*.avi
-videos/*.mov
-videos/*.mkv
-videos/*.wmv
-videos/*.flv
-videos/*.webm
-
-# Keep the README in videos folder
-!videos/README.txt
+# Media files (can be large)
+media/*
+!media/README.txt
 
 # OS specific
 .DS_Store

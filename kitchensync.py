@@ -67,7 +67,7 @@ def apply_upgrade_if_available(usb_mount_point=None):
         target_dir = script_dir
         # Simple/clean replacement logic
         for item in target_dir.iterdir():
-            if item.name in ["upgrade", ".git", ".gitignore", "videos", "logs"]:
+            if item.name in ["upgrade", ".git", ".gitignore", "media", "logs"]:
                 continue
             if item.is_dir():
                 shutil.rmtree(item)
@@ -204,7 +204,7 @@ class kSyncAutoStart:
             "role": self.config.role_name(),
             "device_id": self.config.device_id,
             "video_file": self.config.video_file,
-            "debug": str(self.config.debug_mode).lower(),
+            "overlay": str(self.config.debug_mode).lower(),
             "usb_mount_point": self.config.usb_mount_point or "",
         }
         self.config.update_local_config("ksync.ini", updates)
