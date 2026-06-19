@@ -113,9 +113,12 @@ class USBConfigLoader:
             config_path = os.path.join(mount_point, "ksync.ini")
             if os.path.exists(config_path):
                 return config_path
-        # Then subdirs
+        # Then subdirs (limit depth to 2 levels)
         for mount_point in mount_points:
-            for root, _, files in os.walk(mount_point):
+            for root, dirs, files in os.walk(mount_point):
+                depth = root[len(mount_point):].count(os.sep)
+                if depth >= 1:
+                    dirs.clear()
                 if "ksync.ini" in files:
                     return os.path.join(root, "ksync.ini")
         return None
@@ -125,7 +128,10 @@ class USBConfigLoader:
         """Find a video file on USB drives"""
         video_extensions = [".mp4", ".mov", ".mkv"]
         for mount_point in USBConfigLoader.find_usb_mount_points():
-            for root, _, files in os.walk(mount_point):
+            for root, dirs, files in os.walk(mount_point):
+                depth = root[len(mount_point):].count(os.sep)
+                if depth >= 1:
+                    dirs.clear()
                 for file in files:
                     if any(file.lower().endswith(ext) for ext in video_extensions):
                         video_path = os.path.join(root, file)
@@ -138,7 +144,10 @@ class USBConfigLoader:
         """Find a MIDI schedule file on USB drives"""
         schedule_files = ["schedule.json", "midi_schedule.json", "relay_schedule.json"]
         for mount_point in USBConfigLoader.find_usb_mount_points():
-            for root, _, files in os.walk(mount_point):
+            for root, dirs, files in os.walk(mount_point):
+                depth = root[len(mount_point):].count(os.sep)
+                if depth >= 1:
+                    dirs.clear()
                 for file in files:
                     if file.lower() in [sf.lower() for sf in schedule_files]:
                         schedule_path = os.path.join(root, file)
