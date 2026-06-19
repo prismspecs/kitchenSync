@@ -238,7 +238,7 @@ def build_ui_state() -> Dict[str, Any]:
         )
 
     return {
-        "video_pos": cluster_state.video_pos,
+        "video_pos": max(0.0, cluster_state.video_pos - getattr(config, "emulated_render_lag", 0.05)),
         "duration": cluster_state.duration,
         "status": current_status,
         "is_playing": cluster_state.is_playing,

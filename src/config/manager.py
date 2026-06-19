@@ -16,7 +16,7 @@ from core.logger import log_info, log_warning, log_error
 CONFIG_ROLE_SECTIONS = {
     "leader": {
         "KITCHENSYNC": {"role", "device_id", "overlay", "enable_system_logging", "enable_audio", "audio_output", "enable_midi", "enable_osc", "enable_caching", "crop_mode"},
-        "DEFAULT": {"video_file", "schedule_file", "video_driver", "sync_port", "tick_interval", "max_drift", "min_drift", "kp", "min_rate", "max_rate", "max_samples", "video_width", "video_height", "position_poll_interval", "remote_sync_mode"},
+        "DEFAULT": {"video_file", "schedule_file", "video_driver", "sync_port", "tick_interval", "max_drift", "min_drift", "kp", "min_rate", "max_rate", "max_samples", "video_width", "video_height", "position_poll_interval", "remote_sync_mode", "emulated_render_lag"},
     },
     "collaborator": {
         "KITCHENSYNC": {"role", "overlay", "enable_system_logging", "enable_audio", "enable_caching", "enable_latency_compensation", "crop_mode"},
@@ -41,6 +41,7 @@ EDITABLE_CONFIG_FIELDS = {
         {"key": "crop_mode", "section": "KITCHENSYNC", "type": "choice", "label": "Cropping Mode", "default": "letterbox", "options": ["letterbox", "crop-to-fill"], "tooltip": "Fit video to display. Letterbox: add black bars. Crop-to-fill: zoom and crop to fill without distortion."},
         {"key": "overlay", "section": "KITCHENSYNC", "type": "bool", "label": "Debug Overlay", "default": False, "tooltip": "Show real-time synchronization statistics as an on-screen video overlay."},
         {"key": "tick_interval", "section": "DEFAULT", "type": "float", "label": "Sync Interval", "default": 0.05, "tooltip": "How often (seconds) to broadcast time sync messages. Lower = tighter sync but more network traffic."},
+        {"key": "emulated_render_lag", "section": "DEFAULT", "type": "float", "label": "Web UI Render Lag Offset", "default": 0.05, "tooltip": "Offset (seconds) to subtract from the Web UI time/preview to match physical screens (e.g. 0.05 = 50ms)."},
         {"key": "max_drift", "section": "DEFAULT", "type": "float", "label": "Max Drift", "default": 0.5, "tooltip": "Maximum allowed sync deviation before a hard seek (jump) is forced."},
         {"key": "min_drift", "section": "DEFAULT", "type": "float", "label": "Min Drift", "default": 0.01, "tooltip": "Minimum deviation to ignore (prevents jitter)."},
         {"key": "kp", "section": "DEFAULT", "type": "float", "label": "P-Gain", "default": 0.25, "tooltip": "Proportional gain for playback speed adjustment. Higher = faster catchup."},
@@ -436,3 +437,6 @@ class ConfigManager:
 
     @property
     def remote_sync_mode(self) -> str: return self.get("remote_sync_mode", "http").lower()
+
+    @property
+    def emulated_render_lag(self) -> float: return self.getfloat("emulated_render_lag", 0.05)

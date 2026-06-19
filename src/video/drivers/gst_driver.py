@@ -296,6 +296,11 @@ class GstDriver(VideoDriver):
 
     def _create_video_sink(self):
         """Create a hardware-optimized sink bin for the current runtime."""
+        if getattr(self, "video_sink_name", None) == "fakesink":
+            sink = Gst.ElementFactory.make("fakesink", "videosink")
+            if sink:
+                return sink, "fakesink"
+
         crop_str = ""
         if getattr(self, "crop_mode", "letterbox") == "crop-to-fill":
             tw, th = self.video_width, self.video_height
@@ -373,6 +378,28 @@ class GstDriver(VideoDriver):
         threading.Thread(target=window_task, daemon=True).start()
 
     def load(self, video_path: str) -> bool:
+        # Clean up existing pipeline/loop if reloading
+        if self.pipeline:
+            try:
+                self.pipeline.set_state(Gst.State.NULL)
+            except Exception:
+                pass
+            self.pipeline = None
+            
+        if self.loop:
+            try:
+                self.loop.quit()
+            except Exception:
+                pass
+            self.loop = None
+            
+        if self.loop_thread:
+            try:
+                self.loop_thread.join(timeout=0.2)
+            except Exception:
+                pass
+            self.loop_thread = None
+
         if not os.path.exists(video_path):
             log_error(f"Gst: Video file not found: {video_path}")
             return False
@@ -510,6 +537,10 @@ class GstDriver(VideoDriver):
                 self.enable_audio = False
                 # We need to restart the load in a thread to avoid bus deadlocks
                 threading.Thread(target=self._restart_minimal, daemon=True).start()
+            elif getattr(self, "video_sink_name", None) != "fakesink" and any(term in err.message.lower() for term in ["display", "sink", "x11", "surface", "connection", "window", "egl", "gl"]):
+                log_warning(f"Gst: Video sink error ('{err.message}'); attempting fallback to 'fakesink' video driver.", component="video")
+                self.video_sink_name = "fakesink"
+                threading.Thread(target=self._restart_minimal, daemon=True).start()
             else:
                 self.state = PlayerState.ERROR
 
@@ -538,6 +569,28 @@ class GstDriver(VideoDriver):
         ret = self.pipeline.set_state(Gst.State.PLAYING)
         if ret == Gst.StateChangeReturn.FAILURE:
             log_error("Gst: Failed to set pipeline to PLAYING")
+            
+            # Fallback strategy: If video sink failed, try fakesink
+            if getattr(self, "video_sink_name", None) != "fakesink":
+                log_warning("Gst: PLAYING state change failed. Retrying video playback with 'fakesink'...", component="video")
+                self.stop()
+                original_sink_name = self.video_sink_name
+                self.video_sink_name = "fakesink"
+                if self.video_path and self.load(self.video_path):
+                    ret = self.pipeline.set_state(Gst.State.PLAYING)
+                    if ret != Gst.StateChangeReturn.FAILURE:
+                        # Success with fakesink! Wait for state to settle
+                        success, current, _ = self.pipeline.get_state(1.0 * Gst.SECOND)
+                        if success != Gst.StateChangeReturn.FAILURE:
+                            log_info("Gst: Successfully recovered playback using fakesink fallback.", component="video")
+                            self.state = PlayerState.PLAYING
+                            self._cached_position = 0.0
+                            self._last_poll_time = time.time()
+                            self._start_polling()
+                            self._enable_gapless_looping()
+                            return True
+                self.video_sink_name = original_sink_name
+
             self.state = PlayerState.ERROR
             return False
             
@@ -545,6 +598,27 @@ class GstDriver(VideoDriver):
         success, current, _ = self.pipeline.get_state(1.0 * Gst.SECOND)
         if success == Gst.StateChangeReturn.FAILURE:
             log_error("Gst: Pipeline failed to reach a stable state")
+            
+            # Fallback strategy for state settle failure: If video sink failed, try fakesink
+            if getattr(self, "video_sink_name", None) != "fakesink":
+                log_warning("Gst: Pipeline stable state check failed. Retrying video playback with 'fakesink'...", component="video")
+                self.stop()
+                original_sink_name = self.video_sink_name
+                self.video_sink_name = "fakesink"
+                if self.video_path and self.load(self.video_path):
+                    ret = self.pipeline.set_state(Gst.State.PLAYING)
+                    if ret != Gst.StateChangeReturn.FAILURE:
+                        success, current, _ = self.pipeline.get_state(1.0 * Gst.SECOND)
+                        if success != Gst.StateChangeReturn.FAILURE:
+                            log_info("Gst: Successfully recovered playback using fakesink fallback.", component="video")
+                            self.state = PlayerState.PLAYING
+                            self._cached_position = 0.0
+                            self._last_poll_time = time.time()
+                            self._start_polling()
+                            self._enable_gapless_looping()
+                            return True
+                self.video_sink_name = original_sink_name
+
             self.state = PlayerState.ERROR
             return False
 

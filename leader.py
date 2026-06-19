@@ -43,16 +43,24 @@ class LeaderPi:
 
         # Video Driver
         driver_name = self.config.video_driver
-        self.video_player = get_video_driver(
-            driver_name,
-            debug_mode=self.config.debug_mode,
-            enable_audio=self.config.enable_audio,
-            config=self.config
-        )
+        try:
+            self.video_player = get_video_driver(
+                driver_name,
+                debug_mode=self.config.debug_mode,
+                enable_audio=self.config.enable_audio,
+                config=self.config
+            )
+        except Exception as e:
+            log_error(f"Exception initializing video driver '{driver_name}': {e}", component="leader")
+            self.video_player = None
 
         if not self.video_player:
-            log_error("Failed to initialize video driver", component="leader")
-            sys.exit(1)
+            log_warning(f"Failed to initialize primary video driver '{driver_name}'. Falling back to mock driver.", component="leader")
+            try:
+                self.video_player = get_video_driver("mock", debug_mode=self.config.debug_mode, enable_audio=False)
+            except Exception as e:
+                log_error(f"Failed to load mock video driver fallback: {e}", component="leader")
+                sys.exit(1)
 
         # Initialize Networking
         self.sync_broadcaster = SyncBroadcaster(
@@ -73,9 +81,20 @@ class LeaderPi:
         self.video_path = self.video_manager.find_video_file()
         if self.video_path:
             abs_path = os.path.abspath(self.video_path)
-            self.video_player.load(self.video_path)
-            log_info(f"Leader Playing: {abs_path}", component="leader")
-            log_info(f"Video file basename (broadcasted): {Path(self.video_path).name}", component="leader")
+            try:
+                load_success = self.video_player.load(self.video_path)
+                if not load_success:
+                    raise RuntimeError("Driver load returned False")
+                log_info(f"Leader Loaded: {abs_path}", component="leader")
+                log_info(f"Video file basename (broadcasted): {Path(self.video_path).name}", component="leader")
+            except Exception as e:
+                log_error(f"Failed to load video '{abs_path}' under '{driver_name}' driver: {e}. Falling back to mock driver.", component="leader")
+                try:
+                    self.video_player = get_video_driver("mock", debug_mode=self.config.debug_mode, enable_audio=False)
+                    self.video_player.load(self.video_path)
+                    log_info(f"Leader Loaded (Mock fallback): {abs_path}", component="leader")
+                except Exception as me:
+                    log_error(f"Failed to load video on mock fallback driver: {me}", component="leader")
         else:
             log_error("No video file found in leader search paths!", component="leader")
 
@@ -323,7 +342,10 @@ def main():
             enable_system_logging(True)
 
         if args.auto:
-            leader_instance.start_system()
+            try:
+                leader_instance.start_system()
+            except Exception as e:
+                log_error(f"Auto-start playback failed: {e}. Keeping leader process alive for remote Web UI command control.", component="leader")
             while True:
                 time.sleep(1)
         else:
@@ -337,7 +359,8 @@ def main():
             interface.run()
         leader_instance.cleanup()
     except Exception as e:
-        print(f"Fatal error: {e}")
+        log_error(f"Fatal leader startup error: {e}", component="leader")
+        time.sleep(30)
         sys.exit(1)
 
 

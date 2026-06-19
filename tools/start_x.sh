@@ -8,6 +8,12 @@
 
 echo "Starting X11 + Openbox on local display (as $(whoami))..."
 
+# Check if X is already running and ready on :0
+if DISPLAY=:0 xset q > /dev/null 2>&1; then
+    echo "✓ X server is already running and ready on :0"
+    exit 0
+fi
+
 # Kill any existing X session on :0
 pkill -f "Xorg :0" 2>/dev/null
 sleep 1
