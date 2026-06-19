@@ -5,6 +5,7 @@ Handles finding and managing video files from various sources
 """
 
 import glob
+import json
 import os
 import shutil
 import subprocess
@@ -61,7 +62,8 @@ class VideoFileManager:
         self.fallback_sources = [x for x in self.fallback_sources if not (x in seen or seen.add(x))]
         
         self.cache_dir = cache_dir or os.path.expanduser("~/kitchensync_cache")
-        self._metadata_cache = {}
+        self.metadata_cache_file = os.path.join(self.cache_dir, "metadata_cache.json")
+        self._metadata_cache = self._load_metadata_cache()
 
         self._cached_video_list = []
         self._last_scan_time = 0.0
@@ -71,6 +73,37 @@ class VideoFileManager:
 
         # Trigger initial background scan on startup
         self.trigger_background_scan(force=True)
+
+    def _load_metadata_cache(self) -> dict:
+        if os.path.exists(self.metadata_cache_file):
+            try:
+                with open(self.metadata_cache_file, "r") as f:
+                    data = json.load(f)
+                # Convert back to (filepath, mtime) cache keys
+                cache = {}
+                for filepath, entry in data.items():
+                    mtime = entry.get("mtime", 0.0)
+                    metadata = entry.get("metadata", {})
+                    cache[(filepath, mtime)] = metadata
+                return cache
+            except Exception as e:
+                log_warning(f"Failed to load metadata cache: {e}", "video")
+        return {}
+
+    def _save_metadata_cache(self) -> None:
+        try:
+            # Ensure cache dir exists
+            os.makedirs(self.cache_dir, exist_ok=True)
+            data = {}
+            for (filepath, mtime), metadata in self._metadata_cache.items():
+                data[filepath] = {
+                    "mtime": mtime,
+                    "metadata": metadata
+                }
+            with open(self.metadata_cache_file, "w") as f:
+                json.dump(data, f, indent=2)
+        except Exception as e:
+            log_error(f"Failed to save metadata cache: {e}", "video")
 
     def find_video_file(self, target_file: Optional[str] = None, use_cache: bool = False) -> Optional[str]:
         """Find video file with intelligent fallback and optional caching"""
@@ -433,6 +466,7 @@ class VideoFileManager:
         if not hasattr(self, "_metadata_cache"):
             self._metadata_cache = {}
         self._metadata_cache[cache_key] = metadata
+        self._save_metadata_cache()
         return metadata
 
     def trigger_background_scan(self, force: bool = False):
@@ -521,6 +555,13 @@ class VideoFileManager:
             else:
                 log_warning(f"Local source directory does not exist: {source}", "video")
 
+        # Clean up metadata cache of files that no longer exist
+        seen_paths = set(v["path"] for v in video_files)
+        stale_keys = [k for k in self._metadata_cache.keys() if k[0] not in seen_paths]
+        for k in stale_keys:
+            del self._metadata_cache[k]
+
+        self._save_metadata_cache()
         return sorted(video_files, key=lambda x: x["name"])
 
     def delete_video(self, filename: str) -> bool:
