@@ -15,11 +15,11 @@ from core.logger import log_info, log_warning, log_error
 
 CONFIG_ROLE_SECTIONS = {
     "leader": {
-        "KITCHENSYNC": {"role", "device_id", "overlay", "enable_system_logging", "enable_audio", "audio_output", "enable_midi", "enable_osc", "enable_caching"},
+        "KITCHENSYNC": {"role", "device_id", "overlay", "enable_system_logging", "enable_audio", "audio_output", "enable_midi", "enable_osc", "enable_caching", "crop_mode"},
         "DEFAULT": {"video_file", "schedule_file", "video_driver", "sync_port", "tick_interval", "max_drift", "min_drift", "kp", "min_rate", "max_rate", "max_samples", "video_width", "video_height", "position_poll_interval", "remote_sync_mode"},
     },
     "collaborator": {
-        "KITCHENSYNC": {"role", "overlay", "enable_system_logging", "enable_audio", "enable_caching", "enable_latency_compensation"},
+        "KITCHENSYNC": {"role", "overlay", "enable_system_logging", "enable_audio", "enable_caching", "enable_latency_compensation", "crop_mode"},
         "DEFAULT": {"device_id", "video_file", "video_driver", "midi_port", "sync_port", "video_width", "video_height", "position_poll_interval", "remote_sync_mode"},
     },
     "bystander": {
@@ -30,6 +30,7 @@ CONFIG_ROLE_SECTIONS = {
 
 EDITABLE_CONFIG_FIELDS = {
     "leader": [
+        {"key": "device_id", "section": "KITCHENSYNC", "type": "string", "label": "Device Name/ID", "default": "leader-pi", "tooltip": "A custom friendly name/ID for this Leader node."},
         {"key": "role", "section": "KITCHENSYNC", "type": "choice", "label": "Role", "default": "leader", "options": ["leader", "collaborator", "bystander"], "tooltip": "Leader: Master clock and media server. Collaborator: Syncs to leader. Bystander: Idle, waits for provisioning."},
         {"key": "video_file", "section": "DEFAULT", "type": "string", "label": "Video file", "default": "media/sync_test.mp4", "tooltip": "The video file to play. Searches USB first, then local media/ folder."},
         {"key": "schedule_file", "section": "DEFAULT", "type": "string", "label": "Schedule file", "default": "schedule.json", "tooltip": "MIDI/OSC cue schedule file (.json or .mid)."},
@@ -37,6 +38,7 @@ EDITABLE_CONFIG_FIELDS = {
         {"key": "audio_output", "section": "KITCHENSYNC", "type": "choice", "label": "Audio Output", "default": "hdmi", "options": ["hdmi", "headphone"], "tooltip": "Select audio destination: HDMI or the 3.5mm Headphone Jack."},
         {"key": "enable_midi", "section": "KITCHENSYNC", "type": "bool", "label": "Enable MIDI", "default": True, "tooltip": "Enable MIDI output triggers via USB or Serial."},
         {"key": "enable_caching", "section": "KITCHENSYNC", "type": "bool", "label": "Local Caching", "default": False, "tooltip": "If enabled, external USB videos will be copied to SD card for smoother playback."},
+        {"key": "crop_mode", "section": "KITCHENSYNC", "type": "choice", "label": "Cropping Mode", "default": "letterbox", "options": ["letterbox", "crop-to-fill"], "tooltip": "Fit video to display. Letterbox: add black bars. Crop-to-fill: zoom and crop to fill without distortion."},
         {"key": "overlay", "section": "KITCHENSYNC", "type": "bool", "label": "Debug Overlay", "default": False, "tooltip": "Show real-time synchronization statistics as an on-screen video overlay."},
         {"key": "tick_interval", "section": "DEFAULT", "type": "float", "label": "Sync Interval", "default": 0.05, "tooltip": "How often (seconds) to broadcast time sync messages. Lower = tighter sync but more network traffic."},
         {"key": "max_drift", "section": "DEFAULT", "type": "float", "label": "Max Drift", "default": 0.5, "tooltip": "Maximum allowed sync deviation before a hard seek (jump) is forced."},
@@ -52,12 +54,14 @@ EDITABLE_CONFIG_FIELDS = {
         {"key": "remote_sync_mode", "section": "DEFAULT", "type": "choice", "label": "Remote Sync Mode", "default": "http", "options": ["http", "rsync"], "tooltip": "Method to sync content from leader: http (standard Web UI download) or rsync (advanced folder sync)."},
     ],
     "collaborator": [
+        {"key": "device_id", "section": "DEFAULT", "type": "string", "label": "Device Name/ID", "default": "pi-001", "tooltip": "A custom friendly name/ID for this Collaborator node."},
         {"key": "role", "section": "KITCHENSYNC", "type": "choice", "label": "Role", "default": "collaborator", "options": ["leader", "collaborator", "bystander"], "tooltip": "Leader: Master clock and media server. Collaborator: Syncs to leader. Bystander: Idle, waits for provisioning."},
         {"key": "video_file", "section": "DEFAULT", "type": "string", "label": "Video file", "default": "media/sync_test.mp4", "tooltip": "Local video file to play when sync starts."},
         {"key": "enable_audio", "section": "KITCHENSYNC", "type": "bool", "label": "Enable Audio", "default": True, "tooltip": "Toggle audio playback on/off."},
         {"key": "audio_output", "section": "KITCHENSYNC", "type": "choice", "label": "Audio Output", "default": "hdmi", "options": ["hdmi", "headphone"], "tooltip": "Select audio destination: HDMI or the 3.5mm Headphone Jack."},
         {"key": "enable_caching", "section": "KITCHENSYNC", "type": "bool", "label": "Local Caching", "default": False, "tooltip": "If enabled, external USB videos will be copied to SD card for smoother playback."},
         {"key": "enable_latency_compensation", "section": "KITCHENSYNC", "type": "bool", "label": "Latency Compensation", "default": True, "tooltip": "Enable high-precision per-device latency compensation."},
+        {"key": "crop_mode", "section": "KITCHENSYNC", "type": "choice", "label": "Cropping Mode", "default": "letterbox", "options": ["letterbox", "crop-to-fill"], "tooltip": "Fit video to display. Letterbox: add black bars. Crop-to-fill: zoom and crop to fill without distortion."},
         {"key": "midi_port", "section": "DEFAULT", "type": "int", "label": "MIDI port", "default": 0, "tooltip": "The index of the MIDI output port to use."},
         {"key": "overlay", "section": "KITCHENSYNC", "type": "bool", "label": "Debug Overlay", "default": False, "tooltip": "Show real-time synchronization statistics as an on-screen video overlay."},
         {"key": "video_width", "section": "DEFAULT", "type": "int", "label": "Video Width", "default": 0, "tooltip": "Force video width (0 = auto/native, default)."},
@@ -66,6 +70,7 @@ EDITABLE_CONFIG_FIELDS = {
         {"key": "remote_sync_mode", "section": "DEFAULT", "type": "choice", "label": "Remote Sync Mode", "default": "http", "options": ["http", "rsync"], "tooltip": "Method to sync content from leader: http (standard Web UI download) or rsync (advanced folder sync)."},
     ],
     "bystander": [
+        {"key": "device_id", "section": "KITCHENSYNC", "type": "string", "label": "Device Name/ID", "default": "pi-unknown", "tooltip": "A custom friendly name/ID for this Bystander node."},
         {"key": "role", "section": "KITCHENSYNC", "type": "choice", "label": "Role", "default": "bystander", "options": ["leader", "collaborator", "bystander"], "tooltip": "Leader: Master clock and media server. Collaborator: Syncs to leader. Bystander: Idle, waits for provisioning."},
         {"key": "overlay", "section": "KITCHENSYNC", "type": "bool", "label": "Debug Overlay", "default": False, "tooltip": "Show real-time synchronization statistics as an on-screen video overlay."},
     ],
@@ -195,6 +200,7 @@ class ConfigManager:
             "enable_system_logging": "false",
             "tick_interval": "0.1",
             "audio_output": "hdmi",
+            "crop_mode": "letterbox",
         }
 
         if self.config_file and not os.path.exists(self.config_file):
@@ -333,6 +339,9 @@ class ConfigManager:
 
     @property
     def debug_mode(self) -> bool: return self.getboolean("overlay", False)
+
+    @property
+    def crop_mode(self) -> str: return self.get("crop_mode", "letterbox")
 
     @property
     def device_id(self) -> str:

@@ -174,6 +174,41 @@ tr:nth-child(odd) td {
     border: 1px solid #ddc977;
 }
 
+.media-item-details {
+    font-size: 11px;
+    color: #666;
+    background: #fdfdfd;
+    border-radius: 4px;
+    padding: 6px 8px;
+    margin-top: 4px;
+    line-height: 1.5;
+    border: 1px solid #eaeaea;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.optimized-badge {
+    background-color: #2e7d32;
+    color: white;
+    font-size: 9px;
+    font-weight: bold;
+    padding: 1px 3px;
+    border-radius: 3px;
+    text-transform: uppercase;
+    display: inline-block;
+}
+
+.not-optimized-badge {
+    background-color: #ef6c00;
+    color: white;
+    font-size: 9px;
+    font-weight: bold;
+    padding: 1px 3px;
+    border-radius: 3px;
+    text-transform: uppercase;
+    display: inline-block;
+}
+
 .media-name {
     flex: 1;
     overflow: hidden;

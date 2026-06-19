@@ -180,6 +180,14 @@ def build_ui_state() -> Dict[str, Any]:
     else:
         current_status = "Leading"
 
+    leader_video = cluster_state.current_video
+    leader_optimized = False
+    if leader_video:
+        leader_video_path = video_manager.find_video_file(leader_video)
+        if leader_video_path:
+            meta = video_manager.get_metadata(leader_video_path)
+            leader_optimized = meta.get("is_optimized", False)
+
     devices = [
         {
             "device_id": LOCAL_LEADER_ID,
@@ -192,6 +200,8 @@ def build_ui_state() -> Dict[str, Any]:
             "config": config_snapshots.get(LOCAL_LEADER_ID),
             "message": config_messages.get(LOCAL_LEADER_ID),
             "media": media_snapshots.get(LOCAL_LEADER_ID, []),
+            "video_file": leader_video,
+            "is_optimized": leader_optimized,
         }
     ]
 
@@ -216,6 +226,7 @@ def build_ui_state() -> Dict[str, Any]:
                 "status": info.get("status", "unknown"),
                 "online": info.get("online", False),
                 "video_file": info.get("video_file", ""),
+                "is_optimized": info.get("is_optimized", False),
                 "hard_seeks": info.get("hard_seeks", 0),
                 "latency_ms": round(command_manager.get_device_average_rtt(device_id) * 1000, 1)
                 if command_manager.get_device_average_rtt(device_id) > 0

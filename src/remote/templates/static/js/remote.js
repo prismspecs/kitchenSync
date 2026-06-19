@@ -309,7 +309,14 @@ function renderConfigCell(device, videoOptions, scheduleOptions) {
         'kp',
         'max_samples',
         'min_rate',
-        'max_rate'
+        'max_rate',
+        'enable_caching',
+        'enable_latency_compensation',
+        'midi_port',
+        'video_width',
+        'video_height',
+        'position_poll_interval',
+        'remote_sync_mode'
     ]);
 
     const standardFieldsHtml = [];
@@ -384,6 +391,7 @@ function renderMediaCell(device, leaderMedia) {
         const sizeMb = (m.size / (1024 * 1024)).toFixed(1);
         const sourceLabel = m.location === 'usb' ? 'USB' : 'DISK';
         const sourceClass = m.location === 'usb' ? 'source-usb' : 'source-local';
+        const infoId = 'info-' + device.device_id + '-' + m.name.replace(/[^a-zA-Z0-9]/g, '_');
         return `
             <div class="media-item">
                 <div class="media-item-info">
@@ -392,7 +400,14 @@ function renderMediaCell(device, leaderMedia) {
                 </div>
                 <div class="media-item-actions">
                     <span class="media-meta">${sizeMb} MB</span>
+                    <button class="btn-small btn-info" onclick="toggleMediaInfo(event, '${infoId}')">Info</button>
                     <button class="btn-small btn-danger" onclick="deleteMedia('${device.device_id}', '${escapeHtml(m.name)}')">Delete</button>
+                </div>
+                <div id="${infoId}" class="media-item-details" style="display: none;">
+                    Format: <b>${escapeHtml(m.format || 'unknown')}</b> | Codec: <b>${escapeHtml(m.video_codec || 'unknown')}</b> ${m.is_optimized ? '<span class="optimized-badge" style="margin-left:4px;">Optimized</span>' : ''}<br>
+                    Resolution: <b>${m.width || 0}x${m.height || 0}</b><br>
+                    Duration: <b>${m.duration ? m.duration.toFixed(1) + 's' : 'unknown'}</b><br>
+                    Audio: <b>${m.audio_tracks > 0 ? `${m.audio_codec || 'yes'} (${m.audio_tracks} track(s))` : 'none'}</b>
                 </div>
             </div>
         `;
@@ -650,6 +665,11 @@ function renderState(state) {
                     <div class="device-summary-line device-summary-ip">${escapeHtml(device.ip)}</div>
                     <div class="device-summary-line device-summary-latency">${escapeHtml(latencyText)}</div>
                     ${device.role === 'collaborator' ? `<div class="device-summary-line device-summary-seeks">Hard Seeks: ${device.hard_seeks || 0}</div>` : ''}
+                    ${device.video_file ? `
+                    <div class="device-summary-line device-summary-playing" style="margin-top: 4px; font-size: 11px; color: #555;">
+                        Playing: <b>${escapeHtml(device.video_file)}</b> 
+                        ${device.is_optimized ? '<span class="optimized-badge" style="margin-left:4px;">HEVC</span>' : '<span class="not-optimized-badge" style="margin-left:4px;">Non-HEVC</span>'}
+                    </div>` : ''}
                     <div class="device-summary-line" style="margin-top: 8px;">
                         <button class="btn-small" onclick="viewDeviceLogs('${device.device_id}')">View Logs</button>
                     </div>
@@ -835,3 +855,37 @@ window.addEventListener('click', (event) => {
         closeLogModal();
     }
 });
+
+window.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') {
+        closeLogModal();
+    }
+});
+
+function copyLogs() {
+    const body = document.getElementById('logModalBody');
+    const copyBtn = document.getElementById('copyLogsBtn');
+    if (body) {
+        navigator.clipboard.writeText(body.textContent)
+            .then(() => {
+                if (copyBtn) {
+                    const originalText = copyBtn.textContent;
+                    copyBtn.textContent = 'Copied!';
+                    setTimeout(() => {
+                        copyBtn.textContent = originalText;
+                    }, 2000);
+                }
+            })
+            .catch(err => {
+                alert('Failed to copy logs: ' + err);
+            });
+    }
+}
+
+function toggleMediaInfo(event, infoId) {
+    event.preventDefault();
+    const el = document.getElementById(infoId);
+    if (el) {
+        el.style.display = el.style.display === 'none' ? 'block' : 'none';
+    }
+}

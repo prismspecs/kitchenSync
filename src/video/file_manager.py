@@ -60,6 +60,7 @@ class VideoFileManager:
         self.fallback_sources = [x for x in self.fallback_sources if not (x in seen or seen.add(x))]
         
         self.cache_dir = cache_dir or os.path.expanduser("~/kitchensync_cache")
+        self._metadata_cache = {}
 
     def find_video_file(self, target_file: Optional[str] = None, use_cache: bool = False) -> Optional[str]:
         """Find video file with intelligent fallback and optional caching"""
@@ -226,6 +227,74 @@ class VideoFileManager:
         os.makedirs("./media", exist_ok=True)
         return os.path.abspath("./media")
 
+    def get_metadata(self, filepath: str) -> dict:
+        """Get video/audio metadata using GStreamer Discoverer if available"""
+        if not filepath or not os.path.exists(filepath):
+            return {}
+            
+        try:
+            mtime = os.stat(filepath).st_mtime
+            cache_key = (filepath, mtime)
+            if hasattr(self, "_metadata_cache") and cache_key in self._metadata_cache:
+                return self._metadata_cache[cache_key]
+        except Exception:
+            mtime = 0
+            cache_key = (filepath, mtime)
+            
+        metadata = {
+            "duration": 0.0,
+            "video_codec": "unknown",
+            "audio_codec": "unknown",
+            "audio_tracks": 0,
+            "width": 0,
+            "height": 0,
+            "is_optimized": False,
+            "format": os.path.splitext(filepath)[1].lower()
+        }
+        
+        try:
+            import gi
+            gi.require_version('Gst', '1.0')
+            gi.require_version('GstPbutils', '1.0')
+            from gi.repository import Gst, GstPbutils
+            
+            if not Gst.is_initialized():
+                Gst.init(None)
+                
+            disc = GstPbutils.Discoverer.new(Gst.SECOND * 2)
+            uri = Path(filepath).absolute().as_uri()
+            info = disc.discover_uri(uri)
+            
+            if info:
+                metadata["duration"] = round(info.get_duration() / Gst.SECOND, 2)
+                
+                v_streams = info.get_video_streams()
+                if v_streams:
+                    v_stream = v_streams[0]
+                    metadata["width"] = v_stream.get_width()
+                    metadata["height"] = v_stream.get_height()
+                    caps = v_stream.get_caps()
+                    if caps and caps.get_size() > 0:
+                        codec_name = caps.get_structure(0).get_name()
+                        metadata["video_codec"] = codec_name.replace("video/", "").replace("x-", "")
+                        if "h265" in codec_name or "hevc" in codec_name:
+                            metadata["is_optimized"] = True
+                            
+                a_streams = info.get_audio_streams()
+                metadata["audio_tracks"] = len(a_streams)
+                if a_streams:
+                    caps = a_streams[0].get_caps()
+                    if caps and caps.get_size() > 0:
+                        codec_name = caps.get_structure(0).get_name()
+                        metadata["audio_codec"] = codec_name.replace("audio/", "").replace("x-", "")
+        except Exception:
+            pass
+            
+        if not hasattr(self, "_metadata_cache"):
+            self._metadata_cache = {}
+        self._metadata_cache[cache_key] = metadata
+        return metadata
+
     def list_videos(self) -> List[dict]:
         """List all available video files with metadata"""
         video_files = []
@@ -243,12 +312,14 @@ class VideoFileManager:
                 if name not in seen_names:
                     try:
                         stats = os.stat(vid_path)
+                        meta = self.get_metadata(vid_path)
                         video_files.append({
                             "name": name,
                             "path": vid_path,
                             "size": stats.st_size,
                             "mtime": stats.st_mtime,
-                            "location": "usb"
+                            "location": "usb",
+                            **meta
                         })
                         seen_names.add(name)
                     except Exception as e:
@@ -264,12 +335,14 @@ class VideoFileManager:
                     if name not in seen_names:
                         try:
                             stats = os.stat(vid_path)
+                            meta = self.get_metadata(vid_path)
                             video_files.append({
                                 "name": name,
                                 "path": os.path.abspath(vid_path),
                                 "size": stats.st_size,
                                 "mtime": stats.st_mtime,
-                                "location": "local"
+                                "location": "local",
+                                **meta
                             })
                             seen_names.add(name)
                         except Exception as e:

@@ -26,12 +26,14 @@ def get_video_driver(driver_name: str, debug_mode: bool = False, enable_audio: b
             video_width = config.video_width if config else 0
             video_height = config.video_height if config else 0
             poll_interval = config.position_poll_interval if (config and hasattr(config, "position_poll_interval")) else 0.05
+            crop_mode = config.crop_mode if (config and hasattr(config, "crop_mode")) else "letterbox"
             return GstDriver(
                 debug_mode=debug_mode,
                 enable_audio=enable_audio,
                 video_width=video_width,
                 video_height=video_height,
-                poll_interval=poll_interval
+                poll_interval=poll_interval,
+                crop_mode=crop_mode
             )
             
         elif driver_name == "mock":

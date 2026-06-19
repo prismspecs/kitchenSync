@@ -131,8 +131,29 @@ class CollaboratorPi:
                 if self.system_state.is_running:
                     status = "syncing"
                 
+                # Retrieve currently playing video and optimized status
+                video_file = ""
+                is_optimized = False
+                current_path = getattr(self, "video_path", None)
+                if current_path:
+                    video_file = os.path.basename(current_path)
+                    meta = self.video_manager.get_metadata(current_path)
+                    is_optimized = meta.get("is_optimized", False)
+                elif self.config.video_file:
+                    video_file = os.path.basename(self.config.video_file)
+                    resolved = self.video_manager.find_video_file(self.config.video_file)
+                    if resolved:
+                        meta = self.video_manager.get_metadata(resolved)
+                        is_optimized = meta.get("is_optimized", False)
+                
                 try:
-                    self.command_listener.send_heartbeat(self.config.device_id, status, hard_seeks=self.hard_seek_count)
+                    self.command_listener.send_heartbeat(
+                        self.config.device_id,
+                        status,
+                        hard_seeks=self.hard_seek_count,
+                        video_file=video_file,
+                        is_optimized=is_optimized
+                    )
                 except Exception as e:
                     log_warning(f"Failed to send heartbeat: {e}", component="collaborator")
                     

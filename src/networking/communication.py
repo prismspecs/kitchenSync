@@ -508,6 +508,7 @@ class CommandManager:
                 "last_seen": time.time(),
                 "status": msg.get("status", "unknown"),
                 "video_file": msg.get("video_file", ""),
+                "is_optimized": msg.get("is_optimized", False),
                 "hard_seeks": msg.get("hard_seeks", 0),
             }
 
@@ -520,6 +521,7 @@ class CommandManager:
                     "video_file",
                     self.collaborators.get(device_id, {}).get("video_file", ""),
                 ),
+                "is_optimized": msg.get("is_optimized", False),
                 "hard_seeks": msg.get("hard_seeks", 0),
             }
 
@@ -627,12 +629,14 @@ class CommandListener:
         except Exception:
             pass
 
-    def send_heartbeat(self, device_id: str, status: str = "ready", hard_seeks: int = 0) -> None:
+    def send_heartbeat(self, device_id: str, status: str = "ready", hard_seeks: int = 0, video_file: str = "", is_optimized: bool = False) -> None:
         """Send heartbeat to leader"""
         heartbeat = {
             "type": "heartbeat",
             "device_id": device_id,
             "status": status,
             "hard_seeks": hard_seeks,
+            "video_file": video_file,
+            "is_optimized": is_optimized,
         }
         self.send_message(heartbeat)

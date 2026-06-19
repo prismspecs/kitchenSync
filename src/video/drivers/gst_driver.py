@@ -5,6 +5,7 @@ Provides high-performance, rate-based synchronization for Raspberry Pi.
 """
 
 import os
+import shutil
 import subprocess
 import threading
 import time
@@ -22,13 +23,45 @@ except ImportError:
 from video.driver import VideoDriver, PlayerState
 from core.logger import log_info, log_error, log_warning
 
+def get_screen_resolution() -> tuple[int, int]:
+    """Get the screen resolution of the default display on X11/Wayland"""
+    xrandr_path = shutil.which("xrandr")
+    if xrandr_path:
+        try:
+            out = subprocess.check_output([xrandr_path], stderr=subprocess.DEVNULL).decode()
+            for line in out.splitlines():
+                if "*" in line:
+                    parts = line.strip().split()
+                    if parts and "x" in parts[0]:
+                        w, h = parts[0].split("x")
+                        return int(w), int(h)
+        except Exception:
+            pass
+            
+    xwininfo_path = shutil.which("xwininfo")
+    if xwininfo_path and os.environ.get("DISPLAY"):
+        try:
+            out = subprocess.check_output([xwininfo_path, "-root"], stderr=subprocess.DEVNULL).decode()
+            w, h = 0, 0
+            for line in out.splitlines():
+                if "Width:" in line:
+                    w = int(line.split()[-1])
+                elif "Height:" in line:
+                    h = int(line.split()[-1])
+            if w > 0 and h > 0:
+                return w, h
+        except Exception:
+            pass
+            
+    return 0, 0
+
 class GstDriver(VideoDriver):
     """
     GStreamer Driver for kSync.
     Uses playbin for robustness and custom seek events for seamless rate control.
     """
 
-    def __init__(self, debug_mode: bool = False, enable_audio: bool = True, video_width: int = 0, video_height: int = 0, poll_interval: float = 0.05):
+    def __init__(self, debug_mode: bool = False, enable_audio: bool = True, video_width: int = 0, video_height: int = 0, poll_interval: float = 0.05, crop_mode: str = "letterbox"):
         if not GST_AVAILABLE:
             raise ImportError("GStreamer or GObject Introspection not found. Install via OS_SETUP.md.")
 
@@ -38,6 +71,7 @@ class GstDriver(VideoDriver):
         self.video_width = video_width
         self.video_height = video_height
         self.poll_interval = poll_interval
+        self.crop_mode = crop_mode
         self.pipeline = None
         self.video_path = None
         self.state = PlayerState.STOPPED
@@ -222,20 +256,28 @@ class GstDriver(VideoDriver):
 
     def _create_video_sink(self):
         """Create a hardware-optimized sink bin for the current runtime."""
+        crop_str = ""
+        if getattr(self, "crop_mode", "letterbox") == "crop-to-fill":
+            tw, th = self.video_width, self.video_height
+            if tw <= 0 or th <= 0:
+                tw, th = get_screen_resolution()
+            if tw > 0 and th > 0:
+                crop_str = f"aspectratiocrop aspect-ratio={tw}/{th} ! "
+
         if os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"):
             # build a GL bin with native window size control
             try:
                 if self.video_width > 0 and self.video_height > 0:
                     # Use videoscale + capsfilter to FORCE the window size at the GStreamer level
                     bin_desc = (
-                        "videoconvert ! videoscale ! "
+                        f"videoconvert ! {crop_str}videoscale ! "
                         f"capsfilter caps=\"video/x-raw, width={self.video_width}, height={self.video_height}\" ! "
                         "glupload ! glcolorconvert ! glimagesink name=sink"
                     )
                 else:
                     # High-performance zero-copy path without CPU scaling overhead
                     bin_desc = (
-                        "videoconvert ! glupload ! glcolorconvert ! glimagesink name=sink"
+                        f"videoconvert ! {crop_str}glupload ! glcolorconvert ! glimagesink name=sink"
                     )
                 sink_bin = Gst.parse_bin_from_description(bin_desc, True)
                 if sink_bin:
