@@ -8,6 +8,7 @@ import glob
 import os
 import shutil
 import subprocess
+import threading
 import time
 from pathlib import Path
 from typing import Optional, List
@@ -61,6 +62,15 @@ class VideoFileManager:
         
         self.cache_dir = cache_dir or os.path.expanduser("~/kitchensync_cache")
         self._metadata_cache = {}
+
+        self._cached_video_list = []
+        self._last_scan_time = 0.0
+        self._scan_interval = 10.0  # scan at most every 10 seconds
+        self._scan_lock = threading.Lock()
+        self._is_scanning = False
+
+        # Trigger initial background scan on startup
+        self.trigger_background_scan(force=True)
 
     def find_video_file(self, target_file: Optional[str] = None, use_cache: bool = False) -> Optional[str]:
         """Find video file with intelligent fallback and optional caching"""
@@ -425,8 +435,39 @@ class VideoFileManager:
         self._metadata_cache[cache_key] = metadata
         return metadata
 
+    def trigger_background_scan(self, force: bool = False):
+        """Trigger an asynchronous background scan of media files"""
+        now = time.time()
+        with self._scan_lock:
+            if self._is_scanning:
+                return
+            if not force and now - self._last_scan_time < self._scan_interval:
+                return
+            self._is_scanning = True
+
+        def run_scan():
+            try:
+                video_files = self._perform_scan()
+                with self._scan_lock:
+                    self._cached_video_list = video_files
+                    self._last_scan_time = time.time()
+            except Exception as e:
+                log_error(f"Background media scan failed: {e}", "video")
+            finally:
+                with self._scan_lock:
+                    self._is_scanning = False
+
+        thread = threading.Thread(target=run_scan, daemon=True)
+        thread.start()
+
     def list_videos(self) -> List[dict]:
-        """List all available video files with metadata"""
+        """List all available video files with metadata (non-blocking background cache)"""
+        self.trigger_background_scan()
+        with self._scan_lock:
+            return list(self._cached_video_list)
+
+    def _perform_scan(self) -> List[dict]:
+        """Actual media scanning logic (run in background thread)"""
         video_files = []
         seen_names = set()
 
@@ -498,6 +539,7 @@ class VideoFileManager:
                     os.remove(target)
                     log_info(f"Deleted video: {target}", "video")
                     deleted = True
+                    self.trigger_background_scan(force=True)
                 except Exception as e:
                     log_error(f"Failed to delete {target}: {e}", "video")
         

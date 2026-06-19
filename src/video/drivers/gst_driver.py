@@ -158,16 +158,31 @@ class GstDriver(VideoDriver):
 
         hw_decoders = self._hardware_decoder_names()
 
-        # Detect Raspberry Pi 5 to disable hardware HEVC decoding (Pi 5 has no HW HEVC block)
+        # Optimize decoder rankings for Raspberry Pi 5:
+        # - Pi 5 (BCM2712) lacks H.264 hardware decoding, so we disable H.264 hardware decoders to force software fallback.
+        # - Pi 5 has a custom stateless HEVC hardware decoder (v4l2slhevcdec). We keep this active but disable
+        #   other hardware HEVC decoders (like v4l2slh265dec, v4l2h265dec) which can cause stalls/hangs under X11/GL.
         pi_model = get_pi_model()
         if "Raspberry Pi 5" in pi_model:
-            log_info(f"Gst: Detected Raspberry Pi 5 ('{pi_model}'). Disabling hardware HEVC decoders to force software decoding.")
-            hevc_hw = ["v4l2slh265dec", "v4l2slhevcdec", "v4l2h265dec", "vah265dec", "vaapih265dec", "nvh265dec"]
-            for name in hevc_hw:
+            log_info(f"Gst: Detected Raspberry Pi 5 ('{pi_model}'). Demoting unsupported/obsolete hardware decoders.")
+            
+            # Disable H.264 hardware decoders (not present in hardware)
+            unsupported_h264 = ["v4l2slh264dec", "v4l2h264dec", "vah264dec", "vaapih264dec", "nvh264dec"]
+            for name in unsupported_h264:
                 factory = Gst.ElementFactory.find(name)
                 if factory:
                     factory.set_rank(0)  # Gst.Rank.NONE
-            hw_decoders = [name for name in hw_decoders if name not in hevc_hw]
+            
+            # Disable problematic HEVC hardware decoders, keeping only the stateless 'v4l2slhevcdec' active
+            unsupported_hevc = ["v4l2slh265dec", "v4l2h265dec", "vah265dec", "vaapih265dec", "nvh265dec"]
+            for name in unsupported_hevc:
+                factory = Gst.ElementFactory.find(name)
+                if factory:
+                    factory.set_rank(0)  # Gst.Rank.NONE
+            
+            # Filter our hardware list to reflect these changes
+            disabled_names = set(unsupported_h264 + unsupported_hevc)
+            hw_decoders = [name for name in hw_decoders if name not in disabled_names]
 
         # 1. Prioritize Hardware Decoders
         for offset, decoder_name in enumerate(hw_decoders):
