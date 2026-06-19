@@ -491,7 +491,14 @@ class CommandManager:
         if msg_type == "pong":
             sent_at = self._ping_sent_at.pop(device_id, None)
             if sent_at is not None:
-                self._record_rtt_sample(device_id, time.monotonic() - sent_at)
+                rtt = time.monotonic() - sent_at
+                self._record_rtt_sample(device_id, rtt)
+                # Send the RTT / 2 back to the collaborator so they know their transport latency!
+                latency_msg = {
+                    "type": "latency_update",
+                    "latency": rtt / 2.0
+                }
+                self.send_command(latency_msg, target_pi=device_id)
             return
 
         # If a new ID appears from an IP that we already know, 

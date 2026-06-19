@@ -198,6 +198,19 @@ class CollaboratorPi:
             log_info("Sync: Hard seek counter reset manually via command.", component="collaborator")
         elif cmd_type == "log_request":
             self._handle_log_request(msg, addr)
+        elif cmd_type == "latency_update":
+            self._handle_latency_update(msg)
+
+    def _handle_latency_update(self, msg: dict) -> None:
+        latency = msg.get("latency", 0.0)
+        if latency > 0.0:
+            if self._smoothed_latency is None:
+                self._smoothed_latency = latency
+            else:
+                alpha = 0.3
+                self._smoothed_latency = alpha * latency + (1 - alpha) * self._smoothed_latency
+            if self.config.debug_mode:
+                log_info(f"Sync: Updated smoothed transport latency to {self._smoothed_latency*1000:.1f}ms", component="collaborator")
 
     def _message_targets_this_device(self, msg: dict) -> bool:
         target_device_id = msg.get("target_device_id")
@@ -406,16 +419,9 @@ class CollaboratorPi:
         if state and self.system_state.is_running:
             leader_time, received_at, sent_at = state
             adjusted_leader_time = leader_time
-            if sent_at and self.config.enable_latency_compensation:
-                transport_latency = received_at - float(sent_at)
-                if 0.0 <= transport_latency <= 0.1:
-                    # EWMA smoothing to reduce jitter in per-device latency
-                    if self._smoothed_latency is None:
-                        self._smoothed_latency = transport_latency
-                    else:
-                        alpha = 0.3
-                        self._smoothed_latency = alpha * transport_latency + (1 - alpha) * self._smoothed_latency
-                    adjusted_leader_time += self._smoothed_latency
+            enable_compensation = getattr(self.config, "enable_latency_compensation", False)
+            if enable_compensation and self._smoothed_latency is not None:
+                adjusted_leader_time += self._smoothed_latency
             # Account for time elapsed since packet arrived (processing lag)
             adjusted_leader_time += max(0.0, time.time() - received_at)
             self.system_state.current_time = adjusted_leader_time
