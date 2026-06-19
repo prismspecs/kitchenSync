@@ -3,6 +3,7 @@ const lastSaveAt = new Map();
 const draftConfigValues = new Map();
 const openConfigPanels = new Set(['remote-leader']);
 const openMediaPanels = new Set(['remote-leader']);
+const openInfoPanels = new Set();
 let latestState = null;
 
 const REFRESH_ICON_SVG = `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"></path><path d="M1 20v-6h6"></path><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>`;
@@ -392,6 +393,7 @@ function renderMediaCell(device, leaderMedia) {
         const sourceLabel = m.location === 'usb' ? 'USB' : 'DISK';
         const sourceClass = m.location === 'usb' ? 'source-usb' : 'source-local';
         const infoId = 'info-' + device.device_id + '-' + m.name.replace(/[^a-zA-Z0-9]/g, '_');
+        const isInfoOpen = openInfoPanels.has(infoId);
         return `
             <div class="media-item">
                 <div class="media-item-info">
@@ -403,7 +405,7 @@ function renderMediaCell(device, leaderMedia) {
                     <button class="btn-small btn-info" onclick="toggleMediaInfo(event, '${infoId}')">Info</button>
                     <button class="btn-small btn-danger" onclick="deleteMedia('${device.device_id}', '${escapeHtml(m.name)}')">Delete</button>
                 </div>
-                <div id="${infoId}" class="media-item-details" style="display: none;">
+                <div id="${infoId}" class="media-item-details" style="display: ${isInfoOpen ? 'block' : 'none'};">
                     Format: <b>${escapeHtml(m.format || 'unknown')}</b> | Codec: <b>${escapeHtml(m.video_codec || 'unknown')}</b> ${m.is_optimized ? '<span class="optimized-badge" style="margin-left:4px;">Optimized</span>' : ''}<br>
                     Resolution: <b>${m.width || 0}x${m.height || 0}</b><br>
                     Duration: <b>${m.duration ? m.duration.toFixed(1) + 's' : 'unknown'}</b><br>
@@ -886,6 +888,12 @@ function toggleMediaInfo(event, infoId) {
     event.preventDefault();
     const el = document.getElementById(infoId);
     if (el) {
-        el.style.display = el.style.display === 'none' ? 'block' : 'none';
+        const isHidden = el.style.display === 'none';
+        el.style.display = isHidden ? 'block' : 'none';
+        if (isHidden) {
+            openInfoPanels.add(infoId);
+        } else {
+            openInfoPanels.delete(infoId);
+        }
     }
 }

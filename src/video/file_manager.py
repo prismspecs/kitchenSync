@@ -227,8 +227,126 @@ class VideoFileManager:
         os.makedirs("./media", exist_ok=True)
         return os.path.abspath("./media")
 
+    def _discover_via_cli(self, filepath: str) -> dict:
+        """Fallback to gst-discoverer-1.0 CLI to parse metadata"""
+        metadata = {}
+        try:
+            res = subprocess.run(
+                ["gst-discoverer-1.0", filepath],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            if res.returncode == 0:
+                lines = res.stdout.splitlines()
+                video_codec = "unknown"
+                audio_codec = "unknown"
+                audio_tracks = 0
+                width = 0
+                height = 0
+                duration = 0.0
+                
+                in_video = False
+                in_audio = False
+                
+                for line in lines:
+                    stripped = line.strip()
+                    if stripped.startswith("Duration:"):
+                        parts = stripped.split("Duration:")[1].strip().split(":")
+                        if len(parts) == 3:
+                            try:
+                                h = float(parts[0])
+                                m = float(parts[1])
+                                s = float(parts[2])
+                                duration = h * 3600 + m * 60 + s
+                            except ValueError:
+                                pass
+                    elif stripped.startswith("Video:"):
+                        in_video = True
+                        in_audio = False
+                    elif stripped.startswith("Audio:"):
+                        in_audio = True
+                        in_video = False
+                    elif line.startswith("  ") and not line.startswith("   ") and (in_video or in_audio):
+                        codec = stripped.split("(")[0].strip().lower()
+                        if in_video:
+                            video_codec = codec
+                        elif in_audio:
+                            audio_codec = codec
+                            audio_tracks += 1
+                    elif stripped.startswith("Width:"):
+                        try:
+                            width = int(stripped.split(":")[1].strip())
+                        except ValueError:
+                            pass
+                    elif stripped.startswith("Height:"):
+                        try:
+                            height = int(stripped.split(":")[1].strip())
+                        except ValueError:
+                            pass
+                            
+                metadata["duration"] = round(duration, 2)
+                metadata["video_codec"] = video_codec
+                metadata["audio_codec"] = audio_codec
+                metadata["audio_tracks"] = audio_tracks
+                metadata["width"] = width
+                metadata["height"] = height
+                if "h265" in video_codec or "hevc" in video_codec:
+                    metadata["is_optimized"] = True
+        except Exception as e:
+            log_warning(f"Metadata CLI discovery failed: {e}", "video")
+        return metadata
+
+    def _discover_via_ffprobe(self, filepath: str) -> dict:
+        """Fallback to ffprobe CLI to parse metadata"""
+        metadata = {}
+        try:
+            cmd = [
+                "ffprobe",
+                "-v", "error",
+                "-show_entries", "format=duration:stream=codec_name,width,height,codec_type",
+                "-of", "json",
+                filepath
+            ]
+            res = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+            if res.returncode == 0:
+                import json
+                data = json.loads(res.stdout)
+                
+                fmt = data.get("format", {})
+                duration = float(fmt.get("duration", 0.0))
+                
+                video_codec = "unknown"
+                audio_codec = "unknown"
+                audio_tracks = 0
+                width = 0
+                height = 0
+                
+                for stream in data.get("streams", []):
+                    t = stream.get("codec_type")
+                    codec = stream.get("codec_name", "unknown")
+                    if t == "video":
+                        video_codec = codec
+                        width = int(stream.get("width", 0))
+                        height = int(stream.get("height", 0))
+                    elif t == "audio":
+                        audio_codec = codec
+                        audio_tracks += 1
+                        
+                metadata["duration"] = round(duration, 2)
+                metadata["video_codec"] = video_codec
+                metadata["audio_codec"] = audio_codec
+                metadata["audio_tracks"] = audio_tracks
+                metadata["width"] = width
+                metadata["height"] = height
+                if "h265" in video_codec or "hevc" in video_codec:
+                    metadata["is_optimized"] = True
+        except Exception as e:
+            log_warning(f"Metadata ffprobe discovery failed: {e}", "video")
+        return metadata
+
     def get_metadata(self, filepath: str) -> dict:
-        """Get video/audio metadata using GStreamer Discoverer if available"""
+        """Get video/audio metadata using GStreamer Discoverer if available, falling back to CLIs"""
         if not filepath or not os.path.exists(filepath):
             return {}
             
@@ -290,6 +408,18 @@ class VideoFileManager:
         except Exception:
             pass
             
+        # Fallback 1: gst-discoverer-1.0 CLI
+        if metadata["video_codec"] == "unknown" or metadata["duration"] == 0.0:
+            cli_meta = self._discover_via_cli(filepath)
+            if cli_meta:
+                metadata.update({k: v for k, v in cli_meta.items() if v not in (0.0, "unknown", 0)})
+                
+        # Fallback 2: ffprobe CLI
+        if metadata["video_codec"] == "unknown" or metadata["duration"] == 0.0:
+            ff_meta = self._discover_via_ffprobe(filepath)
+            if ff_meta:
+                metadata.update({k: v for k, v in ff_meta.items() if v not in (0.0, "unknown", 0)})
+                
         if not hasattr(self, "_metadata_cache"):
             self._metadata_cache = {}
         self._metadata_cache[cache_key] = metadata
