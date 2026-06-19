@@ -155,6 +155,7 @@ class ConfigManager:
         self.config_file = config_file
         self.usb_config_path = None
         self._usb_mount_point = None
+        self._debug_mode_override = None
         self.load_configuration()
 
     def load_configuration(self) -> None:
@@ -338,7 +339,14 @@ class ConfigManager:
     def enable_osc(self) -> bool: return self.getboolean("enable_osc", False)
 
     @property
-    def debug_mode(self) -> bool: return self.getboolean("overlay", False)
+    def debug_mode(self) -> bool:
+        if getattr(self, "_debug_mode_override", None) is not None:
+            return self._debug_mode_override
+        return self.getboolean("overlay", False)
+
+    @debug_mode.setter
+    def debug_mode(self, value: bool) -> None:
+        self._debug_mode_override = value
 
     @property
     def crop_mode(self) -> str: return self.get("crop_mode", "letterbox")
