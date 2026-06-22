@@ -200,6 +200,8 @@ class CollaboratorPi:
             self._handle_log_request(msg, addr)
         elif cmd_type == "latency_update":
             self._handle_latency_update(msg)
+        elif cmd_type == "device_update":
+            self._handle_device_update(msg)
 
     def _handle_latency_update(self, msg: dict) -> None:
         latency = msg.get("latency", 0.0)
@@ -211,6 +213,26 @@ class CollaboratorPi:
                 self._smoothed_latency = alpha * latency + (1 - alpha) * self._smoothed_latency
             if self.config.debug_mode:
                 log_info(f"Sync: Updated smoothed transport latency to {self._smoothed_latency*1000:.1f}ms", component="collaborator")
+
+    def _handle_device_update(self, msg: dict) -> None:
+        if not self._message_targets_this_device(msg):
+            return
+        log_info("Device update requested — git pull && reboot", component="collaborator")
+
+        def _do_update():
+            import subprocess
+            import shutil
+            repo = os.path.dirname(os.path.abspath(__file__))
+            try:
+                subprocess.run(
+                    ["git", "pull"],
+                    cwd=repo, capture_output=True, text=True, timeout=30,
+                )
+            except Exception as e:
+                log_warning(f"Update git pull failed: {e}", component="collaborator")
+            subprocess.run(["sudo", "reboot"], capture_output=True)
+
+        threading.Thread(target=_do_update, daemon=True).start()
 
     def _message_targets_this_device(self, msg: dict) -> bool:
         target_device_id = msg.get("target_device_id")

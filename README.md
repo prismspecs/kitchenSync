@@ -108,7 +108,7 @@ kSync prefers hardware-accelerated GStreamer sinks:
 
 To verify HEVC hardware decoding on a Pi 5:
 ```bash
-DISPLAY=:0 python3 tools/verify_gst_hwaccel.py --video videos/test_hevc_clean.mp4 --json
+DISPLAY=:0 python3 tools/verify_gst_hwaccel.py --video videos/bbb_1080p_24fps_hevc.mp4 --json
 ```
 
 Successful decode signal: `"active_decoder": "v4l2slh265dec"`
@@ -134,7 +134,7 @@ pytest tests/test_sync_regressions.py tests/test_sync_simulation.py
 If you need a sample file for manual testing, download a test video into `videos/`:
 ```bash
 mkdir -p videos
-wget -O videos/big_buck_bunny_1080p_h264.mov https://download.blender.org/peach/bigbuckbunny_movies/big_buck_bunny_1080p_h264.mov
+wget -O videos/bbb_1080p_24fps_h264.mov https://download.blender.org/peach/bigbuckbunny_movies/big_buck_bunny_1080p_h264.mov
 ```
 
 For distributed manual testing, use the commands in [docs/TESTING.md](docs/TESTING.md).

@@ -280,6 +280,13 @@ tr:nth-child(odd) td {
     margin-bottom: 2px;
 }
 
+.device-summary-actions {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+    margin-top: 8px;
+}
+
 .device-summary-status {
     font-weight: 600;
 }

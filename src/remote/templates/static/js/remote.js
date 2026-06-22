@@ -695,9 +695,9 @@ function renderState(state) {
                         Playing: <b>${escapeHtml(device.video_file)}</b> 
                         ${device.is_optimized ? '<span class="optimized-badge" style="margin-left:4px;">HEVC</span>' : '<span class="not-optimized-badge" style="margin-left:4px;">Non-HEVC</span>'}
                     </div>` : ''}
-                    <div class="device-summary-line" style="margin-top: 8px;">
+                    <div class="device-summary-actions">
                         <button class="btn-small" onclick="viewDeviceLogs('${device.device_id}')">View Logs</button>
-                        ${device.role === 'collaborator' ? `<button class="btn-small" onclick="updateDevice('${device.device_id}', this)" style="margin-left:4px">Update & Reboot</button>` : ''}
+                        ${device.role === 'collaborator' ? `<button class="btn-small" onclick="updateDevice('${device.device_id}', this)">Update & Reboot</button>` : ''}
                     </div>
                 </div>
             `;

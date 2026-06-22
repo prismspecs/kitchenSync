@@ -52,28 +52,28 @@ media_snapshots: Dict[str, List[Dict[str, Any]]] = {}
 
 
 def _update_device(device_id: str) -> None:
-    """SSH into a collaborator Pi, git pull, and reboot."""
-    info = command_manager.collaborators.get(device_id)
-    if not info:
-        log_warning(f"Update: device {device_id} not found", component="remote")
-        return
-    ip = info.get("ip")
-    if not ip:
-        log_warning(f"Update: device {device_id} has no IP", component="remote")
-        return
-    ssh_user = "pi"
-    cmd = [
-        "ssh", "-o", "ConnectTimeout=5", "-o", "StrictHostKeyChecking=no",
-        "-o", "BatchMode=yes",
-        f"{ssh_user}@{ip}",
-        "cd ~/kitchenSync && git pull && sudo reboot",
-    ]
-    try:
-        subprocess.run(cmd, capture_output=True, text=True, timeout=30)
-    except subprocess.TimeoutExpired:
-        pass  # expected — reboot kills the SSH connection
-    except Exception as e:
-        log_warning(f"Update failed for {device_id}: {e}", component="remote")
+    """Send a device_update command over UDP — the Pi handles git pull && reboot locally."""
+    if device_id == LOCAL_LEADER_ID:
+        log_info("Device update requested for leader — running locally", component="remote")
+
+        def _do_update():
+            repo = Path(__file__).resolve().parent.parent.parent
+            try:
+                subprocess.run(
+                    ["git", "pull"],
+                    cwd=str(repo), capture_output=True, text=True, timeout=30,
+                )
+            except Exception as e:
+                log_warning(f"Leader update git pull failed: {e}", component="remote")
+            subprocess.run(["sudo", "reboot"], capture_output=True)
+
+        threading.Thread(target=_do_update, daemon=True).start()
+    else:
+        command_manager.send_command(
+            {"type": "device_update", "target_device_id": device_id},
+            target_pi=device_id,
+        )
+        log_info(f"Device update sent to {device_id}", component="remote")
 
 
 def compute_latency_compensation(avg_rtt: float, enabled: bool, latency_factor: float) -> float:
