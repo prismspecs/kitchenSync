@@ -8,7 +8,7 @@ import time
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 from urllib.parse import parse_qs, urlparse, quote
 import socket
 
@@ -49,6 +49,16 @@ log_events: Dict[str, threading.Event] = {}
 
 # Media state cache
 media_snapshots: Dict[str, List[Dict[str, Any]]] = {}
+
+
+def _find_real_leader() -> Optional[str]:
+    """Return device_id of a Pi leader, or None if the web UI is the leader."""
+    for device_id, snapshot in config_snapshots.items():
+        if device_id == LOCAL_LEADER_ID:
+            continue
+        if snapshot.get("role") == "leader":
+            return device_id
+    return None
 
 
 def _update_device(device_id: str) -> None:
@@ -638,6 +648,18 @@ class RemoteHandler(BaseHTTPRequestHandler):
             return
 
         if action in {"play", "api/play"}:
+            # If there's a real Pi leader, delegate to it instead of broadcasting.
+            real_leader = _find_real_leader()
+            if real_leader:
+                command_manager.send_command(
+                    {"type": "remote_start"},
+                    target_pi=real_leader,
+                )
+                log_info(f"Delegated play to leader {real_leader}", component="remote")
+                self.send_response(204)
+                self.end_headers()
+                return
+
             cluster_state.is_playing = True
             cluster_state.is_master = True
             cluster_state.master_start_time = time.time()
@@ -664,9 +686,17 @@ class RemoteHandler(BaseHTTPRequestHandler):
             return
 
         if action in {"stop", "api/stop"}:
+            real_leader = _find_real_leader()
+            if real_leader:
+                command_manager.send_command(
+                    {"type": "remote_stop"},
+                    target_pi=real_leader,
+                )
+                log_info(f"Delegated stop to leader {real_leader}", component="remote")
+            else:
+                command_manager.send_command({"type": "stop"})
             cluster_state.is_playing = False
             cluster_state.is_master = False
-            command_manager.send_command({"type": "stop"})
             log_info("Cluster STOP", component="remote")
             self.send_response(204)
             self.end_headers()

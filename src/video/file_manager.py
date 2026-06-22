@@ -61,7 +61,7 @@ class VideoFileManager:
         seen = set()
         self.fallback_sources = [x for x in self.fallback_sources if not (x in seen or seen.add(x))]
         
-        self.cache_dir = cache_dir or os.path.expanduser("~/kitchensync_cache")
+        self.cache_dir = cache_dir or os.path.expanduser("~/.cache/kitchensync")
         self.metadata_cache_file = os.path.join(self.cache_dir, "metadata_cache.json")
         self._metadata_cache = self._load_metadata_cache()
 

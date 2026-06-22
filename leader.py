@@ -4,6 +4,7 @@ kSync Leader - Main entry point for the Leader role.
 Coordinates playback, broadcasts time sync, and manages collaborators.
 """
 
+import json
 import sys
 import os
 import socket
