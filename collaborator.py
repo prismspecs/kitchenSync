@@ -27,6 +27,20 @@ from core.logger import log_info, log_error, log_warning, enable_system_logging,
 from ui.window_manager import hide_mouse_cursor
 
 
+def _log_startup_crash(exc_type, exc_value, exc_tb):
+    """Log startup crashes to file — catches import-time errors before logging init."""
+    import traceback
+    log_dir = Path(__file__).parent / "logs"
+    log_dir.mkdir(exist_ok=True)
+    with open(log_dir / "startup_crash.log", "a") as f:
+        f.write(f"--- CRASH at {time.strftime('%Y-%m-%d %H:%M:%S')} ---\n")
+        traceback.print_exception(exc_type, exc_value, exc_tb, file=f)
+    traceback.print_exception(exc_type, exc_value, exc_tb)
+
+
+sys.excepthook = _log_startup_crash
+
+
 class CollaboratorPi:
     def __init__(self, config_file=None):
         # Default to ksync.ini if not specified
