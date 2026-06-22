@@ -125,6 +125,23 @@ class LeaderPi:
         self.command_manager.start_listening()
         self.command_manager.start_latency_probing()
 
+        # Periodically announce presence so the web UI can discover this leader
+        threading.Thread(target=self._announce_presence, daemon=True).start()
+
+    def _announce_presence(self) -> None:
+        """Periodically broadcast so the web UI discovers this leader."""
+        while True:
+            try:
+                self.command_manager.send_command({
+                    "type": "leader_announce",
+                    "device_id": self.config.device_id,
+                    "status": "leader",
+                    "video_file": Path(self.video_path).name if self.video_path else "",
+                })
+            except Exception:
+                pass
+            time.sleep(5)
+
     def start_system(self) -> None:
         """Start the synchronized playback system"""
         if self.system_state.is_running:
@@ -203,11 +220,14 @@ class LeaderPi:
                 time.sleep(30.0)
                 if self.system_state.is_running:
                     # Only broadcast (don't send direct to everyone again to reduce noise)
-                    self.command_manager._ensure_send_socket()
-                    payload = json.dumps(start_command)
-                    self.command_manager.control_sock.sendto(
-                        payload.encode(), (self.command_manager.broadcast_ip, self.command_manager.control_port)
-                    )
+                    try:
+                        self.command_manager._ensure_send_socket()
+                        payload = json.dumps(start_command)
+                        self.command_manager.control_sock.sendto(
+                            payload.encode(), (self.command_manager.broadcast_ip, self.command_manager.control_port)
+                        )
+                    except Exception as e:
+                        log_warning(f"Re-broadcast failed: {e}", component="leader")
 
         threading.Thread(target=start_broadcast_loop, daemon=True).start()
 

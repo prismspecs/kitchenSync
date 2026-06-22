@@ -265,11 +265,12 @@ def build_ui_state() -> Dict[str, Any]:
 
     for device_id in sorted(known_collaborator_ids):
         info = collaborators.get(device_id, {})
+        snapshot = config_snapshots.get(device_id, {})
         devices.append(
             {
                 "device_id": device_id,
                 "label": device_id,
-                "role": "collaborator",
+                "role": snapshot.get("role", "collaborator"),
                 "ip": info.get("ip", "unknown"),
                 "status": info.get("status", "unknown"),
                 "online": info.get("online", False),
@@ -835,10 +836,25 @@ class RobustRemoteServer(ThreadingHTTPServer):
         super().handle_error(request, client_address)
 
 
+def _handle_leader_announce(msg: Dict[str, Any], addr: tuple) -> None:
+    device_id = msg.get("device_id")
+    if not device_id:
+        return
+    command_manager.collaborators[device_id] = {
+        "ip": addr[0],
+        "last_seen": time.time(),
+        "status": msg.get("status", "leader"),
+        "video_file": msg.get("video_file", ""),
+        "is_optimized": False,
+        "hard_seeks": 0,
+    }
+
+
 def start_remote():
     """Start the remote controller services."""
     update_runtime_from_config()
 
+    command_manager.register_handler("leader_announce", lambda msg, addr: _handle_leader_announce(msg, addr))
     command_manager.register_handler("config_state", lambda msg, addr: store_config_message(msg))
     command_manager.register_handler(
         "config_update_result", lambda msg, addr: store_config_message(msg)

@@ -85,7 +85,6 @@ class SyncBroadcaster:
         if not self.sync_sock:
             self.setup_socket()
 
-        from core.logger import log_info
         log_info(f"Sync: Starting broadcast on {self.broadcast_ip}:{self.sync_port}", component="network")
 
         def broadcast_loop():
@@ -454,8 +453,8 @@ class CommandManager:
                 payload.encode(), (self.broadcast_ip, self.control_port)
             )
             print(f"[NET] Broadcasted {command['type']} to {self.broadcast_ip}")
-        except Exception:
-            pass
+        except Exception as e:
+            log_warning(f"Broadcast failed for {command['type']}: {e}", component="network")
 
     def send_ping(self, target_pi: Optional[str] = None) -> None:
         """Send an explicit latency probe to one or all registered collaborators."""
