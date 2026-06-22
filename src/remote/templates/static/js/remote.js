@@ -692,6 +692,8 @@ function renderState(state) {
                     ${device.video_driver ? `<div class="device-summary-line device-summary-driver">Driver: ${escapeHtml(device.video_driver)}</div>` : ''}
                     <div class="device-summary-line device-summary-ip">${escapeHtml(device.ip)}</div>
                     <div class="device-summary-line device-summary-latency">${escapeHtml(latencyText)}</div>
+                    ${device.sync_deviation ? `<div class="device-summary-line device-summary-deviation">Dev: ${device.sync_deviation > 0 ? '+' : ''}${device.sync_deviation.toFixed(3)}s</div>` : ''}
+                    ${device.playback_rate && device.playback_rate !== 1.0 ? `<div class="device-summary-line device-summary-rate">Rate: ${device.playback_rate.toFixed(4)}x</div>` : ''}
                     ${device.role === 'collaborator' ? `<div class="device-summary-line device-summary-seeks">Hard Seeks: ${device.hard_seeks || 0}</div>` : ''}
                     ${device.video_file ? `
                     <div class="device-summary-line device-summary-playing" style="margin-top: 4px; font-size: 11px; color: #555;">

@@ -542,6 +542,8 @@ class CommandManager:
                 ),
                 "is_optimized": msg.get("is_optimized", False),
                 "hard_seeks": msg.get("hard_seeks", 0),
+                "sync_deviation": msg.get("sync_deviation", 0.0),
+                "playback_rate": msg.get("playback_rate", 1.0),
             }
 
     def get_collaborators(self) -> Dict[str, Dict]:
@@ -648,7 +650,7 @@ class CommandListener:
         except Exception:
             pass
 
-    def send_heartbeat(self, device_id: str, status: str = "ready", hard_seeks: int = 0, video_file: str = "", is_optimized: bool = False, video_driver: str = "") -> None:
+    def send_heartbeat(self, device_id: str, status: str = "ready", hard_seeks: int = 0, video_file: str = "", is_optimized: bool = False, video_driver: str = "", sync_deviation: float = 0.0, playback_rate: float = 1.0) -> None:
         """Send heartbeat to leader"""
         heartbeat = {
             "type": "heartbeat",
@@ -658,5 +660,7 @@ class CommandListener:
             "video_file": video_file,
             "is_optimized": is_optimized,
             "video_driver": video_driver,
+            "sync_deviation": sync_deviation,
+            "playback_rate": playback_rate,
         }
         self.send_message(heartbeat)

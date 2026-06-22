@@ -282,6 +282,8 @@ def build_ui_state() -> Dict[str, Any]:
                 "video_driver": info.get("video_driver", snapshot.get("video_driver", "")),
                 "is_optimized": info.get("is_optimized", False),
                 "hard_seeks": info.get("hard_seeks", 0),
+                "sync_deviation": info.get("sync_deviation", 0.0),
+                "playback_rate": info.get("playback_rate", 1.0),
                 "latency_ms": round(command_manager.get_device_average_rtt(device_id) * 1000, 1)
                 if command_manager.get_device_average_rtt(device_id) > 0
                 else None,

@@ -116,6 +116,8 @@ class CollaboratorPi:
         self._settle_until = 0
         self.hard_seek_count = 0
         self._smoothed_latency = None  # EWMA-smoothed per-device transport latency
+        self._current_deviation = 0.0
+        self._current_playback_rate = 1.0
 
         # Sync Decoupling
         self._latest_sync_state = None
@@ -172,6 +174,8 @@ class CollaboratorPi:
                         video_file=video_file,
                         is_optimized=is_optimized,
                         video_driver=getattr(self, "video_driver_name", ""),
+                        sync_deviation=self._current_deviation,
+                        playback_rate=self._current_playback_rate,
                     )
                 except Exception as e:
                     log_warning(f"Failed to send heartbeat: {e}", component="collaborator")
@@ -507,6 +511,7 @@ class CollaboratorPi:
             video_pos %= duration
             
         deviation = video_pos - leader_time
+        self._current_deviation = deviation
         if duration and duration > 0:
             if deviation > duration/2: deviation -= duration
             elif deviation < -duration/2: deviation += duration
@@ -535,20 +540,24 @@ class CollaboratorPi:
 
             if allow_hard_seek:
                 self.hard_seek_count += 1
+                self._current_playback_rate = 1.0
                 log_info(f"Sync: Initiating hard seek to {leader_time:.3f}s (dev={median_dev:.3f}s, near_loop={is_near_loop}) [Total hard seeks: {self.hard_seek_count}]", component="collaborator")
                 self.video_player.seek(leader_time, accurate=False)
                 self.deviation_samples.clear()
                 self.startup_sync_count = 0
                 self._settle_until = now + 2.5
             elif allow_accurate_seek:
+                self._current_playback_rate = 1.0
                 log_info(f"Sync: Initiating accurate seek to {leader_time:.3f}s (dev={median_dev:.3f}s)", component="collaborator")
                 self.video_player.seek(leader_time, accurate=True)
                 self.deviation_samples.clear()
                 self._settle_until = now + 1.0
             elif abs(median_dev) > self.min_drift:
                 rate = max(self.min_rate, min(self.max_rate, 1.0 - (median_dev * self.kp)))
+                self._current_playback_rate = rate
                 self.video_player.set_speed(rate)
             else:
+                self._current_playback_rate = 1.0
                 self.video_player.set_speed(1.0)
 
     def _handle_start_command(self, msg: dict) -> None:
