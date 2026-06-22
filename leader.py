@@ -24,7 +24,7 @@ from video.file_manager import VideoFileManager
 from networking.communication import SyncBroadcaster, CommandManager
 from core.schedule import Schedule
 from core.system_state import SystemState
-from core.logger import log_info, log_error, log_warning, enable_system_logging
+from core.logger import log_info, log_error, log_warning, log_file_paths, enable_system_logging
 from ui.interface import CommandInterface, StatusDisplay
 from ui.window_manager import hide_mouse_cursor
 from protocols.midi_handler import MidiManager, MidiScheduler
@@ -123,6 +123,8 @@ class LeaderPi:
         self.command_manager.register_handler("remote_set", lambda msg, addr: self.set_sync_param(msg.get("param"), msg.get("value")))
         self.command_manager.register_handler("config_request", lambda msg, addr: self._handle_config_request(msg, addr))
         self.command_manager.register_handler("discover", lambda msg, addr: self._handle_discover(msg, addr))
+        self.command_manager.register_handler("device_update", lambda msg, addr: self._handle_device_update(msg, addr))
+        self.command_manager.register_handler("log_request", lambda msg, addr: self._handle_log_request(msg, addr))
 
         self.command_manager.start_listening()
         self.command_manager.start_latency_probing()
@@ -165,6 +167,52 @@ class LeaderPi:
             "device_id": self.config.device_id,
             "status": "leader",
             "video_file": Path(self.video_path).name if self.video_path else "",
+        }
+        self._send_unicast(response, addr[0])
+
+    def _handle_device_update(self, msg: dict, addr: tuple) -> None:
+        target = msg.get("target_device_id")
+        if target and target != self.config.device_id:
+            return
+        log_info("Device update requested — git pull && reboot", component="leader")
+
+        def _do_update():
+            import subprocess
+            repo = os.path.dirname(os.path.abspath(__file__))
+            try:
+                subprocess.run(
+                    ["git", "pull"],
+                    cwd=repo, capture_output=True, text=True, timeout=30,
+                )
+            except Exception as e:
+                log_warning(f"Update git pull failed: {e}", component="leader")
+            subprocess.run(["sudo", "reboot"], capture_output=True)
+
+        threading.Thread(target=_do_update, daemon=True).start()
+
+    def _handle_log_request(self, msg: dict, addr: tuple) -> None:
+        target = msg.get("target_device_id")
+        if target and target != self.config.device_id:
+            return
+
+        try:
+            log_paths = log_file_paths()
+            sys_log_path = log_paths.get("system", "logs/kitchensync.log")
+            if os.path.exists(sys_log_path):
+                with open(sys_log_path, "r", errors="replace") as f:
+                    lines = f.readlines()
+                    log_content = "".join(lines[-100:])
+                    if len(log_content) > 30000:
+                        log_content = "... [TRUNCATED] ...\n" + log_content[-30000:]
+            else:
+                log_content = "No log file found on leader."
+        except Exception as exc:
+            log_content = f"Error reading logs: {exc}"
+
+        response = {
+            "type": "log_response",
+            "device_id": self.config.device_id,
+            "logs": log_content,
         }
         self._send_unicast(response, addr[0])
 
