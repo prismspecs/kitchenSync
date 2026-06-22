@@ -699,7 +699,7 @@ function renderState(state) {
                     </div>` : ''}
                     <div class="device-summary-actions">
                         <button class="btn-small view-logs-btn" data-device-id="${device.device_id}">View Logs</button>
-                        ${device.role === 'collaborator' ? `<button class="btn-small update-device-btn" data-device-id="${device.device_id}">Update & Reboot</button>` : ''}
+                        ${device.device_id !== 'remote-leader' ? `<button class="btn-small update-device-btn" data-device-id="${device.device_id}">Update & Reboot</button>` : ''}
                     </div>
                 </div>
             `;
