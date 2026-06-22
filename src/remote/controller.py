@@ -931,6 +931,14 @@ def start_remote():
     command_manager.start_listening()
     command_manager.start_latency_probing()
 
+    # Periodically broadcast discovery so leaders respond via unicast
+    def _discover_loop():
+        while True:
+            command_manager.send_command({"type": "discover", "device_id": LOCAL_LEADER_ID})
+            time.sleep(10)
+
+    threading.Thread(target=_discover_loop, daemon=True).start()
+
     web_thread = threading.Thread(
         target=lambda: RobustRemoteServer(("0.0.0.0", 8080), RemoteHandler).serve_forever(),
         daemon=True,

@@ -121,12 +121,52 @@ class LeaderPi:
         self.command_manager.register_handler("remote_stop", lambda msg, addr: self.stop_system())
         self.command_manager.register_handler("remote_seek", lambda msg, addr: self.seek_video(str(msg.get("value", 0))))
         self.command_manager.register_handler("remote_set", lambda msg, addr: self.set_sync_param(msg.get("param"), msg.get("value")))
+        self.command_manager.register_handler("config_request", lambda msg, addr: self._handle_config_request(msg, addr))
+        self.command_manager.register_handler("discover", lambda msg, addr: self._handle_discover(msg, addr))
 
         self.command_manager.start_listening()
         self.command_manager.start_latency_probing()
 
         # Periodically announce presence so the web UI can discover this leader
         threading.Thread(target=self._announce_presence, daemon=True).start()
+
+    def _send_unicast(self, payload: dict, host: str) -> None:
+        """Send a UDP message directly to a specific host (no broadcast)."""
+        try:
+            self.command_manager._ensure_send_socket()
+            data = json.dumps(payload).encode()
+            self.command_manager.control_sock.sendto(data, (host, self.command_manager.control_port))
+        except Exception:
+            pass
+
+    def _handle_config_request(self, msg: dict, addr: tuple) -> None:
+        role = self.config.role_name()
+        response = {
+            "type": "config_state",
+            "device_id": self.config.device_id,
+            "role": role,
+            "video_file": Path(self.video_path).name if self.video_path else "",
+            "overlay": str(self.config.debug_mode).lower(),
+            "audio_output": self.config.audio_output,
+            "enable_audio": str(self.config.enable_audio).lower(),
+            "enable_midi": str(self.config.enable_midi).lower(),
+            "enable_caching": str(self.config.enable_caching).lower(),
+            "crop_mode": self.config.crop_mode,
+            "enable_latency_compensation": str(self.config.enable_latency_compensation).lower(),
+            "enable_system_logging": str(self.config.enable_system_logging).lower(),
+            "tick_interval": str(self.config.tick_interval),
+            "status": "ok",
+        }
+        self._send_unicast(response, addr[0])
+
+    def _handle_discover(self, msg: dict, addr: tuple) -> None:
+        response = {
+            "type": "leader_announce",
+            "device_id": self.config.device_id,
+            "status": "leader",
+            "video_file": Path(self.video_path).name if self.video_path else "",
+        }
+        self._send_unicast(response, addr[0])
 
     def _announce_presence(self) -> None:
         """Periodically broadcast so the web UI discovers this leader."""

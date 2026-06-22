@@ -9,7 +9,7 @@ import socket
 import threading
 import time
 from typing import Callable, Optional, Dict, Any
-from core.logger import log_info
+from core.logger import log_info, log_warning
 
 
 UDP_MAX_DATAGRAM_SIZE = 65535
