@@ -227,8 +227,8 @@ def build_ui_state() -> Dict[str, Any]:
     devices = [
         {
             "device_id": LOCAL_LEADER_ID,
-            "label": "Simulated leader",
-            "role": "leader",
+            "label": "This computer",
+            "role": config.role_name(),
             "ip": "localhost",
             "status": "leading" if cluster_state.is_master else "ready",
             "online": True,

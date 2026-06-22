@@ -389,6 +389,7 @@ function renderConfigCell(device, videoOptions, scheduleOptions) {
     `;
 }
 
+const updatingDevices = new Set();
 let initialLoadDone = false;
 let currentPreviewVideo = null;
 
@@ -696,13 +697,22 @@ function renderState(state) {
                         ${device.is_optimized ? '<span class="optimized-badge" style="margin-left:4px;">HEVC</span>' : '<span class="not-optimized-badge" style="margin-left:4px;">Non-HEVC</span>'}
                     </div>` : ''}
                     <div class="device-summary-actions">
-                        <button class="btn-small" onclick="viewDeviceLogs('${device.device_id}')">View Logs</button>
-                        ${device.role === 'collaborator' ? `<button class="btn-small" onclick="updateDevice('${device.device_id}', this)">Update & Reboot</button>` : ''}
+                        <button class="btn-small view-logs-btn" data-device-id="${device.device_id}">View Logs</button>
+                        ${device.role === 'collaborator' ? `<button class="btn-small update-device-btn" data-device-id="${device.device_id}">Update & Reboot</button>` : ''}
                     </div>
                 </div>
             `;
             if (cells[0].innerHTML !== newSummaryHtml) {
                 cells[0].innerHTML = newSummaryHtml;
+            }
+
+            // Re-apply updating state after innerHTML replacement
+            if (updatingDevices.has(device.device_id)) {
+                const btn = row.querySelector('.update-device-btn');
+                if (btn) {
+                    btn.disabled = true;
+                    btn.textContent = 'Updating...';
+                }
             }
 
             // 2. Update Config Cell (Surgical)
@@ -830,6 +840,24 @@ document.addEventListener('DOMContentLoaded', () => {
             seekCluster(preview.currentTime);
         });
     }
+
+    const rows = document.getElementById('deviceRows');
+    if (rows) {
+        rows.addEventListener('click', (e) => {
+            const viewBtn = e.target.closest('.view-logs-btn');
+            if (viewBtn) {
+                viewDeviceLogs(viewBtn.dataset.deviceId);
+                return;
+            }
+            const updateBtn = e.target.closest('.update-device-btn');
+            if (updateBtn) {
+                const deviceId = updateBtn.dataset.deviceId;
+                if (!updatingDevices.has(deviceId)) {
+                    updateDevice(deviceId, updateBtn);
+                }
+            }
+        });
+    }
 });
 
 let activeLogDeviceId = null;
@@ -862,14 +890,17 @@ async function viewDeviceLogs(deviceId) {
 }
 
 function updateDevice(deviceId, btn) {
+    updatingDevices.add(deviceId);
     btn.disabled = true;
     btn.textContent = 'Updating...';
-    postJson('/api/device/update', { device_id: deviceId }).then(result => {
+    postJson('/api/device/update', { device_id: deviceId }).then(() => {
         setTimeout(() => {
+            updatingDevices.delete(deviceId);
             btn.disabled = false;
             btn.textContent = 'Update & Reboot';
         }, 10000);
     }).catch(() => {
+        updatingDevices.delete(deviceId);
         btn.disabled = false;
         btn.textContent = 'Update & Reboot';
     });
