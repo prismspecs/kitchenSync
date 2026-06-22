@@ -8,6 +8,7 @@ let latestState = null;
 
 const REFRESH_ICON_SVG = `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"></path><path d="M1 20v-6h6"></path><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>`;
 
+console.log('remote.js v11 loaded');
 async function postJson(path, payload) {
     const response = await fetch(path, {
         method: 'POST',
@@ -890,19 +891,28 @@ async function viewDeviceLogs(deviceId) {
 }
 
 function updateDevice(deviceId, btn) {
+    console.log('updateDevice called for', deviceId);
     updatingDevices.add(deviceId);
-    btn.disabled = true;
-    btn.textContent = 'Updating...';
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Updating...';
+    }
     postJson('/api/device/update', { device_id: deviceId }).then(() => {
+        console.log('updateDevice: POST succeeded for', deviceId);
         setTimeout(() => {
             updatingDevices.delete(deviceId);
+            if (btn) {
+                btn.disabled = false;
+                btn.textContent = 'Update & Reboot';
+            }
+        }, 10000);
+    }).catch((err) => {
+        console.error('updateDevice: POST failed for', deviceId, err);
+        updatingDevices.delete(deviceId);
+        if (btn) {
             btn.disabled = false;
             btn.textContent = 'Update & Reboot';
-        }, 10000);
-    }).catch(() => {
-        updatingDevices.delete(deviceId);
-        btn.disabled = false;
-        btn.textContent = 'Update & Reboot';
+        }
     });
 }
 
