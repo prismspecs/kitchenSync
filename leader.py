@@ -144,29 +144,6 @@ class LeaderPi:
         except Exception as e:
             print(f"[UNICAST] FAILED to send {payload.get('type')} to {host}: {e}")
 
-    def _handle_config_request(self, msg: dict, addr: tuple) -> None:
-        print(f"[CONFIG] Received config_request from {addr[0]}:{addr[1]}")
-        self._refresh_driver_name()
-        role = self.config.role_name()
-        response = {
-            "type": "config_state",
-            "device_id": self.config.device_id,
-            "role": role,
-            "video_file": Path(self.video_path).name if self.video_path else "",
-            "video_driver": self.video_driver_name,
-            "overlay": str(self.config.debug_mode).lower(),
-            "audio_output": self.config.audio_output,
-            "enable_audio": str(self.config.enable_audio).lower(),
-            "enable_midi": str(self.config.enable_midi).lower(),
-            "enable_caching": str(self.config.enable_caching).lower(),
-            "crop_mode": self.config.crop_mode,
-            "enable_latency_compensation": str(self.config.enable_latency_compensation).lower(),
-            "enable_system_logging": str(self.config.enable_system_logging).lower(),
-            "tick_interval": str(self.config.tick_interval),
-            "status": "ok",
-        }
-        self._send_unicast(response, addr[0])
-
     def _handle_discover(self, msg: dict, addr: tuple) -> None:
         print(f"[DISCOVER] Received discover from {addr[0]}:{addr[1]}")
         self._refresh_driver_name()
