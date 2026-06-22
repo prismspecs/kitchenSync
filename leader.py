@@ -443,11 +443,12 @@ class LeaderPi:
         
         self.config.clean_and_save_config("ksync.ini", updates, role="leader")
         
+        restart_keys = {"role", "sync_peer_ip"}
         response = {
             "type": "config_update_result",
             "device_id": self.config.device_id,
             "status": "ok",
-            "requires_restart": "role" in updates
+            "requires_restart": bool(restart_keys & updates.keys())
         }
         self.command_manager.send_command(response, target_pi=None)
         
