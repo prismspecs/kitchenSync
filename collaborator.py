@@ -67,6 +67,8 @@ class CollaboratorPi:
             log_error("Failed to initialize video driver", component="collaborator")
             sys.exit(1)
 
+        self.video_driver_name = driver_name
+
         # Initialize Protocols (MIDI/OSC)
         self.midi_manager = None
         self.midi_scheduler = None
@@ -168,7 +170,8 @@ class CollaboratorPi:
                         status,
                         hard_seeks=self.hard_seek_count,
                         video_file=video_file,
-                        is_optimized=is_optimized
+                        is_optimized=is_optimized,
+                        video_driver=getattr(self, "video_driver_name", ""),
                     )
                 except Exception as e:
                     log_warning(f"Failed to send heartbeat: {e}", component="collaborator")

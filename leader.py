@@ -58,6 +58,7 @@ class LeaderPi:
         self.schedule = Schedule(self.config.schedule_file)
 
         # Video Driver
+        self.video_driver_name = "none"
         driver_name = self.config.video_driver
         try:
             self.video_player = get_video_driver(
@@ -72,11 +73,14 @@ class LeaderPi:
 
         if not self.video_player:
             log_warning(f"Failed to initialize primary video driver '{driver_name}'. Falling back to mock driver.", component="leader")
+            driver_name = "mock"
             try:
                 self.video_player = get_video_driver("mock", debug_mode=self.config.debug_mode, enable_audio=False)
             except Exception as e:
                 log_error(f"Failed to load mock video driver fallback: {e}", component="leader")
                 sys.exit(1)
+
+        self.video_driver_name = driver_name
 
         # Initialize Networking
         self.sync_broadcaster = SyncBroadcaster(
@@ -108,6 +112,7 @@ class LeaderPi:
                 try:
                     self.video_player = get_video_driver("mock", debug_mode=self.config.debug_mode, enable_audio=False)
                     self.video_player.load(self.video_path)
+                    self.video_driver_name = "mock (fallback from gst)"
                     log_info(f"Leader Loaded (Mock fallback): {abs_path}", component="leader")
                 except Exception as me:
                     log_error(f"Failed to load video on mock fallback driver: {me}", component="leader")
@@ -141,12 +146,14 @@ class LeaderPi:
 
     def _handle_config_request(self, msg: dict, addr: tuple) -> None:
         print(f"[CONFIG] Received config_request from {addr[0]}:{addr[1]}")
+        self._refresh_driver_name()
         role = self.config.role_name()
         response = {
             "type": "config_state",
             "device_id": self.config.device_id,
             "role": role,
             "video_file": Path(self.video_path).name if self.video_path else "",
+            "video_driver": self.video_driver_name,
             "overlay": str(self.config.debug_mode).lower(),
             "audio_output": self.config.audio_output,
             "enable_audio": str(self.config.enable_audio).lower(),
@@ -162,11 +169,13 @@ class LeaderPi:
 
     def _handle_discover(self, msg: dict, addr: tuple) -> None:
         print(f"[DISCOVER] Received discover from {addr[0]}:{addr[1]}")
+        self._refresh_driver_name()
         response = {
             "type": "leader_announce",
             "device_id": self.config.device_id,
             "status": "leader",
             "video_file": Path(self.video_path).name if self.video_path else "",
+            "video_driver": self.video_driver_name,
         }
         self._send_unicast(response, addr[0])
 
@@ -227,6 +236,19 @@ class LeaderPi:
         }
         self._send_unicast(response, addr[0])
 
+    def _refresh_driver_name(self) -> None:
+        if self.video_player is None:
+            self.video_driver_name = "none"
+            return
+        driver_type = type(self.video_player).__name__
+        if driver_type == "GstDriver":
+            sink = getattr(self.video_player, "video_sink_name", None)
+            self.video_driver_name = "gst (fakesink)" if sink == "fakesink" else "gst"
+        elif driver_type == "MockVideoDriver":
+            self.video_driver_name = "mock"
+        else:
+            self.video_driver_name = driver_type.lower()
+
     def start_system(self) -> None:
         """Start the synchronized playback system"""
         if self.system_state.is_running:
@@ -248,6 +270,7 @@ class LeaderPi:
             log_info("Starting video playback...", component="video")
             try:
                 self.video_player.play()
+                self._refresh_driver_name()
                 # If we are on a desktop with a display, try to make it fullscreen
                 if os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"):
                     self.video_player.set_fullscreen(True)
@@ -271,6 +294,7 @@ class LeaderPi:
         self.sync_broadcaster.set_time_provider(media_time_provider)
         self.sync_broadcaster.set_duration_provider(self.video_player.get_duration)
         self.sync_broadcaster.leader_id = self.config.device_id
+        self.sync_broadcaster.is_wall_clock = "fakesink" in self.video_driver_name or "mock" in self.video_driver_name
         self.sync_broadcaster.start_broadcasting(self.system_state.start_time)
 
         # Start MIDI playback

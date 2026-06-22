@@ -34,7 +34,7 @@ class ClusterState:
 LOCAL_LEADER_ID = "remote-leader"
 
 cluster_state = ClusterState()
-config = ConfigManager("leader_config.ini")
+config = ConfigManager("ksync_webui.ini")
 video_manager = VideoFileManager(config.video_file, config.usb_mount_point)
 command_manager = CommandManager()
 sync_broadcaster = SyncBroadcaster()
@@ -226,6 +226,7 @@ def build_ui_state() -> Dict[str, Any]:
             meta = video_manager.get_metadata(leader_video_path)
             leader_optimized = meta.get("is_optimized", False)
 
+    local_config = config_snapshots.get(LOCAL_LEADER_ID, {})
     devices = [
         {
             "device_id": LOCAL_LEADER_ID,
@@ -235,10 +236,11 @@ def build_ui_state() -> Dict[str, Any]:
             "status": "leading" if cluster_state.is_master else "ready",
             "online": True,
             "latency_ms": round(avg_rtt * 1000, 1) if avg_rtt > 0 else None,
-            "config": config_snapshots.get(LOCAL_LEADER_ID),
+            "config": local_config,
             "message": config_messages.get(LOCAL_LEADER_ID),
             "media": media_snapshots.get(LOCAL_LEADER_ID, []),
             "video_file": leader_video,
+            "video_driver": local_config.get("video_driver", config.video_driver),
             "is_optimized": leader_optimized,
         }
     ]
@@ -277,6 +279,7 @@ def build_ui_state() -> Dict[str, Any]:
                 "status": info.get("status", "unknown"),
                 "online": info.get("online", False),
                 "video_file": info.get("video_file", ""),
+                "video_driver": info.get("video_driver", snapshot.get("video_driver", "")),
                 "is_optimized": info.get("is_optimized", False),
                 "hard_seeks": info.get("hard_seeks", 0),
                 "latency_ms": round(command_manager.get_device_average_rtt(device_id) * 1000, 1)
@@ -768,7 +771,7 @@ class RemoteHandler(BaseHTTPRequestHandler):
                 filtered_updates = {
                     key: value for key, value in updates.items() if key in editable_keys
                 }
-                config.clean_and_save_config("leader_config.ini", filtered_updates, role="leader")
+                config.clean_and_save_config("ksync_webui.ini", filtered_updates, role="leader")
                 update_runtime_from_config()
                 
                 config_snapshots[LOCAL_LEADER_ID] = build_config_snapshot(LOCAL_LEADER_ID, "leader", config)
@@ -800,7 +803,7 @@ class RemoteHandler(BaseHTTPRequestHandler):
 
             if device_id == LOCAL_LEADER_ID:
                 defaults = config.get_default_values("leader")
-                config.clean_and_save_config("leader_config.ini", defaults, role="leader")
+                config.clean_and_save_config("ksync_webui.ini", defaults, role="leader")
                 update_runtime_from_config()
                 refresh_local_snapshot()
                 config_messages[LOCAL_LEADER_ID] = {
@@ -848,6 +851,7 @@ def _handle_leader_announce(msg: Dict[str, Any], addr: tuple) -> None:
         "last_seen": time.time(),
         "status": msg.get("status", "leader"),
         "video_file": msg.get("video_file", ""),
+        "video_driver": msg.get("video_driver", ""),
         "is_optimized": False,
         "hard_seeks": 0,
     }

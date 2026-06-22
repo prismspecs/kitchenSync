@@ -68,6 +68,11 @@ class SyncBroadcaster:
         self.time_provider: Optional[Callable[[], float]] = None
         # Optional provider that returns the leader's media duration (seconds)
         self.duration_provider: Optional[Callable[[], float]] = None
+        # When True, even if time_provider returns a value, label source as "wall".
+        # Used when the driver is in fakesink/mock mode so the collaborator doesn't
+        # compare wall-clock position against its own hardware-decoded position
+        # (which has ~400ms pipeline delay).
+        self.is_wall_clock: bool = False
 
     def setup_socket(self) -> None:
         """Initialize broadcast socket"""
@@ -98,7 +103,8 @@ class SyncBroadcaster:
                             provided_time = self.time_provider()
                             if provided_time is not None:
                                 current_time = float(provided_time)
-                                time_source = "media"
+                                if not self.is_wall_clock:
+                                    time_source = "media"
                         
                         if current_time is None:
                             current_time = time.time() - self.start_time
@@ -516,6 +522,7 @@ class CommandManager:
                 "last_seen": time.time(),
                 "status": msg.get("status", "unknown"),
                 "video_file": msg.get("video_file", ""),
+                "video_driver": msg.get("video_driver", ""),
                 "is_optimized": msg.get("is_optimized", False),
                 "hard_seeks": msg.get("hard_seeks", 0),
             }
@@ -528,6 +535,10 @@ class CommandManager:
                 "video_file": msg.get(
                     "video_file",
                     self.collaborators.get(device_id, {}).get("video_file", ""),
+                ),
+                "video_driver": msg.get(
+                    "video_driver",
+                    self.collaborators.get(device_id, {}).get("video_driver", ""),
                 ),
                 "is_optimized": msg.get("is_optimized", False),
                 "hard_seeks": msg.get("hard_seeks", 0),
@@ -637,7 +648,7 @@ class CommandListener:
         except Exception:
             pass
 
-    def send_heartbeat(self, device_id: str, status: str = "ready", hard_seeks: int = 0, video_file: str = "", is_optimized: bool = False) -> None:
+    def send_heartbeat(self, device_id: str, status: str = "ready", hard_seeks: int = 0, video_file: str = "", is_optimized: bool = False, video_driver: str = "") -> None:
         """Send heartbeat to leader"""
         heartbeat = {
             "type": "heartbeat",
@@ -646,5 +657,6 @@ class CommandListener:
             "hard_seeks": hard_seeks,
             "video_file": video_file,
             "is_optimized": is_optimized,
+            "video_driver": video_driver,
         }
         self.send_message(heartbeat)

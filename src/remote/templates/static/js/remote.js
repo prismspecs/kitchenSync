@@ -689,6 +689,7 @@ function renderState(state) {
                         ${statusTooltip}
                     </div>
                     <div class="device-summary-line device-summary-role">${escapeHtml(device.role)}</div>
+                    ${device.video_driver ? `<div class="device-summary-line device-summary-driver">Driver: ${escapeHtml(device.video_driver)}</div>` : ''}
                     <div class="device-summary-line device-summary-ip">${escapeHtml(device.ip)}</div>
                     <div class="device-summary-line device-summary-latency">${escapeHtml(latencyText)}</div>
                     ${device.role === 'collaborator' ? `<div class="device-summary-line device-summary-seeks">Hard Seeks: ${device.hard_seeks || 0}</div>` : ''}

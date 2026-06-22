@@ -58,7 +58,7 @@ _setup_handlers()
 
 def _should_log(level: int) -> bool:
     """Check if we should log based on current settings."""
-    if level >= logging.ERROR:
+    if level >= logging.WARNING:
         return True
     return _ENABLE_SYSTEM_LOGGING
 

@@ -42,7 +42,7 @@ If you are testing from SSH or a text console, ensure the local X session is run
 
 **Run Leader:**
 ```bash
-./.venv/bin/python3 leader.py --config leader_config.ini --debug
+./.venv/bin/python3 leader.py --config ksync_webui.ini --debug
 ```
 
 **Run Collaborator:**

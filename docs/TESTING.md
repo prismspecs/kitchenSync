@@ -45,7 +45,7 @@ Testing between your Desktop and the Raspberry Pi (gSync).
 
 ### Scenario B: Pi as Leader, Desktop as Collaborator
 1. **On Pi:** start X first with `./tools/start_x.sh` if no local session is already running.
-2. **On Pi:** `DISPLAY=:0 python3 leader.py --config leader_config.ini --debug`
+2. **On Pi:** `DISPLAY=:0 python3 leader.py --config ksync_webui.ini --debug`
 3. **On Desktop:** `python3 tools/simulator.py --mode collaborator`
 4. **Verify:** Open `http://DESKTOP_IP:8080` to see real-time drift analysis of your Desktop relative to the Pi.
 
