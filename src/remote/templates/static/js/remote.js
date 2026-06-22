@@ -276,6 +276,8 @@ function renderField(deviceId, field, value, videoOptions, scheduleOptions) {
 
     const type = field.type === 'int' || field.type === 'float' ? 'number' : 'text';
     const step = field.type === 'float' ? 'step="any"' : '';
+    const min = field.min != null ? `min="${field.min}"` : '';
+    const max = field.max != null ? `max="${field.max}"` : '';
     let list = '';
     if (field.key === 'video_file' && videoOptions.length) {
         list = 'list="videoSuggestions"';
@@ -286,7 +288,7 @@ function renderField(deviceId, field, value, videoOptions, scheduleOptions) {
     return `
         <div class="row">
             <label for="${fieldId}" class="field-label">${escapeHtml(field.label)}${tooltip}</label>
-            <input id="${fieldId}" data-key="${field.key}" type="${type}" value="${escapeHtml(safeValue)}" ${step} ${list}>
+            <input id="${fieldId}" data-key="${field.key}" type="${type}" value="${escapeHtml(safeValue)}" ${step} ${min} ${max} ${list}>
         </div>
     `;
 }
