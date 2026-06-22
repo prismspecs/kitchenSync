@@ -115,7 +115,9 @@ class LeaderPi:
             log_error("No video file found in leader search paths!", component="leader")
 
         # Register remote control handlers
+        self.command_manager.register_handler("start", lambda msg, addr: self.start_system())
         self.command_manager.register_handler("remote_start", lambda msg, addr: self.start_system())
+        self.command_manager.register_handler("stop", lambda msg, addr: self.stop_system())
         self.command_manager.register_handler("remote_stop", lambda msg, addr: self.stop_system())
         self.command_manager.register_handler("remote_seek", lambda msg, addr: self.seek_video(str(msg.get("value", 0))))
         self.command_manager.register_handler("remote_set", lambda msg, addr: self.set_sync_param(msg.get("param"), msg.get("value")))
