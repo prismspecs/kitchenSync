@@ -95,6 +95,7 @@ class GstDriver(VideoDriver):
         self.pipeline_kind = "playbin"
         self.is_seeking = False
         self._gapless_looping = False
+        self._decoders_prioritized = False
         
         # Position polling
         self._cached_position = 0.0
@@ -151,7 +152,14 @@ class GstDriver(VideoDriver):
         return ["avdec_h264", "avdec_h265"]
 
     def _reprioritize_decoders(self):
-        """Prefer hardware decoders and sinks over software when both exist."""
+        """Prefer hardware decoders and sinks over software when both exist.
+        
+        Only runs once per process since GStreamer ranks are global.
+        """
+        if self._decoders_prioritized:
+            return
+        self._decoders_prioritized = True
+
         available_hw = []
         primary_rank = int(getattr(Gst.Rank, "PRIMARY", 256))
         secondary_rank = int(getattr(Gst.Rank, "SECONDARY", 128))
@@ -159,11 +167,14 @@ class GstDriver(VideoDriver):
         hw_decoders = self._hardware_decoder_names()
 
         # Optimize decoder rankings for Raspberry Pi 5:
-        # - Pi 5 (BCM2712) lacks H.264 hardware decoding, so we disable H.264 hardware decoders to force software fallback.
-        # - Pi 5 has a custom stateless HEVC hardware decoder (v4l2slhevcdec). We keep this active but disable
-        #   other hardware HEVC decoders (like v4l2slh265dec, v4l2h265dec) which can cause stalls/hangs under X11/GL.
+        # - Pi 5 (BCM2712) lacks H.264 hardware decoding, so we disable H.264
+        #   hardware decoders to force software fallback.
+        # - Pi 5 has a stateless HEVC hardware decoder. Different firmware
+        #   versions may expose it as v4l2slhevcdec or v4l2slh265dec. We check
+        #   what's actually available so we don't disable the only working decoder.
         pi_model = get_pi_model()
-        if "Raspberry Pi 5" in pi_model:
+        on_pi5 = "Raspberry Pi 5" in pi_model
+        if on_pi5:
             log_info(f"Gst: Detected Raspberry Pi 5 ('{pi_model}'). Demoting unsupported/obsolete hardware decoders.")
             
             # Disable H.264 hardware decoders (not present in hardware)
@@ -171,18 +182,33 @@ class GstDriver(VideoDriver):
             for name in unsupported_h264:
                 factory = Gst.ElementFactory.find(name)
                 if factory:
-                    factory.set_rank(0)  # Gst.Rank.NONE
-            
-            # Disable problematic HEVC hardware decoders, keeping only the stateless 'v4l2slhevcdec' active
-            unsupported_hevc = ["v4l2slh265dec", "v4l2h265dec", "vah265dec", "vaapih265dec", "nvh265dec"]
-            for name in unsupported_hevc:
+                    factory.set_rank(0)
+
+            # Check which HEVC hardware decoders are actually available on this system.
+            # v4l2slhevcdec is the newer Pi 5 decoder; v4l2slh265dec is the older one.
+            # Only disable v4l2slh265dec if v4l2slhevcdec is present (strictly better).
+            has_slhevcdec = Gst.ElementFactory.find("v4l2slhevcdec") is not None
+            has_slh265dec = Gst.ElementFactory.find("v4l2slh265dec") is not None
+
+            if has_slhevcdec and has_slh265dec:
+                # Newer decoder is available; disable the older one to avoid stalls
+                factory = Gst.ElementFactory.find("v4l2slh265dec")
+                if factory:
+                    factory.set_rank(0)
+
+            # VA-API / NVIDIA decoders are irrelevant on Pi 5 — disable if present
+            for name in ["v4l2h265dec", "vah265dec", "vaapih265dec", "nvh265dec"]:
                 factory = Gst.ElementFactory.find(name)
                 if factory:
-                    factory.set_rank(0)  # Gst.Rank.NONE
-            
-            # Filter our hardware list to reflect these changes
-            disabled_names = set(unsupported_h264 + unsupported_hevc)
-            hw_decoders = [name for name in hw_decoders if name not in disabled_names]
+                    factory.set_rank(0)
+
+            # Build the list of decoders we still want to prioritise
+            disabled_hevc = set()
+            if has_slhevcdec and has_slh265dec:
+                disabled_hevc.add("v4l2slh265dec")
+            disabled_hevc.update(["v4l2h265dec", "vah265dec", "vaapih265dec", "nvh265dec"])
+            disabled_names = set(unsupported_h264) | disabled_hevc
+            hw_decoders = [n for n in hw_decoders if n not in disabled_names]
 
         # 1. Prioritize Hardware Decoders
         for offset, decoder_name in enumerate(hw_decoders):
@@ -519,13 +545,9 @@ class GstDriver(VideoDriver):
             self._last_poll_time = time.time()
             self.seek(0)
         elif t == Gst.MessageType.ASYNC_DONE:
-            # Seek complete. Add a tiny grace period to allow hardware to settle
-            def clear_seeking():
-                time.sleep(0.2)
-                self.is_seeking = False
+            self.is_seeking = False
+            if self.debug_mode:
                 log_info("Gst: Seek operation settled")
-            
-            threading.Thread(target=clear_seeking, daemon=True).start()
         elif t == Gst.MessageType.ERROR:
             err, debug = message.parse_error()
             log_error(f"Gst Error: {err.message}")
@@ -562,6 +584,32 @@ class GstDriver(VideoDriver):
         success, current, _ = self.pipeline.get_state(timeout_ms * millisecond)
         return success != Gst.StateChangeReturn.FAILURE and current >= Gst.State.PAUSED
 
+    def _try_fakesink_fallback(self, reason: str) -> bool:
+        """Attempt recovery by switching to fakesink video driver."""
+        if getattr(self, "video_sink_name", None) == "fakesink":
+            return False
+        log_warning(f"Gst: {reason}. Retrying with 'fakesink'...", component="video")
+        self.stop()
+        original = self.video_sink_name
+        self.video_sink_name = "fakesink"
+        try:
+            if self.video_path and self.load(self.video_path):
+                ret = self.pipeline.set_state(Gst.State.PLAYING)
+                if ret != Gst.StateChangeReturn.FAILURE:
+                    success, current, _ = self.pipeline.get_state(1.0 * Gst.SECOND)
+                    if success != Gst.StateChangeReturn.FAILURE:
+                        log_info("Gst: Successfully recovered playback using fakesink fallback.", component="video")
+                        self.state = PlayerState.PLAYING
+                        self._cached_position = 0.0
+                        self._last_poll_time = time.time()
+                        self._start_polling()
+                        self._enable_gapless_looping()
+                        return True
+        finally:
+            if not self.state == PlayerState.PLAYING:
+                self.video_sink_name = original
+        return False
+
     def play(self) -> bool:
         if not self.pipeline:
             return False
@@ -569,28 +617,8 @@ class GstDriver(VideoDriver):
         ret = self.pipeline.set_state(Gst.State.PLAYING)
         if ret == Gst.StateChangeReturn.FAILURE:
             log_error("Gst: Failed to set pipeline to PLAYING")
-            
-            # Fallback strategy: If video sink failed, try fakesink
-            if getattr(self, "video_sink_name", None) != "fakesink":
-                log_warning("Gst: PLAYING state change failed. Retrying video playback with 'fakesink'...", component="video")
-                self.stop()
-                original_sink_name = self.video_sink_name
-                self.video_sink_name = "fakesink"
-                if self.video_path and self.load(self.video_path):
-                    ret = self.pipeline.set_state(Gst.State.PLAYING)
-                    if ret != Gst.StateChangeReturn.FAILURE:
-                        # Success with fakesink! Wait for state to settle
-                        success, current, _ = self.pipeline.get_state(1.0 * Gst.SECOND)
-                        if success != Gst.StateChangeReturn.FAILURE:
-                            log_info("Gst: Successfully recovered playback using fakesink fallback.", component="video")
-                            self.state = PlayerState.PLAYING
-                            self._cached_position = 0.0
-                            self._last_poll_time = time.time()
-                            self._start_polling()
-                            self._enable_gapless_looping()
-                            return True
-                self.video_sink_name = original_sink_name
-
+            if self._try_fakesink_fallback("PLAYING state change failed"):
+                return True
             self.state = PlayerState.ERROR
             return False
             
@@ -598,27 +626,8 @@ class GstDriver(VideoDriver):
         success, current, _ = self.pipeline.get_state(1.0 * Gst.SECOND)
         if success == Gst.StateChangeReturn.FAILURE:
             log_error("Gst: Pipeline failed to reach a stable state")
-            
-            # Fallback strategy for state settle failure: If video sink failed, try fakesink
-            if getattr(self, "video_sink_name", None) != "fakesink":
-                log_warning("Gst: Pipeline stable state check failed. Retrying video playback with 'fakesink'...", component="video")
-                self.stop()
-                original_sink_name = self.video_sink_name
-                self.video_sink_name = "fakesink"
-                if self.video_path and self.load(self.video_path):
-                    ret = self.pipeline.set_state(Gst.State.PLAYING)
-                    if ret != Gst.StateChangeReturn.FAILURE:
-                        success, current, _ = self.pipeline.get_state(1.0 * Gst.SECOND)
-                        if success != Gst.StateChangeReturn.FAILURE:
-                            log_info("Gst: Successfully recovered playback using fakesink fallback.", component="video")
-                            self.state = PlayerState.PLAYING
-                            self._cached_position = 0.0
-                            self._last_poll_time = time.time()
-                            self._start_polling()
-                            self._enable_gapless_looping()
-                            return True
-                self.video_sink_name = original_sink_name
-
+            if self._try_fakesink_fallback("Pipeline stable state check failed"):
+                return True
             self.state = PlayerState.ERROR
             return False
 
