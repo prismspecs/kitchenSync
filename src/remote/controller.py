@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import json
 import os
+import subprocess
 import sys
 import threading
 import time
@@ -48,6 +49,31 @@ log_events: Dict[str, threading.Event] = {}
 
 # Media state cache
 media_snapshots: Dict[str, List[Dict[str, Any]]] = {}
+
+
+def _update_device(device_id: str) -> None:
+    """SSH into a collaborator Pi, git pull, and reboot."""
+    info = command_manager.collaborators.get(device_id)
+    if not info:
+        log_warning(f"Update: device {device_id} not found", component="remote")
+        return
+    ip = info.get("ip")
+    if not ip:
+        log_warning(f"Update: device {device_id} has no IP", component="remote")
+        return
+    ssh_user = "pi"
+    cmd = [
+        "ssh", "-o", "ConnectTimeout=5", "-o", "StrictHostKeyChecking=no",
+        "-o", "BatchMode=yes",
+        f"{ssh_user}@{ip}",
+        "cd ~/kitchenSync && git pull && sudo reboot",
+    ]
+    try:
+        subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+    except subprocess.TimeoutExpired:
+        pass  # expected — reboot kills the SSH connection
+    except Exception as e:
+        log_warning(f"Update failed for {device_id}: {e}", component="remote")
 
 
 def compute_latency_compensation(avg_rtt: float, enabled: bool, latency_factor: float) -> float:
@@ -204,6 +230,18 @@ def build_ui_state() -> Dict[str, Any]:
             "is_optimized": leader_optimized,
         }
     ]
+
+    # Prune stale config snapshots/messages for device IDs no longer in the
+    # live collaborators list (handles device renames gracefully).
+    now = time.time()
+    for device_id in list(config_snapshots.keys()):
+        if device_id != LOCAL_LEADER_ID and device_id not in collaborators:
+            if now - config_snapshots[device_id].get("updated_at", 0) > 300:
+                del config_snapshots[device_id]
+    for device_id in list(config_messages.keys()):
+        if device_id != LOCAL_LEADER_ID and device_id not in collaborators:
+            if now - config_messages[device_id].get("updated_at", 0) > 300:
+                del config_messages[device_id]
 
     known_collaborator_ids = set(collaborators)
     known_collaborator_ids.update(
@@ -745,6 +783,15 @@ class RemoteHandler(BaseHTTPRequestHandler):
                 target_pi=device_id,
             )
             self._send_json({"status": "requested"}, status=202)
+            return
+
+        if action == "api/device/update":
+            device_id = payload.get("device_id")
+            if not device_id:
+                self._send_json({"status": "error", "message": "device_id required"}, status=400)
+                return
+            threading.Thread(target=_update_device, args=(device_id,), daemon=True).start()
+            self._send_json({"status": "started", "message": "Update initiated"})
             return
 
         self.send_error(404)

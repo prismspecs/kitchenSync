@@ -33,21 +33,44 @@ async function uploadMedia(deviceId = null) {
     formData.append('file', file);
     
     let url = '/api/media/upload';
-    if (deviceId && deviceId !== 'remote-leader') {
+    const isRemote = deviceId && deviceId !== 'remote-leader';
+    if (isRemote) {
         url += `?target_device_id=${encodeURIComponent(deviceId)}`;
     }
 
-    status.textContent = 'Uploading...';
+    status.textContent = '0%';
+    status.style.display = 'block';
+
     try {
-        const response = await fetch(url, {
-            method: 'POST',
-            body: formData
+        const xhr = new XMLHttpRequest();
+        const result = await new Promise((resolve, reject) => {
+            xhr.upload.addEventListener('progress', (e) => {
+                if (e.lengthComputable) {
+                    status.textContent = `${Math.round((e.loaded / e.total) * 100)}%`;
+                }
+            });
+            xhr.addEventListener('load', () => {
+                if (xhr.status >= 200 && xhr.status < 300) {
+                    try { resolve(JSON.parse(xhr.responseText)); }
+                    catch { resolve({ status: 'ok' }); }
+                } else {
+                    try { resolve(JSON.parse(xhr.responseText)); }
+                    catch { reject(new Error(`Upload failed (${xhr.status})`)); }
+                }
+            });
+            xhr.addEventListener('error', () => reject(new Error('Network error during upload')));
+            xhr.open('POST', url);
+            xhr.send(formData);
         });
-        const result = await response.json();
+
         if (result.status === 'ok') {
-            status.textContent = deviceId ? 'Transferring...' : 'Uploaded: ' + result.filename;
+            if (isRemote) {
+                status.textContent = 'Transferred';
+            } else {
+                status.textContent = 'Uploaded: ' + result.filename;
+            }
             input.value = '';
-            setTimeout(refresh, deviceId ? 2000 : 500);
+            setTimeout(refresh, isRemote ? 3000 : 500);
         } else {
             status.textContent = 'Error: ' + (result.message || 'Upload failed');
         }
@@ -428,7 +451,7 @@ function renderMediaCell(device, leaderMedia) {
                     <input type="file" id="upload-input-${device.device_id}" class="file-input-small">
                     <button class="btn-small" onclick="uploadMedia('${device.device_id}')">Upload</button>
                 </div>
-                <div id="upload-status-${device.device_id}" class="message info"></div>
+                <div id="upload-status-${device.device_id}" class="message info" style="display:none"></div>
             </div>
         `;
 
@@ -674,6 +697,7 @@ function renderState(state) {
                     </div>` : ''}
                     <div class="device-summary-line" style="margin-top: 8px;">
                         <button class="btn-small" onclick="viewDeviceLogs('${device.device_id}')">View Logs</button>
+                        ${device.role === 'collaborator' ? `<button class="btn-small" onclick="updateDevice('${device.device_id}', this)" style="margin-left:4px">Update & Reboot</button>` : ''}
                     </div>
                 </div>
             `;
@@ -835,6 +859,20 @@ async function viewDeviceLogs(deviceId) {
             body.textContent = `Error: ${err.message}`;
         }
     }
+}
+
+function updateDevice(deviceId, btn) {
+    btn.disabled = true;
+    btn.textContent = 'Updating...';
+    postJson('/api/device/update', { device_id: deviceId }).then(result => {
+        setTimeout(() => {
+            btn.disabled = false;
+            btn.textContent = 'Update & Reboot';
+        }, 10000);
+    }).catch(() => {
+        btn.disabled = false;
+        btn.textContent = 'Update & Reboot';
+    });
 }
 
 function closeLogModal() {
