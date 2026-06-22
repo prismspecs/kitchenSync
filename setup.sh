@@ -130,6 +130,11 @@ echo "Enabling kitchensync.service..."
 sudo systemctl daemon-reload
 sudo systemctl enable kitchensync.service
 
+# 8. Sudo Permissions (password-less reboot for remote update)
+echo "Setting up sudo permissions..."
+echo "$CURRENT_USER ALL=(ALL) NOPASSWD: /sbin/reboot, /sbin/shutdown" | sudo tee /etc/sudoers.d/ksync-reboot
+sudo chmod 440 /etc/sudoers.d/ksync-reboot
+
 echo "-------------------------------------------------------"
 echo "Setup Complete! Please REBOOT for changes to take effect."
 echo "Upon reboot, the Pi will automatically:"
