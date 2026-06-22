@@ -8,7 +8,7 @@ let latestState = null;
 
 const REFRESH_ICON_SVG = `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"></path><path d="M1 20v-6h6"></path><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>`;
 
-console.log('remote.js v11 loaded');
+console.log('remote.js v13 loaded');
 async function postJson(path, payload) {
     const response = await fetch(path, {
         method: 'POST',
@@ -19,6 +19,14 @@ async function postJson(path, payload) {
         return null;
     }
     return response.json();
+}
+
+function clampValue(input, min, max) {
+    let val = parseFloat(input.value);
+    if (isNaN(val)) return;
+    if (min !== '' && val < min) val = min;
+    if (max !== '' && val > max) val = max;
+    input.value = val;
 }
 
 async function uploadMedia(deviceId = null) {
@@ -275,9 +283,15 @@ function renderField(deviceId, field, value, videoOptions, scheduleOptions) {
     }
 
     const type = field.type === 'int' || field.type === 'float' ? 'number' : 'text';
-    const step = field.type === 'float' ? 'step="any"' : '';
+    let step = '';
+    if (field.type === 'int') {
+        step = field.step != null ? `step="${field.step}"` : 'step="1"';
+    } else if (field.type === 'float') {
+        step = field.step != null ? `step="${field.step}"` : 'step="any"';
+    }
     const min = field.min != null ? `min="${field.min}"` : '';
     const max = field.max != null ? `max="${field.max}"` : '';
+    const clamp = (field.min != null || field.max != null) ? `onchange="clampValue(this, ${field.min ?? ''}, ${field.max ?? ''})"` : '';
     let list = '';
     if (field.key === 'video_file' && videoOptions.length) {
         list = 'list="videoSuggestions"';
@@ -288,7 +302,7 @@ function renderField(deviceId, field, value, videoOptions, scheduleOptions) {
     return `
         <div class="row">
             <label for="${fieldId}" class="field-label">${escapeHtml(field.label)}${tooltip}</label>
-            <input id="${fieldId}" data-key="${field.key}" type="${type}" value="${escapeHtml(safeValue)}" ${step} ${min} ${max} ${list}>
+            <input id="${fieldId}" data-key="${field.key}" type="${type}" value="${escapeHtml(safeValue)}" ${step} ${min} ${max} ${clamp} ${list}>
         </div>
     `;
 }
@@ -694,8 +708,8 @@ function renderState(state) {
                     ${device.video_driver ? `<div class="device-summary-line device-summary-driver">Driver: ${escapeHtml(device.video_driver)}</div>` : ''}
                     <div class="device-summary-line device-summary-ip">${escapeHtml(device.ip)}</div>
                     <div class="device-summary-line device-summary-latency">${escapeHtml(latencyText)}</div>
-                    ${device.sync_deviation ? `<div class="device-summary-line device-summary-deviation">Dev: ${device.sync_deviation > 0 ? '+' : ''}${device.sync_deviation.toFixed(3)}s</div>` : ''}
-                    ${device.playback_rate && device.playback_rate !== 1.0 ? `<div class="device-summary-line device-summary-rate">Rate: ${device.playback_rate.toFixed(4)}x</div>` : ''}
+                    ${device.sync_deviation != null ? `<div class="device-summary-line device-summary-deviation">Dev: ${device.sync_deviation > 0 ? '+' : ''}${device.sync_deviation.toFixed(3)}s</div>` : ''}
+                    ${device.playback_rate != null ? `<div class="device-summary-line device-summary-rate">Rate: ${device.playback_rate.toFixed(4)}x</div>` : ''}
                     ${device.role === 'collaborator' ? `<div class="device-summary-line device-summary-seeks">Hard Seeks: ${device.hard_seeks || 0}</div>` : ''}
                     ${device.video_file ? `
                     <div class="device-summary-line device-summary-playing" style="margin-top: 4px; font-size: 11px; color: #555;">
