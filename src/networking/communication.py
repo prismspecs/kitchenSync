@@ -82,6 +82,11 @@ class SyncBroadcaster:
         except Exception as e:
             raise NetworkError(f"Failed to setup sync socket: {e}")
 
+    def set_unicast_targets(self, targets: list[str], use_broadcast: bool = False) -> None:
+        """Set unicast addresses to send sync to, one per peer."""
+        self._unicast_targets = targets
+        self._use_broadcast = use_broadcast
+
     def start_broadcasting(self, start_time: float) -> None:
         """Start broadcasting time sync"""
         self.start_time = start_time
@@ -90,7 +95,12 @@ class SyncBroadcaster:
         if not self.sync_sock:
             self.setup_socket()
 
-        log_info(f"Sync: Starting broadcast on {self.broadcast_ip}:{self.sync_port}", component="network")
+        targets = getattr(self, "_unicast_targets", [])
+        use_bcast = getattr(self, "_use_broadcast", not bool(targets))
+        if targets:
+            log_info(f"Sync: Sending unicast to {targets} on port {self.sync_port}", component="network")
+        if use_bcast:
+            log_info(f"Sync: Broadcasting on {self.broadcast_ip}:{self.sync_port}", component="network")
 
         def broadcast_loop():
             while self.is_running:
@@ -129,9 +139,14 @@ class SyncBroadcaster:
                             }
                         )
 
-                        self.sync_sock.sendto(
-                            payload.encode(), (self.broadcast_ip, self.sync_port)
-                        )
+                        if use_bcast:
+                            self.sync_sock.sendto(
+                                payload.encode(), (self.broadcast_ip, self.sync_port)
+                            )
+                        for target in targets:
+                            self.sync_sock.sendto(
+                                payload.encode(), (target, self.sync_port)
+                            )
                     except Exception:
                         pass
 
