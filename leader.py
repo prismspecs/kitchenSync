@@ -133,10 +133,12 @@ class LeaderPi:
             self.command_manager._ensure_send_socket()
             data = json.dumps(payload).encode()
             self.command_manager.control_sock.sendto(data, (host, self.command_manager.control_port))
-        except Exception:
-            pass
+            print(f"[UNICAST] Sent {payload.get('type')} to {host}")
+        except Exception as e:
+            print(f"[UNICAST] FAILED to send {payload.get('type')} to {host}: {e}")
 
     def _handle_config_request(self, msg: dict, addr: tuple) -> None:
+        print(f"[CONFIG] Received config_request from {addr[0]}:{addr[1]}")
         role = self.config.role_name()
         response = {
             "type": "config_state",
@@ -157,6 +159,7 @@ class LeaderPi:
         self._send_unicast(response, addr[0])
 
     def _handle_discover(self, msg: dict, addr: tuple) -> None:
+        print(f"[DISCOVER] Received discover from {addr[0]}:{addr[1]}")
         response = {
             "type": "leader_announce",
             "device_id": self.config.device_id,

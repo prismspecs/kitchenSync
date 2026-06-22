@@ -336,6 +336,7 @@ class CommandManager:
         try:
             self.control_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             self.control_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            self.control_sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
             
             # Use SO_REUSEPORT if available (Linux/macOS) to allow multiple 
             # listeners on the same machine to share the port.
