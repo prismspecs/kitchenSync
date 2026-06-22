@@ -531,7 +531,7 @@ class CollaboratorPi:
 
             # Seek overrides for loop boundaries
             allow_hard_seek = abs(median_dev) > 5.0 if is_near_loop else abs(median_dev) > 2.0
-            allow_accurate_seek = False if is_near_loop else abs(median_dev) > self.max_drift
+            allow_accurate_seek = False if is_near_loop else abs(median_dev) >= self.max_drift
 
             if allow_hard_seek:
                 self.hard_seek_count += 1
