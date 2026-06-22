@@ -232,19 +232,29 @@ class CollaboratorPi:
         if not self._message_targets_this_device(msg):
             return
         log_info("Device update requested — git pull && reboot", component="collaborator")
+        print("[UPDATE] Starting device update sequence...")
 
         def _do_update():
             import subprocess
-            import shutil
             repo = os.path.dirname(os.path.abspath(__file__))
             try:
-                subprocess.run(
+                result = subprocess.run(
                     ["git", "pull"],
                     cwd=repo, capture_output=True, text=True, timeout=30,
                 )
+                print(f"[UPDATE] git pull: {result.stdout.strip() or result.stderr.strip()}")
             except Exception as e:
                 log_warning(f"Update git pull failed: {e}", component="collaborator")
-            subprocess.run(["sudo", "reboot"], capture_output=True)
+                print(f"[UPDATE] git pull failed: {e}")
+
+            import time
+            time.sleep(2)
+            result = subprocess.run(
+                ["sudo", "-n", "reboot"], capture_output=True, text=True,
+            )
+            print(f"[UPDATE] sudo reboot: rc={result.returncode}, {result.stdout.strip() or result.stderr.strip()}")
+            if result.returncode != 0:
+                log_error("Device update: sudo reboot failed — gsync user may need NOPASSWD in sudoers", component="collaborator")
 
         threading.Thread(target=_do_update, daemon=True).start()
 
