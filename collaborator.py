@@ -94,6 +94,8 @@ class CollaboratorPi:
         # Sync state
         self.last_sync_at = 0
         self.active_leader_id = None
+        self._sync_source = "media"
+        self._play_start_wall = None
         self.video_start_time = None
         self.debug_sync_logging = self.config.debug_mode
         self.critical_window_logging = False
@@ -439,16 +441,17 @@ class CollaboratorPi:
 
         threading.Thread(target=download_task, daemon=True).start()
 
-    def _handle_sync(self, leader_time: float, received_at: float, leader_id: str = "unknown", sent_at: float = None) -> None:
+    def _handle_sync(self, leader_time: float, received_at: float, leader_id: str = "unknown", sent_at: float = None, source: str = "media") -> None:
         if self.active_leader_id is None:
             self.active_leader_id = leader_id
         elif self.active_leader_id != leader_id:
             return
         self.last_sync_at = received_at
+        self._sync_source = source
         if not self.system_state.is_running:
             return
         with self._sync_lock:
-            self._latest_sync_state = (leader_time, received_at, sent_at)
+            self._latest_sync_state = (leader_time, received_at, sent_at, source)
 
     def _sync_processor_loop(self) -> None:
         while not self._stop_sync_thread.is_set():
@@ -463,7 +466,11 @@ class CollaboratorPi:
         with self._sync_lock:
             state = self._latest_sync_state
         if state and self.system_state.is_running:
-            leader_time, received_at, sent_at = state
+            if len(state) == 4:
+                leader_time, received_at, sent_at, source = state
+            else:
+                leader_time, received_at, sent_at = state
+                source = "media"
             adjusted_leader_time = leader_time
             enable_compensation = getattr(self.config, "enable_latency_compensation", False)
             if enable_compensation and self._smoothed_latency is not None:
@@ -473,15 +480,21 @@ class CollaboratorPi:
             self.system_state.current_time = adjusted_leader_time
             if self.midi_scheduler:
                 self.midi_scheduler.process_cues(adjusted_leader_time)
-            self._maintain_video_sync(adjusted_leader_time)
+            self._maintain_video_sync(adjusted_leader_time, source=source)
 
-    def _maintain_video_sync(self, leader_time: float) -> None:
+    def _maintain_video_sync(self, leader_time: float, source: str = "media") -> None:
         if not self.video_player.is_playing or getattr(self.video_player, "is_seeking", False):
             return
         now = time.time()
         if now < self._settle_until and self.startup_sync_count > 0:
             return
-        video_pos = self.video_player.get_position()
+        # Use wall-clock position when leader sends wall-based time (mock driver fallback)
+        # to avoid comparing wall-based time against hardware-decoded position (which has
+        # a pipeline delay). When the leader uses media position, use get_position().
+        if source == "wall" and hasattr(self, "_play_start_wall") and self._play_start_wall:
+            video_pos = now - self._play_start_wall
+        else:
+            video_pos = self.video_player.get_position()
         if video_pos is None:
             return
         
@@ -575,6 +588,7 @@ class CollaboratorPi:
 
     def start_playback(self) -> None:
         if self.video_path and self.video_player.play():
+            self._play_start_wall = time.time()
             self.system_state.start_session()
             self.hard_seek_count = 0
             self.startup_sync_count = 0
@@ -592,6 +606,7 @@ class CollaboratorPi:
             self._sync_thread.join(timeout=1.0)
             self._sync_thread = None
         self.video_player.stop()
+        self._play_start_wall = None
         if self.midi_scheduler:
             self.midi_scheduler.stop_playback()
         self.system_state.stop_session()

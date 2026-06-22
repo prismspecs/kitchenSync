@@ -241,8 +241,9 @@ class SyncReceiver:
                         if self.sync_callback:
                             try:
                                 # Execute callback with high precision timestamp
+                                source = msg.get("source", "wall")
                                 try:
-                                    self.sync_callback(leader_time, received_at, leader_id, sent_at)
+                                    self.sync_callback(leader_time, received_at, leader_id, sent_at, source)
                                 except TypeError:
                                     # Fallback for older handlers
                                     self.sync_callback(leader_time, received_at, leader_id)
