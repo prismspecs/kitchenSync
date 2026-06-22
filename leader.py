@@ -201,12 +201,20 @@ class LeaderPi:
 
             import time
             time.sleep(2)
-            result = subprocess.run(
-                ["sudo", "-n", "reboot"], capture_output=True, text=True,
-            )
-            print(f"[UPDATE] sudo reboot: rc={result.returncode}, {result.stdout.strip() or result.stderr.strip()}")
-            if result.returncode != 0:
-                log_error("Device update: sudo reboot failed — gsync user may need NOPASSWD in sudoers", component="leader")
+            reboot_commands = [
+                ["sudo", "-n", "reboot"],
+                ["sudo", "-n", "/sbin/reboot"],
+                ["sudo", "-n", "/usr/sbin/reboot"],
+                ["sudo", "-n", "systemctl", "reboot"],
+            ]
+            for cmd in reboot_commands:
+                result = subprocess.run(
+                    cmd, capture_output=True, text=True,
+                )
+                log_info(f"Device update: {' '.join(cmd)} returned rc={result.returncode} — {result.stderr.strip() or result.stdout.strip()}", component="leader")
+                if result.returncode == 0:
+                    return
+            log_error(f"Device update: all reboot attempts failed — last stderr: {result.stderr.strip()}", component="leader")
 
         threading.Thread(target=_do_update, daemon=True).start()
 
