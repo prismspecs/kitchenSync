@@ -16,11 +16,11 @@ from core.logger import log_info, log_warning, log_error
 CONFIG_ROLE_SECTIONS = {
     "leader": {
         "KITCHENSYNC": {"role", "device_id", "overlay", "enable_system_logging", "enable_audio", "audio_output", "enable_midi", "enable_osc", "enable_caching", "crop_mode"},
-        "DEFAULT": {"video_file", "schedule_file", "video_driver", "sync_port", "tick_interval", "max_drift", "min_drift", "kp", "min_rate", "max_rate", "max_samples", "video_width", "video_height", "position_poll_interval", "remote_sync_mode", "emulated_render_lag", "sync_peer_ip"},
+        "DEFAULT": {"video_file", "schedule_file", "video_driver", "sync_port", "tick_interval", "max_drift", "min_drift", "kp", "min_rate", "max_rate", "max_samples", "video_width", "video_height", "position_poll_interval", "remote_sync_mode", "emulated_render_lag", "sync_peer_ip", "sync_mode"},
     },
     "collaborator": {
         "KITCHENSYNC": {"role", "overlay", "enable_system_logging", "enable_audio", "enable_caching", "enable_latency_compensation", "crop_mode"},
-        "DEFAULT": {"device_id", "video_file", "video_driver", "midi_port", "sync_port", "video_width", "video_height", "position_poll_interval", "remote_sync_mode"},
+        "DEFAULT": {"device_id", "video_file", "video_driver", "midi_port", "sync_port", "video_width", "video_height", "position_poll_interval", "remote_sync_mode", "sync_mode"},
     },
     "bystander": {
         "KITCHENSYNC": {"role", "device_id", "overlay", "enable_system_logging"},
@@ -54,6 +54,7 @@ EDITABLE_CONFIG_FIELDS = {
         {"key": "position_poll_interval", "section": "DEFAULT", "type": "float", "label": "Position Poll Interval", "default": 0.05, "min": 0.01, "max": 1.0, "tooltip": "Frequency (seconds) for GStreamer position polling (default 0.05s / 20Hz)."},
         {"key": "remote_sync_mode", "section": "DEFAULT", "type": "choice", "label": "Remote Sync Mode", "default": "http", "options": ["http", "rsync"], "tooltip": "Method to sync content from leader: http (standard Web UI download) or rsync (advanced folder sync)."},
         {"key": "sync_peer_ip", "section": "DEFAULT", "type": "string", "label": "Sync Peer IP (Ethernet)", "default": "", "tooltip": "Ethernet IP of the peer device for low-latency sync over direct cable. When set, sync uses unicast on this IP and disables WiFi broadcast."},
+        {"key": "sync_mode", "section": "DEFAULT", "type": "choice", "label": "Sync Mode", "default": "udp", "options": ["udp", "netclock"], "tooltip": "udp: custom P-gain speed control. netclock: GStreamer native clock sync."},
     ],
     "collaborator": [
         {"key": "device_id", "section": "DEFAULT", "type": "string", "label": "Device Name/ID", "default": "pi-001", "tooltip": "A custom friendly name/ID for this Collaborator node."},
@@ -70,6 +71,7 @@ EDITABLE_CONFIG_FIELDS = {
         {"key": "video_height", "section": "DEFAULT", "type": "int", "label": "Video Height", "default": 0, "min": 0, "max": 4320, "tooltip": "Force video height (0 = auto/native, default)."},
         {"key": "position_poll_interval", "section": "DEFAULT", "type": "float", "label": "Position Poll Interval", "default": 0.05, "min": 0.01, "max": 1.0, "tooltip": "Frequency (seconds) for GStreamer position polling (default 0.05s / 20Hz)."},
         {"key": "remote_sync_mode", "section": "DEFAULT", "type": "choice", "label": "Remote Sync Mode", "default": "http", "options": ["http", "rsync"], "tooltip": "Method to sync content from leader: http (standard Web UI download) or rsync (advanced folder sync)."},
+        {"key": "sync_mode", "section": "DEFAULT", "type": "choice", "label": "Sync Mode", "default": "udp", "options": ["udp", "netclock"], "tooltip": "udp: custom P-gain speed control. netclock: GStreamer native clock sync."},
     ],
     "bystander": [
         {"key": "device_id", "section": "KITCHENSYNC", "type": "string", "label": "Device Name/ID", "default": "pi-unknown", "tooltip": "A custom friendly name/ID for this Bystander node."},
@@ -399,6 +401,9 @@ class ConfigManager:
 
     @property
     def audio_output(self) -> str: return self.get("audio_output", "hdmi")
+
+    @property
+    def sync_mode(self) -> str: return self.get("sync_mode", "udp")
 
     @property
     def max_drift(self) -> float: return self.getfloat("max_drift", 0.15)

@@ -305,12 +305,16 @@ class SyncReceiver:
 
                         if self.sync_callback:
                             try:
-                                # Execute callback with high precision timestamp
+                                # Execute callback with high precision timestamp and leader IP
                                 source = msg.get("source", "wall")
+                                leader_ip = addr[0] if addr else None
                                 try:
-                                    self.sync_callback(leader_time, received_at, leader_id, sent_at, source, position_read_time)
+                                    self.sync_callback(leader_time, received_at, leader_id, sent_at, source, position_read_time, leader_ip)
                                 except TypeError:
-                                    self.sync_callback(leader_time, received_at, leader_id)
+                                    try:
+                                        self.sync_callback(leader_time, received_at, leader_id, sent_at, source, position_read_time)
+                                    except TypeError:
+                                        self.sync_callback(leader_time, received_at, leader_id)
                                         
                                 if packets_drained > 5:
                                     log_info(

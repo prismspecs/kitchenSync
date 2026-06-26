@@ -303,6 +303,10 @@ class LeaderPi:
 
         # Periodically send start command to collaborators
         def start_broadcast_loop():
+            gst_base_time = None
+            if getattr(self.config, "sync_mode", "udp") == "netclock" and hasattr(self.video_player, "get_pipeline_base_time"):
+                gst_base_time = self.video_player.get_pipeline_base_time()
+
             start_command = {
                 "type": "start",
                 "video_file": Path(self.video_path).name if self.video_path else None,
@@ -320,6 +324,10 @@ class LeaderPi:
                     "enable_audio": self.config.enable_audio,
                 },
             }
+            if gst_base_time is not None:
+                start_command["gst_base_time"] = gst_base_time
+                start_command["netclock_port"] = self.config.getint("netclock_port", 9997)
+
             # Send immediately on start
             self.command_manager.send_command(start_command)
             

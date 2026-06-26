@@ -221,7 +221,7 @@ class CollaboratorPi:
             return
 
         if cmd_type == "start":
-            self._handle_start_command(msg)
+            self._handle_start_command(msg, addr)
         elif cmd_type == "stop":
             self.stop_playback()
         elif cmd_type == "ping":
@@ -481,13 +481,15 @@ class CollaboratorPi:
 
         threading.Thread(target=download_task, daemon=True).start()
 
-    def _handle_sync(self, leader_time: float, received_at: float, leader_id: str = "unknown", sent_at: float = None, source: str = "media", position_read_time: float = None) -> None:
+    def _handle_sync(self, leader_time: float, received_at: float, leader_id: str = "unknown", sent_at: float = None, source: str = "media", position_read_time: float = None, leader_ip: str = None) -> None:
         if self.active_leader_id is None:
             self.active_leader_id = leader_id
         elif self.active_leader_id != leader_id:
             return
         self.last_sync_at = received_at
         self._sync_source = source
+        if leader_ip:
+            self.discovered_leader_ip = leader_ip
         if not self.system_state.is_running:
             return
         with self._sync_lock:
@@ -529,7 +531,8 @@ class CollaboratorPi:
             self.system_state.current_time = adjusted_leader_time
             if self.midi_scheduler:
                 self.midi_scheduler.process_cues(adjusted_leader_time)
-            self._maintain_video_sync(adjusted_leader_time, source=source)
+            if getattr(self.config, "sync_mode", "udp") != "netclock":
+                self._maintain_video_sync(adjusted_leader_time, source=source)
 
     def _maintain_video_sync(self, leader_time: float, source: str = "media") -> None:
         if not self.video_player.is_playing or getattr(self.video_player, "is_seeking", False):
@@ -610,11 +613,15 @@ class CollaboratorPi:
                 except Exception:
                     pass
 
-    def _handle_start_command(self, msg: dict) -> None:
+    def _handle_start_command(self, msg: dict, addr: Optional[tuple] = None) -> None:
         leader_file = msg.get("video_file")
         leader_id = msg.get("leader_id", "unknown")
         start_time = msg.get("start_time", 0.0)
         
+        # Discover leader IP from command address
+        if addr:
+            self.discovered_leader_ip = addr[0]
+            
         configured_file = self.config.video_file
         target_file = configured_file or leader_file
         
@@ -646,6 +653,22 @@ class CollaboratorPi:
         self.video_path = local_video_path
         if self.video_player.load(self.video_path):
             self.active_session_key = session_key
+            
+            # Phase 3 GstNetClientClock integration
+            if getattr(self.config, "sync_mode", "udp") == "netclock":
+                leader_ip = getattr(self, "discovered_leader_ip", None)
+                if not leader_ip and addr:
+                    leader_ip = addr[0]
+                    
+                gst_base_time = msg.get("gst_base_time")
+                netclock_port = msg.get("netclock_port", 9997)
+                
+                if leader_ip and gst_base_time is not None:
+                    if hasattr(self.video_player, "use_network_clock"):
+                        self.video_player.use_network_clock(leader_ip, gst_base_time, netclock_port)
+                else:
+                    log_warning(f"Sync: Cannot use NetClock yet (ip={leader_ip}, base_time={gst_base_time})", component="collaborator")
+            
             self.start_playback()
 
     def start_playback(self) -> None:

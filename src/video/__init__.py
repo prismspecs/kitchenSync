@@ -33,7 +33,8 @@ def get_video_driver(driver_name: str, debug_mode: bool = False, enable_audio: b
                 video_width=video_width,
                 video_height=video_height,
                 poll_interval=poll_interval,
-                crop_mode=crop_mode
+                crop_mode=crop_mode,
+                config=config
             )
             
         elif driver_name == "mock":

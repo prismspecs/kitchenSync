@@ -73,11 +73,12 @@ class GstDriver(VideoDriver):
     Uses playbin for robustness and custom seek events for seamless rate control.
     """
 
-    def __init__(self, debug_mode: bool = False, enable_audio: bool = True, video_width: int = 0, video_height: int = 0, poll_interval: float = 0.05, crop_mode: str = "letterbox"):
+    def __init__(self, debug_mode: bool = False, enable_audio: bool = True, video_width: int = 0, video_height: int = 0, poll_interval: float = 0.05, crop_mode: str = "letterbox", config = None):
         if not GST_AVAILABLE:
             raise ImportError("GStreamer or GObject Introspection not found. Install via OS_SETUP.md.")
 
         Gst.init(None)
+        self.config = config
         self.debug_mode = debug_mode
         self.enable_audio = enable_audio
         self.video_width = video_width
@@ -96,6 +97,7 @@ class GstDriver(VideoDriver):
         self.is_seeking = False
         self._gapless_looping = False
         self._decoders_prioritized = False
+        self.net_time_provider = None
         
         # Position polling
         self._cached_position = 0.0
@@ -635,6 +637,19 @@ class GstDriver(VideoDriver):
         self._cached_position = 0.0
         self._last_poll_time = time.time() # Reset poll time to current to avoid extrapolation explosion
         self._start_polling()
+
+        # Phase 3 NetTimeProvider setup for clock sync
+        if self.config and getattr(self.config, "sync_mode", "udp") == "netclock":
+            try:
+                from gi.repository import GstNet
+                clock = self.pipeline.get_clock()
+                if clock:
+                    clock_port = self.config.getint("netclock_port", 9997)
+                    # Create NetTimeProvider to serve clock over TCP
+                    self.net_time_provider = GstNet.NetTimeProvider.new(clock, "0.0.0.0", clock_port)
+                    log_info(f"Gst: Started NetTimeProvider on port {clock_port}", component="video")
+            except Exception as e:
+                log_error(f"Gst: Failed to start NetTimeProvider: {e}", component="video")
         
         self.decoder_name = self._discover_active_decoder()
         if not self.decoder_name and self.decoder_candidates:
@@ -668,6 +683,10 @@ class GstDriver(VideoDriver):
             self.state = PlayerState.STOPPED
             self.is_seeking = False
             self._stop_polling_worker()
+            
+        # Clean up NetTimeProvider
+        if hasattr(self, "net_time_provider") and self.net_time_provider:
+            self.net_time_provider = None
 
     def seek(self, seconds: float, accurate: bool = True) -> bool:
         """
@@ -783,16 +802,72 @@ class GstDriver(VideoDriver):
         return position if success else None
 
     def get_duration(self) -> float:
-        if not hasattr(self, "_duration"):
-            self._duration = 0.0
+        """Get total video duration in seconds."""
+        if not self.pipeline:
+            return 0.0
             
-        if not self._is_ready():
-            return self._duration
-        
         success, duration = self.pipeline.query_duration(Gst.Format.TIME)
         if success:
-            self._duration = duration / Gst.SECOND
-        return self._duration
+            return duration / Gst.SECOND
+        return 0.0
+
+    def get_pipeline_clock(self):
+        """Get the underlying GStreamer clock."""
+        return self.pipeline.get_clock() if self.pipeline else None
+
+    def use_pipeline_clock(self, clock):
+        """Set the underlying GStreamer clock to be used by the pipeline."""
+        if self.pipeline:
+            self.pipeline.use_clock(clock)
+
+    def get_pipeline_bus(self):
+        """Get the underlying GStreamer pipeline bus."""
+        return self.pipeline.get_bus() if self.pipeline else None
+
+    def get_pipeline_base_time(self):
+        """Get the GStreamer pipeline's base time in nanoseconds."""
+        return self.pipeline.get_base_time() if self.pipeline else 0
+
+    def set_pipeline_base_time(self, base_time):
+        """Set the GStreamer pipeline's base time in nanoseconds."""
+        if self.pipeline:
+            self.pipeline.set_base_time(base_time)
+
+    def set_pipeline_start_time(self, start_time):
+        """Set the GStreamer pipeline's start time in nanoseconds."""
+        if self.pipeline:
+            self.pipeline.set_start_time(start_time)
+
+    def use_network_clock(self, leader_ip: str, base_time: int, port: int = 9997) -> bool:
+        """Configure the pipeline to use GstNetClientClock synced to leader."""
+        try:
+            from gi.repository import GstNet
+            log_info(f"Gst: Connecting to leader NetClock at {leader_ip}:{port}...", component="video")
+            
+            # Create client clock synced to leader's clock
+            client_clock = GstNet.NetClientClock.new("ksync-clock", leader_ip, port, 0)
+            if not client_clock:
+                log_error("Gst: Failed to create GstNetClientClock", component="video")
+                return False
+                
+            # Wait for sync to establish (up to 5s)
+            success = client_clock.wait_for_sync(5 * Gst.SECOND)
+            if not success:
+                log_warning("Gst: Clock sync timeout. Proceeding anyway...", component="video")
+                
+            # Apply to pipeline
+            self.pipeline.use_clock(client_clock)
+            
+            # Align pipeline timing (GStreamer handles sync using base_time)
+            # We must set start_time to CLOCK_TIME_NONE so base_time calculation works correctly
+            self.pipeline.set_start_time(Gst.CLOCK_TIME_NONE)
+            self.pipeline.set_base_time(base_time)
+            
+            log_info(f"Gst: Pipeline synced to leader clock. Base time set to {base_time}", component="video")
+            return True
+        except Exception as e:
+            log_error(f"Gst: Failed to configure network clock: {e}", component="video")
+            return False
 
     def get_state(self) -> PlayerState:
         if not self.pipeline:

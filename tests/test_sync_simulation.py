@@ -191,5 +191,44 @@ class SyncSimulationTest(unittest.TestCase):
         finally:
             shutil.rmtree(temp_dir)
 
+    def test_netclock_sync_mode(self):
+        """Verify netclock sync mode handling."""
+        config = MockConfig(kp=0.1, max_samples=5)
+        config.sync_mode = "netclock"
+        
+        collab = self.get_collaborator(config)
+        collab.video_manager.find_video_file = MagicMock(return_value="/mock/path/test.mp4")
+        
+        # Add a mocked use_network_clock to the mock video driver
+        collab.video_player.use_network_clock = MagicMock()
+        
+        msg = {
+            "type": "start",
+            "video_file": "test.mp4",
+            "leader_id": "leader-001",
+            "start_time": 0.0,
+            "gst_base_time": 123456789,
+            "netclock_port": 9998
+        }
+        addr = ("192.168.0.221", 5000)
+        
+        collab._handle_start_command(msg, addr)
+        
+        # Assertions
+        self.assertEqual(collab.discovered_leader_ip, "192.168.0.221")
+        collab.video_player.use_network_clock.assert_called_once_with(
+            "192.168.0.221", 123456789, 9998
+        )
+        
+        # Verify _maintain_video_sync is bypassed when sync_mode is netclock
+        collab._maintain_video_sync = MagicMock()
+        
+        with patch('time.time', return_value=1000.0):
+            # Simulate a sync tick
+            collab._handle_sync(10.0, 1000.0, "leader-001")
+            collab._process_sync_tick()
+            
+        collab._maintain_video_sync.assert_not_called()
+
 if __name__ == "__main__":
     unittest.main()
