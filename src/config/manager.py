@@ -42,9 +42,9 @@ EDITABLE_CONFIG_FIELDS = {
         {"key": "overlay", "section": "KITCHENSYNC", "type": "bool", "label": "Debug Overlay", "default": False, "tooltip": "Show real-time synchronization statistics as an on-screen video overlay."},
         {"key": "tick_interval", "section": "DEFAULT", "type": "float", "label": "Sync Interval", "default": 0.02, "min": 0.02, "max": 5.0, "step": 0.01, "tooltip": "How often (seconds) to broadcast time sync messages. Lower = tighter sync but more network traffic."},
         {"key": "emulated_render_lag", "section": "DEFAULT", "type": "float", "label": "Web UI Render Lag Offset", "default": 0.05, "min": 0, "max": 1.0, "step": 0.01, "tooltip": "Offset (seconds) to subtract from the Web UI time/preview to match physical screens (e.g. 0.05 = 50ms)."},
-        {"key": "max_drift", "section": "DEFAULT", "type": "float", "label": "Max Drift", "default": 0.3, "min": 0, "max": 10.0, "step": 0.1, "tooltip": "Maximum allowed sync deviation before a hard seek (jump) is forced."},
-        {"key": "min_drift", "section": "DEFAULT", "type": "float", "label": "Min Drift", "default": 0.01, "min": 0, "max": 1.0, "step": 0.01, "tooltip": "Minimum deviation to ignore (prevents jitter)."},
-        {"key": "kp", "section": "DEFAULT", "type": "float", "label": "P-Gain", "default": 0.25, "min": 0, "max": 10.0, "step": 0.01, "tooltip": "Proportional gain for playback speed adjustment. Higher = faster catchup."},
+        {"key": "max_drift", "section": "DEFAULT", "type": "float", "label": "Max Drift", "default": 0.15, "min": 0, "max": 10.0, "step": 0.05, "tooltip": "Maximum allowed sync deviation before a hard seek (jump) is forced."},
+        {"key": "min_drift", "section": "DEFAULT", "type": "float", "label": "Min Drift", "default": 0.005, "min": 0, "max": 1.0, "step": 0.001, "tooltip": "Minimum deviation to ignore (prevents jitter)."},
+        {"key": "kp", "section": "DEFAULT", "type": "float", "label": "P-Gain", "default": 2.0, "min": 0, "max": 10.0, "step": 0.05, "tooltip": "Proportional gain for playback speed adjustment. Higher = faster catchup."},
         {"key": "max_samples", "section": "DEFAULT", "type": "int", "label": "Max Samples", "default": 3, "min": 1, "max": 100, "step": 1, "tooltip": "Number of sync samples to average for drift calculation."},
         {"key": "min_rate", "section": "DEFAULT", "type": "float", "label": "Min Rate", "default": 0.9, "min": 0.01, "max": 1.0, "step": 0.01, "tooltip": "Minimum playback speed allowed for slow-down correction."},
         {"key": "max_rate", "section": "DEFAULT", "type": "float", "label": "Max Rate", "default": 1.2, "min": 1.0, "max": 10.0, "step": 0.01, "tooltip": "Maximum playback speed allowed for catch-up correction."},
@@ -401,13 +401,13 @@ class ConfigManager:
     def audio_output(self) -> str: return self.get("audio_output", "hdmi")
 
     @property
-    def max_drift(self) -> float: return self.getfloat("max_drift", 0.3)
+    def max_drift(self) -> float: return self.getfloat("max_drift", 0.15)
 
     @property
-    def min_drift(self) -> float: return self.getfloat("min_drift", 0.01)
+    def min_drift(self) -> float: return self.getfloat("min_drift", 0.005)
 
     @property
-    def kp(self) -> float: return self.getfloat("kp", 0.25)
+    def kp(self) -> float: return self.getfloat("kp", 2.0)
 
     @property
     def min_rate(self) -> float: return self.getfloat("min_rate", 0.9)
@@ -423,6 +423,9 @@ class ConfigManager:
 
     @property
     def enable_latency_compensation(self) -> bool: return self.getboolean("enable_latency_compensation", True)
+
+    @property
+    def enable_deviation_log(self) -> bool: return self.getboolean("enable_deviation_log", False)
 
     @property
     def latency_factor(self) -> float: return self.getfloat("latency_factor", 0.5)

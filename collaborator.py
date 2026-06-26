@@ -136,6 +136,22 @@ class CollaboratorPi:
         
         self.is_running = False
 
+        # Deviation Logging
+        self.enable_deviation_log = getattr(self.config, "enable_deviation_log", False)
+        if self.enable_deviation_log:
+            self._init_deviation_log()
+
+    def _init_deviation_log(self) -> None:
+        log_dir = Path(__file__).parent / "logs"
+        log_dir.mkdir(exist_ok=True)
+        self.deviation_log_path = log_dir / "sync_deviation.csv"
+        if not self.deviation_log_path.exists() or self.deviation_log_path.stat().st_size == 0:
+            try:
+                with open(self.deviation_log_path, "w") as f:
+                    f.write("timestamp,leader_time,video_pos,deviation,rate,hard_seeks\n")
+            except Exception as e:
+                log_error(f"Failed to initialize deviation CSV: {e}", component="collaborator")
+
     def run(self) -> None:
         """Main execution loop"""
         hide_mouse_cursor()
@@ -585,6 +601,14 @@ class CollaboratorPi:
             else:
                 self._current_playback_rate = 1.0
                 self.video_player.set_speed(1.0)
+
+            # Log to CSV if enabled
+            if getattr(self, "enable_deviation_log", False):
+                try:
+                    with open(self.deviation_log_path, "a") as f:
+                        f.write(f"{now:.6f},{leader_time:.6f},{video_pos:.6f},{deviation:.6f},{self._current_playback_rate:.4f},{self.hard_seek_count}\n")
+                except Exception:
+                    pass
 
     def _handle_start_command(self, msg: dict) -> None:
         leader_file = msg.get("video_file")

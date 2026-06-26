@@ -84,5 +84,40 @@ class TestCommandManagerLatency(unittest.TestCase):
         self.assertLess(manager.get_average_rtt(), 0.5)
 
 
+class TestKernelTimestampExtraction(unittest.TestCase):
+    def test_extract_timestamp_ns(self):
+        from networking.communication import _extract_kernel_timestamp
+        import struct
+        # SO_TIMESTAMPNS (35): timespec (8 bytes sec, 8 bytes nsec on 64-bit)
+        cmsg_data = struct.pack("qq", 1600000000, 500000000)
+        ancdata = [(socket.SOL_SOCKET, 35, cmsg_data)]
+        ts = _extract_kernel_timestamp(ancdata)
+        self.assertEqual(ts, 1600000000.5)
+
+    def test_extract_timestamp_us_64(self):
+        from networking.communication import _extract_kernel_timestamp
+        import struct
+        # SO_TIMESTAMP (29): timeval (8 bytes sec, 8 bytes usec on 64-bit)
+        cmsg_data = struct.pack("qq", 1600000000, 500000)
+        ancdata = [(socket.SOL_SOCKET, 29, cmsg_data)]
+        ts = _extract_kernel_timestamp(ancdata)
+        self.assertEqual(ts, 1600000000.5)
+
+    def test_extract_timestamp_us_32(self):
+        from networking.communication import _extract_kernel_timestamp
+        import struct
+        # SO_TIMESTAMP (29): timeval (4 bytes sec, 4 bytes usec on 32-bit)
+        cmsg_data = struct.pack("ii", 1600000000, 500000)
+        ancdata = [(socket.SOL_SOCKET, 29, cmsg_data)]
+        ts = _extract_kernel_timestamp(ancdata)
+        self.assertEqual(ts, 1600000000.5)
+
+    def test_extract_timestamp_none(self):
+        from networking.communication import _extract_kernel_timestamp
+        ancdata = [(socket.SOL_SOCKET, 999, b"invalid")]
+        ts = _extract_kernel_timestamp(ancdata)
+        self.assertIsNone(ts)
+
+
 if __name__ == "__main__":
     unittest.main()

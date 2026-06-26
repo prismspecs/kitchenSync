@@ -35,6 +35,7 @@ class MockConfig:
         self.max_drift = max_drift
         self.min_rate = 0.9
         self.max_rate = 1.2
+        self.enable_deviation_log = False
 
     def getint(self, key, default, section=None):
         return getattr(self, key, default)
@@ -146,6 +147,49 @@ class SyncSimulationTest(unittest.TestCase):
             
             print(f"Number of zero crossings (tuned kp): {crossings}")
             self.assertLessEqual(crossings, 1)
+
+    def test_deviation_logging(self):
+        """Verify that deviation logging writes to a CSV when enabled."""
+        import tempfile
+        import shutil
+        from pathlib import Path
+        
+        temp_dir = tempfile.mkdtemp()
+        try:
+            config = MockConfig(kp=0.1, max_samples=5)
+            config.enable_deviation_log = False
+            
+            collab = self.get_collaborator(config)
+            
+            # Now enable and point to temp path
+            collab.enable_deviation_log = True
+            collab.deviation_log_path = Path(temp_dir) / "test_deviation.csv"
+            collab._init_deviation_log = lambda: None
+            
+            # Manually set up
+            with open(collab.deviation_log_path, "w") as f:
+                f.write("timestamp,leader_time,video_pos,deviation,rate,hard_seeks\n")
+                
+            # Simulate a sync tick
+            with patch('time.time', return_value=1000.0):
+                collab.video_player.play()
+                collab.video_player.seek(0.2)
+                collab._handle_sync(0.0, 1000.0, "leader-001")
+                collab._process_sync_tick()
+                
+            # Verify data was written
+            with open(collab.deviation_log_path, "r") as f:
+                lines = f.readlines()
+            self.assertEqual(len(lines), 2)  # Header + 1 data line
+            data_parts = lines[1].strip().split(",")
+            self.assertEqual(len(data_parts), 6)
+            self.assertEqual(data_parts[0], "1000.000000")
+            self.assertEqual(data_parts[1], "0.000000")
+            self.assertEqual(data_parts[2], "0.200000")
+            self.assertAlmostEqual(float(data_parts[3]), 0.2)
+            self.assertEqual(data_parts[4], "0.9800")
+        finally:
+            shutil.rmtree(temp_dir)
 
 if __name__ == "__main__":
     unittest.main()

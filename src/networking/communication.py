@@ -6,6 +6,7 @@ Handles time sync and command communication between leader and collaborators
 
 import json
 import socket
+import struct
 import threading
 import time
 from typing import Callable, Optional, Dict, Any
@@ -179,6 +180,26 @@ class SyncBroadcaster:
         # print("Stopped time sync broadcasting")
 
 
+def _extract_kernel_timestamp(ancdata) -> Optional[float]:
+    """Extract kernel receive timestamp from recvmsg ancillary data if available."""
+    for cmsg_level, cmsg_type, cmsg_data in ancdata:
+        if cmsg_level == socket.SOL_SOCKET:
+            # SO_TIMESTAMPNS (35) - timespec (seconds, nanoseconds)
+            if cmsg_type == 35:
+                if len(cmsg_data) == 16:
+                    sec, nsec = struct.unpack("qq" if struct.calcsize("l") == 8 else "ll", cmsg_data)
+                    return sec + nsec / 1e9
+            # SO_TIMESTAMP (29) - timeval (seconds, microseconds)
+            elif cmsg_type == 29:
+                if len(cmsg_data) == 16:
+                    sec, usec = struct.unpack("qq" if struct.calcsize("l") == 8 else "ll", cmsg_data)
+                    return sec + usec / 1e6
+                elif len(cmsg_data) == 8:
+                    sec, usec = struct.unpack("ii", cmsg_data)
+                    return sec + usec / 1e6
+    return None
+
+
 class SyncReceiver:
     """Handles time sync reception for collaborators"""
 
@@ -200,6 +221,15 @@ class SyncReceiver:
                     self.sync_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
                 except Exception:
                     pass
+            
+            # Enable kernel-level software timestamping on the socket (SO_TIMESTAMPNS or SO_TIMESTAMP)
+            for opt in ["SO_TIMESTAMPNS", "SO_TIMESTAMP"]:
+                if hasattr(socket, opt):
+                    try:
+                        self.sync_sock.setsockopt(socket.SOL_SOCKET, getattr(socket, opt), 1)
+                        break
+                    except Exception:
+                        pass
                     
             self.sync_sock.bind(("", self.sync_port))
         except Exception as e:
@@ -226,8 +256,12 @@ class SyncReceiver:
                 try:
                     # 1. Block on the first packet (lowest CPU)
                     try:
-                        data, addr = self.sync_sock.recvfrom(1024)
-                        received_at = time.time()
+                        if hasattr(self.sync_sock, "recvmsg"):
+                            data, ancdata, flags, addr = self.sync_sock.recvmsg(1024, 128)
+                            received_at = _extract_kernel_timestamp(ancdata) or time.time()
+                        else:
+                            data, addr = self.sync_sock.recvfrom(1024)
+                            received_at = time.time()
                     except socket.timeout:
                         continue
                     except (socket.error, OSError):
@@ -241,9 +275,14 @@ class SyncReceiver:
                     packets_drained = 0
                     while self.is_running:
                         try:
-                            new_data, new_addr = self.sync_sock.recvfrom(1024)
-                            data, addr = new_data, new_addr
-                            received_at = time.time() # Update to the arrival time of the newest packet
+                            if hasattr(self.sync_sock, "recvmsg"):
+                                new_data, new_ancdata, new_flags, new_addr = self.sync_sock.recvmsg(1024, 128)
+                                data, addr = new_data, new_addr
+                                received_at = _extract_kernel_timestamp(new_ancdata) or time.time()
+                            else:
+                                new_data, new_addr = self.sync_sock.recvfrom(1024)
+                                data, addr = new_data, new_addr
+                                received_at = time.time()
                             packets_drained += 1
                         except (socket.error, BlockingIOError):
                             break
