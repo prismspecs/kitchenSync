@@ -16,7 +16,7 @@ from core.logger import log_info, log_warning, log_error
 CONFIG_ROLE_SECTIONS = {
     "leader": {
         "KITCHENSYNC": {"role", "device_id", "overlay", "enable_system_logging", "enable_audio", "audio_output", "enable_midi", "enable_osc", "enable_caching", "crop_mode"},
-        "DEFAULT": {"video_file", "schedule_file", "video_driver", "sync_port", "tick_interval", "max_drift", "min_drift", "kp", "min_rate", "max_rate", "max_samples", "video_width", "video_height", "position_poll_interval", "remote_sync_mode", "emulated_render_lag"},
+        "DEFAULT": {"video_file", "schedule_file", "video_driver", "sync_port", "tick_interval", "max_drift", "min_drift", "kp", "min_rate", "max_rate", "max_samples", "video_width", "video_height", "position_poll_interval", "remote_sync_mode", "emulated_render_lag", "sync_peer_ip"},
     },
     "collaborator": {
         "KITCHENSYNC": {"role", "overlay", "enable_system_logging", "enable_audio", "enable_caching", "enable_latency_compensation", "crop_mode"},
