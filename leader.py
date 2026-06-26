@@ -281,7 +281,7 @@ class LeaderPi:
         self.sync_broadcaster.set_duration_provider(self.video_player.get_duration)
         self.sync_broadcaster.leader_id = self.config.device_id
         self.sync_broadcaster.is_wall_clock = "fakesink" in self.video_driver_name or "mock" in self.video_driver_name
-        peer_ip = (getattr(self.config, "sync_peer_ip", "") or "").strip()
+        peer_ip = (self.config.get("sync_peer_ip", "") or "").strip()
         if peer_ip:
             log_info(f"Sync: Using unicast to peer {peer_ip} over Ethernet (WiFi broadcast disabled)", component="leader")
             self.sync_broadcaster.set_unicast_targets([peer_ip], use_broadcast=False)

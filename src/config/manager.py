@@ -341,6 +341,9 @@ class ConfigManager:
         return usb_sched or self.get("schedule_file", "schedule.json")
 
     @property
+    def sync_peer_ip(self) -> str: return self.get("sync_peer_ip", "")
+
+    @property
     def video_driver(self) -> str: return self.get("video_driver", "gst")
 
     @property
