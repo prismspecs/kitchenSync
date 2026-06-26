@@ -85,7 +85,7 @@ class LeaderPi:
         # Initialize Networking
         self.sync_broadcaster = SyncBroadcaster(
             sync_port=self.config.getint("sync_port", 5005),
-            tick_interval=0.1,
+            tick_interval=self.config.tick_interval,
         )
         self.command_manager = CommandManager()
 

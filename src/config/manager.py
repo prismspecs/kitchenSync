@@ -40,7 +40,7 @@ EDITABLE_CONFIG_FIELDS = {
         {"key": "enable_caching", "section": "KITCHENSYNC", "type": "bool", "label": "Local Caching", "default": False, "tooltip": "If enabled, external USB videos will be copied to SD card for smoother playback."},
         {"key": "crop_mode", "section": "KITCHENSYNC", "type": "choice", "label": "Cropping Mode", "default": "letterbox", "options": ["letterbox", "crop-to-fill"], "tooltip": "Fit video to display. Letterbox: add black bars. Crop-to-fill: zoom and crop to fill without distortion."},
         {"key": "overlay", "section": "KITCHENSYNC", "type": "bool", "label": "Debug Overlay", "default": False, "tooltip": "Show real-time synchronization statistics as an on-screen video overlay."},
-        {"key": "tick_interval", "section": "DEFAULT", "type": "float", "label": "Sync Interval", "default": 0.05, "min": 0.02, "max": 5.0, "step": 0.01, "tooltip": "How often (seconds) to broadcast time sync messages. Lower = tighter sync but more network traffic."},
+        {"key": "tick_interval", "section": "DEFAULT", "type": "float", "label": "Sync Interval", "default": 0.02, "min": 0.02, "max": 5.0, "step": 0.01, "tooltip": "How often (seconds) to broadcast time sync messages. Lower = tighter sync but more network traffic."},
         {"key": "emulated_render_lag", "section": "DEFAULT", "type": "float", "label": "Web UI Render Lag Offset", "default": 0.05, "min": 0, "max": 1.0, "step": 0.01, "tooltip": "Offset (seconds) to subtract from the Web UI time/preview to match physical screens (e.g. 0.05 = 50ms)."},
         {"key": "max_drift", "section": "DEFAULT", "type": "float", "label": "Max Drift", "default": 0.3, "min": 0, "max": 10.0, "step": 0.1, "tooltip": "Maximum allowed sync deviation before a hard seek (jump) is forced."},
         {"key": "min_drift", "section": "DEFAULT", "type": "float", "label": "Min Drift", "default": 0.01, "min": 0, "max": 1.0, "step": 0.01, "tooltip": "Minimum deviation to ignore (prevents jitter)."},
@@ -210,7 +210,7 @@ class ConfigManager:
             "video_file": video_file or "video.mp4",
             "video_driver": "gst",
             "enable_system_logging": "false",
-            "tick_interval": "0.1",
+            "tick_interval": "0.02",
             "audio_output": "hdmi",
             "crop_mode": "letterbox",
         }
@@ -395,7 +395,7 @@ class ConfigManager:
     def enable_system_logging(self) -> bool: return self.getboolean("enable_system_logging", False)
 
     @property
-    def tick_interval(self) -> float: return self.getfloat("tick_interval", 0.1)
+    def tick_interval(self) -> float: return self.getfloat("tick_interval", 0.02)
 
     @property
     def audio_output(self) -> str: return self.get("audio_output", "hdmi")

@@ -456,7 +456,7 @@ class CollaboratorPi:
 
         threading.Thread(target=download_task, daemon=True).start()
 
-    def _handle_sync(self, leader_time: float, received_at: float, leader_id: str = "unknown", sent_at: float = None, source: str = "media") -> None:
+    def _handle_sync(self, leader_time: float, received_at: float, leader_id: str = "unknown", sent_at: float = None, source: str = "media", position_read_time: float = None) -> None:
         if self.active_leader_id is None:
             self.active_leader_id = leader_id
         elif self.active_leader_id != leader_id:
@@ -466,7 +466,7 @@ class CollaboratorPi:
         if not self.system_state.is_running:
             return
         with self._sync_lock:
-            self._latest_sync_state = (leader_time, received_at, sent_at, source)
+            self._latest_sync_state = (leader_time, received_at, sent_at, source, position_read_time)
 
     def _sync_processor_loop(self) -> None:
         while not self._stop_sync_thread.is_set():
@@ -474,19 +474,28 @@ class CollaboratorPi:
                 self._process_sync_tick()
             except Exception as e:
                 log_error(f"Sync error: {e}")
-            time.sleep(0.05)
+            time.sleep(0.01)
 
     def _process_sync_tick(self) -> None:
         state = None
         with self._sync_lock:
             state = self._latest_sync_state
         if state and self.system_state.is_running:
-            if len(state) == 4:
+            if len(state) == 5:
+                leader_time, received_at, sent_at, source, position_read_time = state
+                # Compensate for sender-side processing lag: time between
+                # position read and actual packet transmission.
+                if sent_at and position_read_time:
+                    adjusted_leader_time = leader_time + max(0.0, sent_at - position_read_time)
+                else:
+                    adjusted_leader_time = leader_time
+            elif len(state) == 4:
                 leader_time, received_at, sent_at, source = state
+                adjusted_leader_time = leader_time
             else:
                 leader_time, received_at, sent_at = state
                 source = "media"
-            adjusted_leader_time = leader_time
+                adjusted_leader_time = leader_time
             enable_compensation = getattr(self.config, "enable_latency_compensation", False)
             if enable_compensation and self._smoothed_latency is not None:
                 adjusted_leader_time += self._smoothed_latency

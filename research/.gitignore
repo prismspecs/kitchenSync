@@ -1,0 +1,5 @@
+# Ignore cloned repos — they are large and upstream-controlled
+rpi-video-sync-looper/
+Multichannel-Video/
+raspi-video-sync/
+synchronized4kplaybackrpi4/

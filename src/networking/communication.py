@@ -108,8 +108,10 @@ class SyncBroadcaster:
                     try:
                         current_time = None
                         time_source = "wall"
+                        position_read_time = None
                         
                         if self.time_provider is not None:
+                            position_read_time = time.time()
                             provided_time = self.time_provider()
                             if provided_time is not None:
                                 current_time = float(provided_time)
@@ -128,6 +130,7 @@ class SyncBroadcaster:
                             except Exception:
                                 pass
 
+                        now = time.time()
                         payload = json.dumps(
                             {
                                 "type": "sync",
@@ -135,7 +138,8 @@ class SyncBroadcaster:
                                 "leader_id": self.leader_id,
                                 "source": time_source,
                                 "duration": leader_duration,
-                                "sent_at": time.time(),
+                                "sent_at": now,
+                                "position_read_time": position_read_time or now,
                             }
                         )
 
@@ -258,15 +262,15 @@ class SyncReceiver:
                         leader_time = msg.get("time", 0)
                         leader_id = msg.get("leader_id", "unknown")
                         sent_at = msg.get("sent_at")
+                        position_read_time = msg.get("position_read_time", sent_at)
 
                         if self.sync_callback:
                             try:
                                 # Execute callback with high precision timestamp
                                 source = msg.get("source", "wall")
                                 try:
-                                    self.sync_callback(leader_time, received_at, leader_id, sent_at, source)
+                                    self.sync_callback(leader_time, received_at, leader_id, sent_at, source, position_read_time)
                                 except TypeError:
-                                    # Fallback for older handlers
                                     self.sync_callback(leader_time, received_at, leader_id)
                                         
                                 if packets_drained > 5:
