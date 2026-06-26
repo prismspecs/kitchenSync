@@ -12,7 +12,7 @@ Leader (Pi 5)                              Collaborator (Pi 4)
 GstDriver.get_position()                  
   → poll worker: pipeline query every 50ms
   → cached_position extrapolated by elapsed*rate
-  ├→ SyncBroadcaster loop (every 100ms)
+   ├→ SyncBroadcaster loop (every 20ms)
   │    time_provider() → get_position()
   │    JSON {time, sent_at, source, duration}
   │    → UDP unicast to 192.168.0.165:5005
@@ -20,7 +20,7 @@ GstDriver.get_position()
   │                                     │    recvfrom() → drain buffer → newest packet
   │                                     │    _handle_sync() → store state
   │                                     │
-  │                                     ├→ _sync_processor_loop (every 50ms)
+   │                                     ├→ _sync_processor_loop (every 10ms)
   │                                     │    _process_sync_tick()
   │                                     │    → latency compensation (RTT/2 via ping/pong)
   │                                     │    → _maintain_video_sync()
@@ -34,29 +34,31 @@ GstDriver.get_position()
 
 | Parameter | Current Value | Location |
 |---|---|---|
-| `tick_interval` | 100ms | `SyncBroadcaster.__init__` |
-| `_sync_processor_loop` sleep | 50ms | `collaborator.py:477` |
-| Position poll interval | 50ms | `gst_driver.py` |
-| `max_drift` | 0.3s | config default |
-| `min_drift` | configurable | config default |
-| `kp` | configurable | config default |
-| `max_rate` | configurable | config default |
+| `tick_interval` | 0.02 (was 0.1) | config default + SyncBroadcaster |
+| `_sync_processor_loop` sleep | 0.01 (was 0.05) | `collaborator.py:477` |
+| Position poll interval | 0.05 | `gst_driver.py` (configurable) |
+| `max_drift` | 0.3 | config default |
+| `min_drift` | 0.01 | config default |
+| `kp` | 0.25 | config default |
+| `min_rate` | 0.9 | config default |
+| `max_rate` | 1.2 | config default |
+| `position_read_time` compensation | added | collaborative per-packet |
 
 ### Sources of 40ms Error (Ordered by Impact)
 
-1. **Broadcast tick interval (100ms):** Position is sampled at best every 100ms. The collaborator drains buffered packets to get the newest, but the newest is still up to 100ms old. At 30fps that's ~3 frames of uncertainty.
+1. ~~Broadcast tick interval (was 100ms)~~ **Fixed: now 20ms.** Position sampled 5x more often. At 30fps (33ms per frame), this means ~1 sampling interval per frame instead of ~3.
 
-2. **UDP send-to-receive jitter:** Python's `time.sleep()` in the broadcast loop has ±15ms granularity. Combined with GIL, thread scheduling, and JSON serialization, the actual interval between `get_position()` and actual wire transmission can vary 10-30ms.
+2. **UDP send-to-receive jitter:** `time.sleep(0.02)` in Python has ±5-10ms granularity. Combined with GIL, thread scheduling, and JSON serialization (now includes `position_read_time` to correct for sender-side lag). Remaining jitter: ~5-15ms.
 
-3. **Position read vs. send timestamp mismatch:** `get_position()` is called, then JSON is serialized, then `time.time()` is recorded as `sent_at`. The position was read before serialization overhead (~1-5ms), but no correction is applied.
+3. ~~Position read vs. send timestamp mismatch~~ **Fixed: position_read_time recorded at query time, sent alongside packet.** Collaborator computes `sent_at - position_read_time` and adds it to leader_time.
 
-4. **Position extrapolation in GstDriver:** `get_position()` returns `cached_position + elapsed * rate`. The cached position is updated every 50ms by the poll worker. This extrapolation adds error when rate ≠ 1.0.
+4. **Position extrapolation in GstDriver:** `get_position()` returns `cached_position + elapsed * rate`. Cached position updated every 50ms by poll worker. Extrapolation error when rate ≠ 1.0. Unchanged.
 
-5. **No sender-side latency compensation:** The collaborator only compensates for transport latency (RTT/2) but not for the delay between `get_position()` and packet transmission on the leader.
+5. **Sender-side latency:** ~~Not compensated~~ **Fixed: position_read_time allows precise sender-side lag compensation.**
 
-6. **Clock drift between devices:** Without NTP/PTP, each Pi's `time.time()` drifts independently. The sync system compares media position (not wall time), so clock drift affects only `sent_at` timing, not the position comparison. But it does affect RTT measurement accuracy.
+6. **Clock drift between devices:** Without NTP/PTP, each Pi's `time.time()` drifts independently. Sync compares media position (not wall time), so clock drift affects only `sent_at` timing. **NTP attempted but currently blocked** (see chrony issue below).
 
-7. **Rate change latency:** `set_speed()` in GStreamer uses `INSTANT_RATE_CHANGE` or a flushing seek. The time from issuing the rate change to actual effect is not measured.
+7. **Rate change latency:** `set_speed()` uses `INSTANT_RATE_CHANGE` or flushing seek. Time from rate command to actual pipeline effect is not measured.
 
 ## Reference Projects Analysis
 
@@ -302,33 +304,77 @@ Currently sync quality (deviation) is reported via heartbeats as `sync_deviation
    ```
    These messages contain `rtt`, `stddev`, and other metrics.
 
-## Implementation Plan
+## Current Status (2026-06-26)
 
-### Phase 1 (Low-Hanging Fruit, <1 day)
-- [ ] Reduce `tick_interval` to 0.02 (20ms) in config default
-- [ ] Reduce `_sync_processor_loop` sleep to 0.01 (10ms)
-- [ ] Add `position_read_time` to sync packet
-- [ ] NTP setup on both Pis
+### Phase 1 Completed — Code Changes (commits ae2f681, 5af4196, 89e02f1)
 
-### Phase 2 (Medium, 1-2 days)
-- [ ] SO_TIMESTAMPING on sync sockets (software) for precise packet timing
+All code changes pushed to Pi 5, restart confirms they're in use:
+
+- [x] **tick_interval 100ms → 20ms**: Default changed from 0.1 to 0.02 in config property, `_create_default_config`, and `EDITABLE_CONFIG_FIELDS`. Leader.py was hardcoding 0.1 and ignoring config — now reads `self.config.tick_interval`.
+- [x] **_sync_processor_loop 50ms → 10ms**: `time.sleep(0.05)` → `time.sleep(0.01)` in collaborator.py:477.
+- [x] **position_read_time**: Added to sync packet. Recorded when `time_provider()` is called, before serialization overhead. Included in JSON as `"position_read_time"`. Collaborator unpacked as 5-tuple `(leader_time, received_at, sent_at, source, position_read_time)`. Compensates sender-side processing lag: `adjusted_leader_time += max(0, sent_at - position_read_time)`.
+- [x] **NTP setup script**: `tools/ntp-setup.sh` — takes eth0 down temporarily for internet access during `apt-get install chrony`, configures leader as local stratum-10 server or collaborator as client of leader.
+
+### Phase 1 Blocked — NTP Not Working
+
+Chrony installed on both Pis. Pi 5 is stratum-10 local clock, serving locally. But Pi 4 cannot reach Pi 5's NTP:
+
+**Chrony Debug Log:**
+- Pi 5 config has `allow 192.168.0.0/24` and `local stratum 10` at end of `/etc/chrony/chrony.conf`
+- Pi 5 `chronyd` is running (`Active: active (running)`), listening on `0.0.0.0:123`
+- Pi 5 serves NTP locally: `python3 NTP query to 127.0.0.1:123` succeeds (48 bytes response)
+- Pi 4 can `ping 192.168.0.165` (0.1ms RTT)
+- Pi 4 NTP query to 192.168.0.165:123 **times out** — raw NTP v4 client packet gets no response
+- `nc -zu 192.168.0.165 123` reports `port blocked`
+- `sntp` not installed on Pi 4
+- `chronyc sources -v` on Pi 4 shows `192.168.0.165` in `^?` (unreachable/unknown) state
+- `chronyc tracking` on Pi 4 shows Stratum 0, Not synchronised
+- No firewall on either Pi (`iptables` not installed, `nft list ruleset` empty)
+- Pi 5's `chrony.conf` has `confdir /etc/chrony/conf.d` (empty), `sourcedir /etc/chrony/sources.d` (empty)
+- Pi 5 chronyd uses `seccomp filter (level 1)` — potential blocker?
+- chrony version 4.6.1 on both Pis
+
+**Hypotheses:**
+1. `seccomp` filter blocking NTP response socket operations → try `DAEMON_OPTS="-F 0"` to disable seccomp
+2. `allow 192.168.0.0/24` directive placement after `confdir` causes it to be ignored by chrony 4.6 → try placing it before `confdir` or in a conf.d file
+3. NTS/auth requirement in chrony 4.6 → check `ntsdumpdir` and key config
+4. Network: eth0 has static IP 192.168.0.x but maybe the ARP or route is asymmetric (Pi 4 tries to send via wrong interface)
+5. Pi 5 responds to localhost but has `bind()` issue on the physical interface → check `ss -tulpn | grep chronyd` shows `0.0.0.0:123` already confirmed
+
+**Next steps to try:**
+1. `sudo chronyd -Q -q` to check config parse on Pi 5 (confirmed works, no errors)
+2. Move `allow` directives into `/etc/chrony/conf.d/` file instead of main config
+3. Disable seccomp: edit `/etc/default/chrony` to set `DAEMON_OPTS="-F 0"`
+4. Check Pi 5's `/var/log/chrony/` for NTP access logs
+5. `tcpdump -i eth0 port 123` on both Pis simultaneously to see if packets arrive/depart
+
+### Network Topology
+
+```
+Pi 5 (leader)
+  ├─ eth0: 192.168.0.165  ─── TP-Link switch (no internet) ─── Pi 4 eth0: 192.168.0.164
+  └─ wlan0: 192.168.1.128 ─── Router (internet) ─── Workbench (also on 192.168.1.x)
+
+Both Pis have dual network. Default route goes through Ethernet (wrong — no internet).
+NTP setup script takes eth0 down temporarily to force apt-get through WiFi.
+```
+
+### Phase 2 (Not Started)
+- [ ] SO_TIMESTAMPING on sync sockets (software kernel timestamps via `recvmsg()`)
 - [ ] Tune rate control parameters (kp, min_drift, max_rate)
-- [ ] Add sender-side processing lag compensation
+- [ ] Verify sender-side processing lag compensation is working
 
-### Phase 3 (High Impact, 2-5 days)
-- [ ] GstNetClientClock integration (shared pipeline clock across devices)
-- [ ] If GstNetClientClock works well → eliminate custom UDP sync entirely
-- [ ] Evaluate GstPtpClock for Pi 5 (if hardware timestamping bug is fixed)
+### Phase 3 (Not Started)
+- [ ] GstNetClientClock integration (shared pipeline clock across devices via GStreamer's GstNetTimeProvider/GstNetClientClock)
+- [ ] If GstNetClientClock works → eliminate custom UDP sync entirely
+- [ ] Evaluate GstPtpClock for Pi 5 (if https://github.com/raspberrypi/linux/issues/5904 is fixed)
 
-## Quick Wins — Immediate Next Steps
-
-1. NTP sync both Pis (5 minutes)
-2. Change tick_interval to 0.02 (5 minutes)  
-3. Change sync processor sleep to 0.01 (1 minute)
-4. Add position_read_time to sync packet (15 minutes)
-5. Restart and measure deviation in web UI
-
-These alone should bring us from ~40ms to ~10-15ms.
+### Estimated Impact After NTP Fix + Code Changes
+- tick_interval 20ms: ~40ms → ~20ms error reduction
+- processor loop 10ms: ~5ms additional
+- position_read_time: ~1-3ms additional
+- After NTP: allows accurate one-way delay measurement, tighter RTT compensation
+- Total estimate: ~40ms → ~10-15ms with just Phase 1 completed
 
 ## References
 
