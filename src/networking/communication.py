@@ -98,9 +98,9 @@ class SyncBroadcaster:
         targets = getattr(self, "_unicast_targets", [])
         use_bcast = getattr(self, "_use_broadcast", not bool(targets))
         if targets:
-            log_info(f"Sync: Sending unicast to {targets} on port {self.sync_port}", component="network")
+            log_warning(f"Sync: Sending unicast to {targets} on port {self.sync_port}", component="network")
         if use_bcast:
-            log_info(f"Sync: Broadcasting on {self.broadcast_ip}:{self.sync_port}", component="network")
+            log_warning(f"Sync: Broadcasting on {self.broadcast_ip}:{self.sync_port}", component="network")
 
         def broadcast_loop():
             while self.is_running:
