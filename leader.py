@@ -127,6 +127,7 @@ class LeaderPi:
         self.command_manager.register_handler("remote_seek", lambda msg, addr: self.seek_video(str(msg.get("value", 0))))
         self.command_manager.register_handler("remote_set", lambda msg, addr: self.set_sync_param(msg.get("param"), msg.get("value")))
         self.command_manager.register_handler("config_request", lambda msg, addr: self._handle_config_request(msg, addr))
+        self.command_manager.register_handler("config_update", lambda msg, addr: self._handle_config_update(msg, addr))
         self.command_manager.register_handler("discover", lambda msg, addr: self._handle_discover(msg, addr))
         self.command_manager.register_handler("device_update", lambda msg, addr: self._handle_device_update(msg, addr))
         self.command_manager.register_handler("log_request", lambda msg, addr: self._handle_log_request(msg, addr))
