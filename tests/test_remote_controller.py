@@ -69,6 +69,8 @@ class TestRemoteController(unittest.TestCase):
                     "enable_latency_compensation": True,
                     "latency_factor": 0.5,
                     "emulated_render_lag": 0.05,
+                    "role_name": lambda *args: "leader",
+                    "video_driver": "gstreamer",
                 },
             )(),
         ), patch.object(controller, "refresh_local_snapshot", lambda: None), patch.object(

@@ -28,33 +28,62 @@ if ip link show "$ETH_IFACE" 2>/dev/null | grep -q "state UP"; then
     sleep 2
 fi
 
-cleanup() {
+restore_eth0() {
     if [ "$ETH_WAS_UP" = true ]; then
         echo "==> Restoring $ETH_IFACE..."
         sudo ip link set "$ETH_IFACE" up
         sleep 1
+        ETH_WAS_UP=false  # prevent double-restore
     fi
 }
-trap cleanup EXIT
+trap restore_eth0 EXIT
 
 echo "==> Installing chrony..."
 sudo apt-get install -y chrony
 
 if [ "$ROLE" = "leader" ]; then
-    echo "==> Configuring Pi 5 as NTP server..."
-    echo "" | sudo tee -a /etc/chrony/chrony.conf
-    echo "# Serve time to kSync peers on local network" | sudo tee -a /etc/chrony/chrony.conf
-    echo "allow 192.168.0.0/24" | sudo tee -a /etc/chrony/chrony.conf
-    echo "local stratum 10" | sudo tee -a /etc/chrony/chrony.conf
+    echo "==> Cleaning up any legacy config in /etc/chrony/chrony.conf..."
+    sudo sed -i '/# Serve time to kSync peers/d' /etc/chrony/chrony.conf
+    sudo sed -i '/allow 192.168.0.0\/24/d' /etc/chrony/chrony.conf
+    sudo sed -i '/local stratum 10/d' /etc/chrony/chrony.conf
+
+    echo "==> Configuring Pi 5 as NTP server via drop-in config..."
+    sudo mkdir -p /etc/chrony/conf.d
+    sudo tee /etc/chrony/conf.d/ksync.conf <<EOF
+# Serve time to kSync peers on local network
+allow 192.168.0.0/24
+local stratum 10
+EOF
+
+    echo "==> Disabling chrony seccomp filter on leader..."
+    if [ -f /etc/default/chrony ]; then
+        if grep -q "DAEMON_OPTS" /etc/default/chrony; then
+            # Add -F 0 if not already present
+            if ! grep -q -- "-F 0" /etc/default/chrony; then
+                sudo sed -i 's/DAEMON_OPTS="\(.*\)"/DAEMON_OPTS="\1 -F 0"/' /etc/default/chrony
+            fi
+        else
+            echo 'DAEMON_OPTS="-F 0"' | sudo tee -a /etc/default/chrony
+        fi
+    fi
 
 elif [ "$ROLE" = "collaborator" ]; then
-    echo "==> Configuring Pi 4 to sync from leader at $LEADER_IP..."
-    echo "" | sudo tee -a /etc/chrony/chrony.conf
-    echo "# kSync leader (Pi 5) as primary time source" | sudo tee -a /etc/chrony/chrony.conf
-    echo "server $LEADER_IP iburst prefer" | sudo tee -a /etc/chrony/chrony.conf
-    echo "minpoll 2" | sudo tee -a /etc/chrony/chrony.conf
-    echo "maxpoll 4" | sudo tee -a /etc/chrony/chrony.conf
+    echo "==> Cleaning up any legacy config in /etc/chrony/chrony.conf..."
+    sudo sed -i '/# kSync leader/d' /etc/chrony/chrony.conf
+    sudo sed -i '/server .* iburst prefer/d' /etc/chrony/chrony.conf
+    sudo sed -i '/minpoll 2/d' /etc/chrony/chrony.conf
+    sudo sed -i '/maxpoll 4/d' /etc/chrony/chrony.conf
+
+    echo "==> Configuring Pi 4 to sync from leader at $LEADER_IP via drop-in config..."
+    sudo mkdir -p /etc/chrony/conf.d
+    sudo tee /etc/chrony/conf.d/ksync.conf <<EOF
+# kSync leader (Pi 5) as primary time source
+server $LEADER_IP iburst prefer minpoll 2 maxpoll 4
+EOF
 fi
+
+# Restore eth0 BEFORE restarting chrony so it binds to the live interface
+restore_eth0
 
 echo "==> Restarting chrony..."
 sudo systemctl restart chrony

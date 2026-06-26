@@ -22,7 +22,7 @@ from config.manager import ConfigManager
 from video import get_video_driver
 from video.file_manager import VideoFileManager
 from networking.communication import CommandListener, SyncReceiver
-from core.system_state import SystemState
+from core import SystemState, get_ntp_status
 from core.logger import log_info, log_error, log_warning, enable_system_logging, log_file_paths
 from ui.window_manager import hide_mouse_cursor
 
@@ -49,6 +49,15 @@ class CollaboratorPi:
         enable_system_logging(self.config.debug_mode or self.config.enable_system_logging)
 
         log_info(f"Starting kSync Node '{self.config.device_id}' (Role: {self.config.role_name()})", component="collaborator")
+
+        # Check and log NTP status
+        ntp_status = get_ntp_status()
+        if ntp_status.get("synced"):
+            log_info(f"NTP status: Synchronized (stratum={ntp_status['stratum']}, offset={ntp_status['offset']:.6f}s)", component="collaborator")
+        else:
+            err = ntp_status.get("error")
+            err_msg = f" ({err})" if err else ""
+            log_warning(f"NTP status: Unsynchronized/Not configured{err_msg}", component="collaborator")
 
         # Core Components
         self.system_state = SystemState()

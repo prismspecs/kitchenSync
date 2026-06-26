@@ -2,8 +2,9 @@
 
 from .schedule import Schedule, ScheduleEditor, ScheduleError
 from .system_state import SystemState
+from .ntp_check import get_ntp_status
 
 __all__ = [
     "Schedule", "ScheduleEditor", "ScheduleError",
-    "SystemState"
+    "SystemState", "get_ntp_status"
 ]

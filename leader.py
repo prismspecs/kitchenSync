@@ -23,7 +23,7 @@ from video import get_video_driver
 from video.file_manager import VideoFileManager
 from networking.communication import SyncBroadcaster, CommandManager
 from core.schedule import Schedule
-from core.system_state import SystemState
+from core import SystemState, get_ntp_status
 from core.logger import log_info, log_error, log_warning, log_file_paths, enable_system_logging
 from ui.interface import CommandInterface, StatusDisplay
 from ui.window_manager import hide_mouse_cursor
@@ -51,6 +51,15 @@ class LeaderPi:
         enable_system_logging(self.config.debug_mode or self.config.enable_system_logging)
 
         log_info("Starting kSync Leader...", component="leader")
+
+        # Check and log NTP status
+        ntp_status = get_ntp_status()
+        if ntp_status.get("synced"):
+            log_info(f"NTP status: Synchronized (stratum={ntp_status['stratum']}, offset={ntp_status['offset']:.6f}s)", component="leader")
+        else:
+            err = ntp_status.get("error")
+            err_msg = f" ({err})" if err else ""
+            log_warning(f"NTP status: Unsynchronized/Not configured{err_msg}", component="leader")
 
         # Core Components
         self.system_state = SystemState()
