@@ -26,13 +26,13 @@ from video.drivers import gst_driver
 from ui import window_manager
 
 
-class TestUpdateLocalConfigSectionRouting(unittest.TestCase):
-    """A literal key in [KITCHENSYNC] shadows [DEFAULT] on reads, so the boot
-    persistence path must route keys to their canonical section and strip
-    duplicates — a stale [KITCHENSYNC] video_file once pinned the leader to
-    an old video no matter what was saved."""
+class TestUnifiedConfigPersistence(unittest.TestCase):
+    """The config is unified into a single [KITCHENSYNC] section. Writers must
+    strip legacy [DEFAULT] duplicates: a duplicated key across the two old
+    sections once pinned the leader to a stale video_file no matter what was
+    saved (configparser resolves a section's own key before [DEFAULT])."""
 
-    def test_removes_shadowing_duplicate(self):
+    def test_update_local_config_migrates_legacy_default_keys(self):
         import configparser
         import tempfile
         from config.manager import ConfigManager
@@ -42,7 +42,7 @@ class TestUpdateLocalConfigSectionRouting(unittest.TestCase):
             path = os.path.join(td, "ksync.ini")
             with open(path, "w") as f:
                 f.write(
-                    "[DEFAULT]\nvideo_file = ignored.mp4\n\n"
+                    "[DEFAULT]\nvideo_file = legacy.mp4\nsync_mode = udp\n\n"
                     "[KITCHENSYNC]\nrole = leader\nvideo_file = stale.mp4\n"
                 )
 
@@ -50,11 +50,11 @@ class TestUpdateLocalConfigSectionRouting(unittest.TestCase):
 
             parsed = configparser.ConfigParser()
             parsed.read(path)
-            # canonical location updated...
-            self.assertEqual(parsed.get("DEFAULT", "video_file"), "new.mp4")
-            # ...and the shadowing literal removed, so reads resolve to DEFAULT
-            self.assertTrue(parsed.remove_option("KITCHENSYNC", "video_file") is False)
+            # unified location updated, legacy [DEFAULT] duplicate stripped
             self.assertEqual(parsed.get("KITCHENSYNC", "video_file"), "new.mp4")
+            self.assertNotIn("video_file", parsed.defaults())
+            # untouched legacy keys still readable via DEFAULT fallback
+            self.assertEqual(parsed.get("KITCHENSYNC", "sync_mode"), "udp")
             self.assertEqual(parsed.get("KITCHENSYNC", "role"), "leader")
 
 

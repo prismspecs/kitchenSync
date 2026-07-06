@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Unified Config — Single [KITCHENSYNC] Section (2026-07-06)
+
+- Every config key now lives in one `[KITCHENSYNC]` section; the `[DEFAULT]`/`[KITCHENSYNC]` split is gone. The split caused a live-observed bug class: configparser resolves a section's own key before `[DEFAULT]`, so a stale duplicate (stamped at boot) shadowed every later edit — the pi5 kept playing `bbb_1080p_24fps_hevc.mp4` while `[DEFAULT]` said `sync_test_pi5_hevc.mp4`.
+- All writers (`clean_and_save_config`, `update_local_config`, `set_param`) target the unified section and strip legacy `[DEFAULT]` duplicates; readers keep a `[DEFAULT]` fallback, so existing device files work unchanged and migrate on first save. `CONFIG_ROLE_SECTIONS` → flat `CONFIG_ROLE_KEYS`; `section` dropped from editable-field definitions.
+- Repo config mirrors (`ksync.ini`, `ksync_collaborator.ini`, `ksync_webui.ini`) rewritten in the unified format.
+
 ### Web UI: Load Button, Leader Media List, Edit Stability (2026-07-06)
 
 - **Load button** on every Available Videos entry: sets that file as the device's `video_file` and restarts playback (new `/api/media/load`; leader now restarts on video change like it does on role change).

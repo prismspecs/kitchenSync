@@ -13,72 +13,81 @@ from typing import Optional, Dict, Any
 from core.logger import log_info, log_warning, log_error
 
 
-CONFIG_ROLE_SECTIONS = {
+# The config is UNIFIED: every key lives in the single [KITCHENSYNC] section.
+# (configparser needs one section header; [DEFAULT] is only read as a legacy
+# fallback for old files and is stripped on every save. The old two-section
+# split let a stale [KITCHENSYNC] key shadow [DEFAULT] edits indefinitely.)
+CONFIG_ROLE_KEYS = {
     "leader": {
-        "KITCHENSYNC": {"role", "device_id", "overlay", "enable_system_logging", "enable_audio", "audio_output", "enable_midi", "enable_osc", "enable_caching", "crop_mode"},
-        "DEFAULT": {"video_file", "schedule_file", "video_driver", "sync_port", "tick_interval", "max_drift", "min_drift", "kp", "min_rate", "max_rate", "max_samples", "video_width", "video_height", "position_poll_interval", "remote_sync_mode", "emulated_render_lag", "sync_peer_ip", "sync_mode", "enable_deviation_log", "netclock_max_drift", "netclock_port"},
+        "role", "device_id", "overlay", "enable_system_logging", "enable_audio", "audio_output",
+        "enable_midi", "enable_osc", "enable_caching", "crop_mode",
+        "video_file", "schedule_file", "video_driver", "sync_port", "tick_interval",
+        "max_drift", "min_drift", "kp", "min_rate", "max_rate", "max_samples",
+        "video_width", "video_height", "position_poll_interval", "remote_sync_mode",
+        "emulated_render_lag", "sync_peer_ip", "sync_mode",
+        "enable_deviation_log", "netclock_max_drift", "netclock_port",
     },
     "collaborator": {
-        "KITCHENSYNC": {"role", "overlay", "enable_system_logging", "enable_audio", "enable_caching", "enable_latency_compensation", "crop_mode"},
-        "DEFAULT": {"device_id", "video_file", "video_driver", "midi_port", "sync_port", "video_width", "video_height", "position_poll_interval", "remote_sync_mode", "sync_mode", "enable_deviation_log", "netclock_max_drift", "netclock_port"},
+        "role", "device_id", "overlay", "enable_system_logging", "enable_audio",
+        "enable_caching", "enable_latency_compensation", "crop_mode",
+        "video_file", "video_driver", "midi_port", "sync_port",
+        "video_width", "video_height", "position_poll_interval", "remote_sync_mode", "sync_mode",
+        "enable_deviation_log", "netclock_max_drift", "netclock_port",
     },
-    "bystander": {
-        "KITCHENSYNC": {"role", "device_id", "overlay", "enable_system_logging"},
-        "DEFAULT": {},
-    },
+    "bystander": {"role", "device_id", "overlay", "enable_system_logging"},
 }
 
 EDITABLE_CONFIG_FIELDS = {
     "leader": [
-        {"key": "device_id", "section": "KITCHENSYNC", "type": "string", "label": "Device Name/ID", "default": "leader-pi", "tooltip": "A custom friendly name/ID for this Leader node."},
-        {"key": "role", "section": "KITCHENSYNC", "type": "choice", "label": "Role", "default": "leader", "options": ["leader", "collaborator", "bystander"], "tooltip": "Leader: Master clock and media server. Collaborator: Syncs to leader. Bystander: Idle, waits for provisioning."},
-        {"key": "video_file", "section": "DEFAULT", "type": "string", "label": "Video file", "default": "media/sync_test.mp4", "tooltip": "The video file to play. Searches USB first, then local media/ folder."},
-        {"key": "schedule_file", "section": "DEFAULT", "type": "string", "label": "Schedule file", "default": "schedule.json", "tooltip": "MIDI/OSC cue schedule file (.json or .mid)."},
-        {"key": "enable_audio", "section": "KITCHENSYNC", "type": "bool", "label": "Enable Audio", "default": True, "tooltip": "Toggle audio playback on/off."},
-        {"key": "audio_output", "section": "KITCHENSYNC", "type": "choice", "label": "Audio Output", "default": "hdmi", "options": ["hdmi", "headphone"], "tooltip": "Select audio destination: HDMI or the 3.5mm Headphone Jack."},
-        {"key": "enable_midi", "section": "KITCHENSYNC", "type": "bool", "label": "Enable MIDI", "default": True, "tooltip": "Enable MIDI output triggers via USB or Serial."},
-        {"key": "enable_caching", "section": "KITCHENSYNC", "type": "bool", "label": "Local Caching", "default": False, "tooltip": "If enabled, external USB videos will be copied to SD card for smoother playback."},
-        {"key": "crop_mode", "section": "KITCHENSYNC", "type": "choice", "label": "Cropping Mode", "default": "letterbox", "options": ["letterbox", "crop-to-fill"], "tooltip": "Fit video to display. Letterbox: add black bars. Crop-to-fill: zoom and crop to fill without distortion."},
-        {"key": "overlay", "section": "KITCHENSYNC", "type": "bool", "label": "Debug Overlay", "default": False, "tooltip": "Show real-time synchronization statistics as an on-screen video overlay."},
-        {"key": "tick_interval", "section": "DEFAULT", "type": "float", "label": "Sync Interval", "default": 0.02, "min": 0.02, "max": 5.0, "step": 0.01, "tooltip": "How often (seconds) to broadcast time sync messages. Lower = tighter sync but more network traffic."},
-        {"key": "emulated_render_lag", "section": "DEFAULT", "type": "float", "label": "Web UI Render Lag Offset", "default": 0.05, "min": 0, "max": 1.0, "step": 0.01, "tooltip": "Offset (seconds) to subtract from the Web UI time/preview to match physical screens (e.g. 0.05 = 50ms)."},
-        {"key": "max_drift", "section": "DEFAULT", "type": "float", "label": "Max Drift", "default": 0.15, "min": 0, "max": 10.0, "step": 0.05, "tooltip": "Maximum allowed sync deviation before a hard seek (jump) is forced."},
-        {"key": "min_drift", "section": "DEFAULT", "type": "float", "label": "Min Drift", "default": 0.005, "min": 0, "max": 1.0, "step": 0.001, "tooltip": "Minimum deviation to ignore (prevents jitter)."},
-        {"key": "kp", "section": "DEFAULT", "type": "float", "label": "P-Gain", "default": 2.0, "min": 0, "max": 10.0, "step": 0.05, "tooltip": "Proportional gain for playback speed adjustment. Higher = faster catchup."},
-        {"key": "max_samples", "section": "DEFAULT", "type": "int", "label": "Max Samples", "default": 3, "min": 1, "max": 100, "step": 1, "tooltip": "Number of sync samples to average for drift calculation."},
-        {"key": "min_rate", "section": "DEFAULT", "type": "float", "label": "Min Rate", "default": 0.9, "min": 0.01, "max": 1.0, "step": 0.01, "tooltip": "Minimum playback speed allowed for slow-down correction."},
-        {"key": "max_rate", "section": "DEFAULT", "type": "float", "label": "Max Rate", "default": 1.2, "min": 1.0, "max": 10.0, "step": 0.01, "tooltip": "Maximum playback speed allowed for catch-up correction."},
-        {"key": "enable_system_logging", "section": "KITCHENSYNC", "type": "bool", "label": "Verbose logging", "default": False, "tooltip": "Enable detailed logging to kitchensync.log for troubleshooting."},
-        {"key": "video_width", "section": "DEFAULT", "type": "int", "label": "Video Width", "default": 0, "min": 0, "max": 7680, "step": 1, "tooltip": "Force video width (0 = auto/native, default)."},
-        {"key": "video_height", "section": "DEFAULT", "type": "int", "label": "Video Height", "default": 0, "min": 0, "max": 4320, "tooltip": "Force video height (0 = auto/native, default)."},
-        {"key": "position_poll_interval", "section": "DEFAULT", "type": "float", "label": "Position Poll Interval", "default": 0.05, "min": 0.01, "max": 1.0, "tooltip": "Frequency (seconds) for GStreamer position polling (default 0.05s / 20Hz)."},
-        {"key": "remote_sync_mode", "section": "DEFAULT", "type": "choice", "label": "Remote Sync Mode", "default": "http", "options": ["http", "rsync"], "tooltip": "Method to sync content from leader: http (standard Web UI download) or rsync (advanced folder sync)."},
-        {"key": "sync_peer_ip", "section": "DEFAULT", "type": "string", "label": "Sync Peer IP (Ethernet)", "default": "", "tooltip": "COLLABORATOR's IP for direct-cable unicast sync. Setting this DISABLES broadcast - leave empty on a normal router/switch network. Never set it to this device's own IP."},
-        {"key": "enable_deviation_log", "section": "DEFAULT", "type": "bool", "label": "Deviation CSV Log", "default": True, "tooltip": "Write per-tick sync deviation to logs/sync_deviation.csv (main diagnostic for sync quality)."},
-        {"key": "sync_mode", "section": "DEFAULT", "type": "choice", "label": "Sync Mode", "default": "udp", "options": ["udp", "netclock"], "tooltip": "udp: custom P-gain speed control. netclock: GStreamer native clock sync."},
+        {"key": "device_id", "type": "string", "label": "Device Name/ID", "default": "leader-pi", "tooltip": "A custom friendly name/ID for this Leader node."},
+        {"key": "role", "type": "choice", "label": "Role", "default": "leader", "options": ["leader", "collaborator", "bystander"], "tooltip": "Leader: Master clock and media server. Collaborator: Syncs to leader. Bystander: Idle, waits for provisioning."},
+        {"key": "video_file", "type": "string", "label": "Video file", "default": "media/sync_test.mp4", "tooltip": "The video file to play. Searches USB first, then local media/ folder."},
+        {"key": "schedule_file", "type": "string", "label": "Schedule file", "default": "schedule.json", "tooltip": "MIDI/OSC cue schedule file (.json or .mid)."},
+        {"key": "enable_audio", "type": "bool", "label": "Enable Audio", "default": True, "tooltip": "Toggle audio playback on/off."},
+        {"key": "audio_output", "type": "choice", "label": "Audio Output", "default": "hdmi", "options": ["hdmi", "headphone"], "tooltip": "Select audio destination: HDMI or the 3.5mm Headphone Jack."},
+        {"key": "enable_midi", "type": "bool", "label": "Enable MIDI", "default": True, "tooltip": "Enable MIDI output triggers via USB or Serial."},
+        {"key": "enable_caching", "type": "bool", "label": "Local Caching", "default": False, "tooltip": "If enabled, external USB videos will be copied to SD card for smoother playback."},
+        {"key": "crop_mode", "type": "choice", "label": "Cropping Mode", "default": "letterbox", "options": ["letterbox", "crop-to-fill"], "tooltip": "Fit video to display. Letterbox: add black bars. Crop-to-fill: zoom and crop to fill without distortion."},
+        {"key": "overlay", "type": "bool", "label": "Debug Overlay", "default": False, "tooltip": "Show real-time synchronization statistics as an on-screen video overlay."},
+        {"key": "tick_interval", "type": "float", "label": "Sync Interval", "default": 0.02, "min": 0.02, "max": 5.0, "step": 0.01, "tooltip": "How often (seconds) to broadcast time sync messages. Lower = tighter sync but more network traffic."},
+        {"key": "emulated_render_lag", "type": "float", "label": "Web UI Render Lag Offset", "default": 0.05, "min": 0, "max": 1.0, "step": 0.01, "tooltip": "Offset (seconds) to subtract from the Web UI time/preview to match physical screens (e.g. 0.05 = 50ms)."},
+        {"key": "max_drift", "type": "float", "label": "Max Drift", "default": 0.15, "min": 0, "max": 10.0, "step": 0.05, "tooltip": "Maximum allowed sync deviation before a hard seek (jump) is forced."},
+        {"key": "min_drift", "type": "float", "label": "Min Drift", "default": 0.005, "min": 0, "max": 1.0, "step": 0.001, "tooltip": "Minimum deviation to ignore (prevents jitter)."},
+        {"key": "kp", "type": "float", "label": "P-Gain", "default": 2.0, "min": 0, "max": 10.0, "step": 0.05, "tooltip": "Proportional gain for playback speed adjustment. Higher = faster catchup."},
+        {"key": "max_samples", "type": "int", "label": "Max Samples", "default": 3, "min": 1, "max": 100, "step": 1, "tooltip": "Number of sync samples to average for drift calculation."},
+        {"key": "min_rate", "type": "float", "label": "Min Rate", "default": 0.9, "min": 0.01, "max": 1.0, "step": 0.01, "tooltip": "Minimum playback speed allowed for slow-down correction."},
+        {"key": "max_rate", "type": "float", "label": "Max Rate", "default": 1.2, "min": 1.0, "max": 10.0, "step": 0.01, "tooltip": "Maximum playback speed allowed for catch-up correction."},
+        {"key": "enable_system_logging", "type": "bool", "label": "Verbose logging", "default": False, "tooltip": "Enable detailed logging to kitchensync.log for troubleshooting."},
+        {"key": "video_width", "type": "int", "label": "Video Width", "default": 0, "min": 0, "max": 7680, "step": 1, "tooltip": "Force video width (0 = auto/native, default)."},
+        {"key": "video_height", "type": "int", "label": "Video Height", "default": 0, "min": 0, "max": 4320, "tooltip": "Force video height (0 = auto/native, default)."},
+        {"key": "position_poll_interval", "type": "float", "label": "Position Poll Interval", "default": 0.05, "min": 0.01, "max": 1.0, "tooltip": "Frequency (seconds) for GStreamer position polling (default 0.05s / 20Hz)."},
+        {"key": "remote_sync_mode", "type": "choice", "label": "Remote Sync Mode", "default": "http", "options": ["http", "rsync"], "tooltip": "Method to sync content from leader: http (standard Web UI download) or rsync (advanced folder sync)."},
+        {"key": "sync_peer_ip", "type": "string", "label": "Sync Peer IP (Ethernet)", "default": "", "tooltip": "COLLABORATOR's IP for direct-cable unicast sync. Setting this DISABLES broadcast - leave empty on a normal router/switch network. Never set it to this device's own IP."},
+        {"key": "enable_deviation_log", "type": "bool", "label": "Deviation CSV Log", "default": True, "tooltip": "Write per-tick sync deviation to logs/sync_deviation.csv (main diagnostic for sync quality)."},
+        {"key": "sync_mode", "type": "choice", "label": "Sync Mode", "default": "udp", "options": ["udp", "netclock"], "tooltip": "udp: custom P-gain speed control. netclock: GStreamer native clock sync."},
     ],
     "collaborator": [
-        {"key": "device_id", "section": "DEFAULT", "type": "string", "label": "Device Name/ID", "default": "pi-001", "tooltip": "A custom friendly name/ID for this Collaborator node."},
-        {"key": "role", "section": "KITCHENSYNC", "type": "choice", "label": "Role", "default": "collaborator", "options": ["leader", "collaborator", "bystander"], "tooltip": "Leader: Master clock and media server. Collaborator: Syncs to leader. Bystander: Idle, waits for provisioning."},
-        {"key": "video_file", "section": "DEFAULT", "type": "string", "label": "Video file", "default": "media/sync_test.mp4", "tooltip": "Local video file to play when sync starts."},
-        {"key": "enable_audio", "section": "KITCHENSYNC", "type": "bool", "label": "Enable Audio", "default": True, "tooltip": "Toggle audio playback on/off."},
-        {"key": "audio_output", "section": "KITCHENSYNC", "type": "choice", "label": "Audio Output", "default": "hdmi", "options": ["hdmi", "headphone"], "tooltip": "Select audio destination: HDMI or the 3.5mm Headphone Jack."},
-        {"key": "enable_caching", "section": "KITCHENSYNC", "type": "bool", "label": "Local Caching", "default": False, "tooltip": "If enabled, external USB videos will be copied to SD card for smoother playback."},
-        {"key": "enable_latency_compensation", "section": "KITCHENSYNC", "type": "bool", "label": "Latency Compensation", "default": True, "tooltip": "Enable high-precision per-device latency compensation."},
-        {"key": "crop_mode", "section": "KITCHENSYNC", "type": "choice", "label": "Cropping Mode", "default": "letterbox", "options": ["letterbox", "crop-to-fill"], "tooltip": "Fit video to display. Letterbox: add black bars. Crop-to-fill: zoom and crop to fill without distortion."},
-        {"key": "midi_port", "section": "DEFAULT", "type": "int", "label": "MIDI port", "default": 0, "min": 0, "max": 65535, "tooltip": "The index of the MIDI output port to use."},
-        {"key": "overlay", "section": "KITCHENSYNC", "type": "bool", "label": "Debug Overlay", "default": False, "tooltip": "Show real-time synchronization statistics as an on-screen video overlay."},
-        {"key": "video_width", "section": "DEFAULT", "type": "int", "label": "Video Width", "default": 0, "min": 0, "max": 7680, "step": 1, "tooltip": "Force video width (0 = auto/native, default)."},
-        {"key": "video_height", "section": "DEFAULT", "type": "int", "label": "Video Height", "default": 0, "min": 0, "max": 4320, "tooltip": "Force video height (0 = auto/native, default)."},
-        {"key": "position_poll_interval", "section": "DEFAULT", "type": "float", "label": "Position Poll Interval", "default": 0.05, "min": 0.01, "max": 1.0, "tooltip": "Frequency (seconds) for GStreamer position polling (default 0.05s / 20Hz)."},
-        {"key": "remote_sync_mode", "section": "DEFAULT", "type": "choice", "label": "Remote Sync Mode", "default": "http", "options": ["http", "rsync"], "tooltip": "Method to sync content from leader: http (standard Web UI download) or rsync (advanced folder sync)."},
-        {"key": "sync_mode", "section": "DEFAULT", "type": "choice", "label": "Sync Mode", "default": "udp", "options": ["udp", "netclock"], "tooltip": "udp: custom P-gain speed control. netclock: GStreamer native clock sync."},
-        {"key": "enable_deviation_log", "section": "DEFAULT", "type": "bool", "label": "Deviation CSV Log", "default": True, "tooltip": "Write per-tick sync deviation to logs/sync_deviation.csv (main diagnostic for sync quality)."},
+        {"key": "device_id", "type": "string", "label": "Device Name/ID", "default": "pi-001", "tooltip": "A custom friendly name/ID for this Collaborator node."},
+        {"key": "role", "type": "choice", "label": "Role", "default": "collaborator", "options": ["leader", "collaborator", "bystander"], "tooltip": "Leader: Master clock and media server. Collaborator: Syncs to leader. Bystander: Idle, waits for provisioning."},
+        {"key": "video_file", "type": "string", "label": "Video file", "default": "media/sync_test.mp4", "tooltip": "Local video file to play when sync starts."},
+        {"key": "enable_audio", "type": "bool", "label": "Enable Audio", "default": True, "tooltip": "Toggle audio playback on/off."},
+        {"key": "audio_output", "type": "choice", "label": "Audio Output", "default": "hdmi", "options": ["hdmi", "headphone"], "tooltip": "Select audio destination: HDMI or the 3.5mm Headphone Jack."},
+        {"key": "enable_caching", "type": "bool", "label": "Local Caching", "default": False, "tooltip": "If enabled, external USB videos will be copied to SD card for smoother playback."},
+        {"key": "enable_latency_compensation", "type": "bool", "label": "Latency Compensation", "default": True, "tooltip": "Enable high-precision per-device latency compensation."},
+        {"key": "crop_mode", "type": "choice", "label": "Cropping Mode", "default": "letterbox", "options": ["letterbox", "crop-to-fill"], "tooltip": "Fit video to display. Letterbox: add black bars. Crop-to-fill: zoom and crop to fill without distortion."},
+        {"key": "midi_port", "type": "int", "label": "MIDI port", "default": 0, "min": 0, "max": 65535, "tooltip": "The index of the MIDI output port to use."},
+        {"key": "overlay", "type": "bool", "label": "Debug Overlay", "default": False, "tooltip": "Show real-time synchronization statistics as an on-screen video overlay."},
+        {"key": "video_width", "type": "int", "label": "Video Width", "default": 0, "min": 0, "max": 7680, "step": 1, "tooltip": "Force video width (0 = auto/native, default)."},
+        {"key": "video_height", "type": "int", "label": "Video Height", "default": 0, "min": 0, "max": 4320, "tooltip": "Force video height (0 = auto/native, default)."},
+        {"key": "position_poll_interval", "type": "float", "label": "Position Poll Interval", "default": 0.05, "min": 0.01, "max": 1.0, "tooltip": "Frequency (seconds) for GStreamer position polling (default 0.05s / 20Hz)."},
+        {"key": "remote_sync_mode", "type": "choice", "label": "Remote Sync Mode", "default": "http", "options": ["http", "rsync"], "tooltip": "Method to sync content from leader: http (standard Web UI download) or rsync (advanced folder sync)."},
+        {"key": "sync_mode", "type": "choice", "label": "Sync Mode", "default": "udp", "options": ["udp", "netclock"], "tooltip": "udp: custom P-gain speed control. netclock: GStreamer native clock sync."},
+        {"key": "enable_deviation_log", "type": "bool", "label": "Deviation CSV Log", "default": True, "tooltip": "Write per-tick sync deviation to logs/sync_deviation.csv (main diagnostic for sync quality)."},
     ],
     "bystander": [
-        {"key": "device_id", "section": "KITCHENSYNC", "type": "string", "label": "Device Name/ID", "default": "pi-unknown", "tooltip": "A custom friendly name/ID for this Bystander node."},
-        {"key": "role", "section": "KITCHENSYNC", "type": "choice", "label": "Role", "default": "bystander", "options": ["leader", "collaborator", "bystander"], "tooltip": "Leader: Master clock and media server. Collaborator: Syncs to leader. Bystander: Idle, waits for provisioning."},
-        {"key": "overlay", "section": "KITCHENSYNC", "type": "bool", "label": "Debug Overlay", "default": False, "tooltip": "Show real-time synchronization statistics as an on-screen video overlay."},
+        {"key": "device_id", "type": "string", "label": "Device Name/ID", "default": "pi-unknown", "tooltip": "A custom friendly name/ID for this Bystander node."},
+        {"key": "role", "type": "choice", "label": "Role", "default": "bystander", "options": ["leader", "collaborator", "bystander"], "tooltip": "Leader: Master clock and media server. Collaborator: Syncs to leader. Bystander: Idle, waits for provisioning."},
+        {"key": "overlay", "type": "bool", "label": "Debug Overlay", "default": False, "tooltip": "Show real-time synchronization statistics as an on-screen video overlay."},
     ],
 }
 
@@ -251,43 +260,28 @@ class ConfigManager:
         except: return default
 
     def update_local_config(self, target_file: str, updates: Dict[str, Any], section: str = "KITCHENSYNC") -> None:
-        """Persist values into the local config, section-aware.
+        """Persist values into the unified [KITCHENSYNC] section.
 
-        Each key is routed to its canonical section (per CONFIG_ROLE_SECTIONS)
-        and any literal duplicate in other sections is removed. configparser
-        resolves a section's own key before [DEFAULT], so a stale duplicate
-        left in [KITCHENSYNC] silently overrides every later edit to
-        [DEFAULT] — this once pinned the leader to an old video_file no
-        matter what was saved.
+        Any literal duplicate of an updated key in [DEFAULT] or a stray
+        section is removed, so legacy two-section files converge to the
+        unified layout and can never shadow an edit again.
         """
         local_config = configparser.ConfigParser()
         if os.path.exists(target_file):
             local_config.read(target_file)
 
-        role = str(updates.get("role") or self.role_name()).lower()
-        role_sections = CONFIG_ROLE_SECTIONS.get(role, {})
+        if "KITCHENSYNC" not in local_config:
+            local_config.add_section("KITCHENSYNC")
 
         for key, value in updates.items():
-            target_section = section
-            for section_name, keys in role_sections.items():
-                if key in keys:
-                    target_section = section_name
-                    break
-
-            if target_section != "DEFAULT" and target_section not in local_config:
-                local_config.add_section(target_section)
-            local_config.set(target_section, key, str(value))
-
-            # Remove literal duplicates from every other section (inherited
-            # DEFAULT values are untouched by remove_option).
+            local_config.set("KITCHENSYNC", key, str(value))
             for other_section in local_config.sections():
-                if other_section != target_section:
+                if other_section != "KITCHENSYNC":
                     local_config.remove_option(other_section, key)
-            if target_section != "DEFAULT":
-                try:
-                    local_config.remove_option("DEFAULT", key)
-                except configparser.Error:
-                    pass
+            try:
+                local_config.remove_option("DEFAULT", key)
+            except configparser.Error:
+                pass
 
         with open(target_file, "w") as f:
             local_config.write(f)
@@ -316,52 +310,45 @@ class ConfigManager:
         values: Dict[str, Any] = {}
         for field in self.get_editable_fields(role):
             key = field["key"]
-            section = field["section"]
             ftype = field["type"]
             default = field.get("default")
-            if ftype == "int": values[key] = self.getint(key, int(default) if default is not None else 0, section)
-            elif ftype == "float": values[key] = self.getfloat(key, float(default) if default is not None else 0.0, section)
-            elif ftype == "bool": values[key] = self.getboolean(key, bool(default) if default is not None else False, section)
-            else: values[key] = self.get(key, str(default) if default is not None else "", section)
+            if ftype == "int": values[key] = self.getint(key, int(default) if default is not None else 0)
+            elif ftype == "float": values[key] = self.getfloat(key, float(default) if default is not None else 0.0)
+            elif ftype == "bool": values[key] = self.getboolean(key, bool(default) if default is not None else False)
+            else: values[key] = self.get(key, str(default) if default is not None else "")
         return values
 
     def get_default_values(self, role: Optional[str] = None) -> Dict[str, Any]:
         return {f["key"]: f.get("default") for f in self.get_editable_fields(role)}
 
     def clean_and_save_config(self, target_file: str, updates: Dict[str, Any], role: Optional[str] = None) -> None:
+        """Rewrite the config as a single unified [KITCHENSYNC] section
+        containing only the role's whitelisted keys."""
         role_name = role or self.role_name()
         cleaned = configparser.ConfigParser()
         cleaned["KITCHENSYNC"] = {}
-        cleaned["DEFAULT"] = {}
-        
+
         # Determine if we are updating the current config
         is_current = (self.get_config_path() == target_file)
 
-        for sec, keys in CONFIG_ROLE_SECTIONS[role_name].items():
-            if sec not in cleaned: cleaned.add_section(sec)
-            for k in sorted(keys):
-                val = updates.get(k)
-                if val is None:
-                    # Fallback to current
-                    val = self.get(k, None, sec)
-                if val is not None:
-                    cleaned[sec][k] = str(val).lower() if isinstance(val, bool) else str(val)
+        for k in sorted(CONFIG_ROLE_KEYS[role_name]):
+            val = updates.get(k)
+            if val is None:
+                # Fallback to current (reads [KITCHENSYNC], then legacy [DEFAULT])
+                val = self.get(k, None)
+            if val is not None:
+                cleaned["KITCHENSYNC"][k] = str(val).lower() if isinstance(val, bool) else str(val)
 
         with open(target_file, "w") as handle:
             cleaned.write(handle)
-        
+
         if is_current:
             self.config = cleaned
 
     def set_param(self, key: str, value: Any) -> None:
         # Live update internal object
-        section = "KITCHENSYNC"
-        for field in EDITABLE_CONFIG_FIELDS["leader"]:
-            if field["key"] == key:
-                section = field["section"]
-                break
-        if section not in self.config: self.config[section] = {}
-        self.config[section][key] = str(value).lower() if isinstance(value, bool) else str(value)
+        if "KITCHENSYNC" not in self.config: self.config["KITCHENSYNC"] = {}
+        self.config["KITCHENSYNC"][key] = str(value).lower() if isinstance(value, bool) else str(value)
 
     @property
     def content_dir(self) -> str:

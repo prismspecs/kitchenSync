@@ -77,7 +77,15 @@ gst-inspect-1.0 | grep -E "v4l2(sl)?h?(264|265|evc)"
 
 Each device reads a local `ksync.ini` (a `ksync.ini` on a USB stick's root
 overrides it). **`ksync.ini` is untracked in git** — a `git pull` never
-changes a device's config. The repo keeps reference mirrors for the two
+changes a device's config.
+
+The config is **unified**: every key lives in the single `[KITCHENSYNC]`
+section. (Historically keys were split between `[DEFAULT]` and
+`[KITCHENSYNC]`; configparser resolves a section's own key before
+`[DEFAULT]`, so a stale duplicate could shadow an edit forever — that bug
+pinned the leader to an old video no matter what was saved. Legacy
+two-section files still read correctly and are migrated to the unified
+layout on the first save.) The repo keeps reference mirrors for the two
 devices: `ksync.ini` (leader, pi5_1) and `ksync_collaborator.ini`
 (collaborator, pi4_1 — deploy it *as* `ksync.ini` on that Pi).
 
