@@ -464,8 +464,14 @@ class LeaderPi:
         # Always reply with updated list
         self._handle_file_list_request(msg, addr)
 
+    def _message_targets_this_device(self, msg: dict) -> bool:
+        target_device_id = msg.get("target_device_id")
+        return not target_device_id or target_device_id == self.config.device_id
+
     def _handle_config_request(self, msg: dict, addr: tuple) -> None:
         """Reply with current configuration."""
+        if not self._message_targets_this_device(msg):
+            return
         response = {
             "type": "config_state",
             "device_id": self.config.device_id,
@@ -478,6 +484,13 @@ class LeaderPi:
 
     def _handle_config_update(self, msg: dict, addr: tuple) -> None:
         """Handle a configuration update from the remote controller."""
+        # Config updates are broadcast (direct send + broadcast fallback), so
+        # an update addressed to a collaborator also arrives here. Applying it
+        # once overwrote this leader's ksync.ini with the collaborator's
+        # entire config (role, device_id and all), demoting it to a second
+        # collaborator on the next restart.
+        if not self._message_targets_this_device(msg):
+            return
         updates = msg.get("updates", {})
         log_info(f"Applying leader config updates: {updates}", component="leader")
         

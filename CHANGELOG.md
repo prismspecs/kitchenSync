@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Leader Config Clobbering Fix (2026-07-06)
+
+- **Critical**: `config_update`/`config_request` are sent with a `target_device_id` but also broadcast; the collaborator filtered by target, the leader did not. Editing a collaborator's config in the web UI therefore overwrote the leader's `ksync.ini` with the collaborator's entire config (`role = collaborator`, `device_id = pi4_1`, …), demoting the leader to a second collaborator on restart. Leader now ignores config messages addressed to other devices (`_message_targets_this_device`, same as collaborator). Regression tests added.
+
 ### Sync Investigation & NetClock Repair (2026-07-06)
 
 Root-caused the constant ~1s collaborator lag (three compounding issues) and repaired the netclock path. Full write-up: `docs/PROJECT_OVERVIEW.md`.

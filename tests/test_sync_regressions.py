@@ -21,8 +21,53 @@ sys.modules.setdefault("gi.repository", MagicMock())
 
 
 import collaborator
+import leader
 from video.drivers import gst_driver
 from ui import window_manager
+
+
+class TestLeaderConfigTargeting(unittest.TestCase):
+    """Broadcast config updates addressed to a collaborator must never be
+    applied by the leader (this once demoted the leader to a collaborator)."""
+
+    def _make_dummy(self):
+        dummy = SimpleNamespace(
+            config=SimpleNamespace(
+                device_id="pi5_1",
+                clean_and_save_config=MagicMock(),
+            ),
+            command_manager=SimpleNamespace(send_command=MagicMock()),
+        )
+        dummy._message_targets_this_device = (
+            lambda msg: leader.LeaderPi._message_targets_this_device(dummy, msg)
+        )
+        return dummy
+
+    def test_update_for_other_device_is_ignored(self):
+        dummy = self._make_dummy()
+        msg = {
+            "type": "config_update",
+            "target_device_id": "pi4_1",
+            "updates": {"role": "collaborator", "device_id": "pi4_1"},
+        }
+        leader.LeaderPi._handle_config_update(dummy, msg, ("192.168.1.165", 5006))
+        dummy.config.clean_and_save_config.assert_not_called()
+
+    def test_update_for_this_device_is_applied(self):
+        dummy = self._make_dummy()
+        msg = {
+            "type": "config_update",
+            "target_device_id": "pi5_1",
+            "updates": {"tick_interval": "0.05"},
+        }
+        leader.LeaderPi._handle_config_update(dummy, msg, ("192.168.1.165", 5006))
+        dummy.config.clean_and_save_config.assert_called_once()
+
+    def test_config_request_for_other_device_is_ignored(self):
+        dummy = self._make_dummy()
+        msg = {"type": "config_request", "target_device_id": "pi4_1"}
+        leader.LeaderPi._handle_config_request(dummy, msg, ("192.168.1.165", 5006))
+        dummy.command_manager.send_command.assert_not_called()
 
 
 class TestGstDriverSetSpeed(unittest.TestCase):
