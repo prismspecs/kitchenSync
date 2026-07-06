@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### NetClock Fallback, Video Offset, Leader HEVC Badge (2026-07-06)
+
+- **netclock → udp fallback**: a collaborator configured for netclock whose net clock never establishes (leader in udp mode, port blocked) now falls back to the UDP rate controller with a one-time warning. Previously it sat ~1s off forever with rate pinned at 1.0 while the watchdog attempted ~14,000 futile realigns (the inflated hard-seek counter in sync_deviation.csv). Failed realigns now back off 2.5s and no longer increment the counter.
+- **`video_offset`** (collaborator, Advanced): static per-device offset in seconds — positive delays the device relative to the leader. Applied in both udp comparison and the netclock join. This is the knob for display-chain latency differences between screens, the residual clock sync cannot see (e.g. device appears 30ms ahead → set 0.030).
+- **Leader HEVC badge fixed**: `leader_announce` never included `is_optimized` and the web UI hardcoded it to False, so the leader always showed "Non-HEVC" regardless of the file.
+
 ### Unified Config — Single [KITCHENSYNC] Section (2026-07-06)
 
 - Every config key now lives in one `[KITCHENSYNC]` section; the `[DEFAULT]`/`[KITCHENSYNC]` split is gone. The split caused a live-observed bug class: configparser resolves a section's own key before `[DEFAULT]`, so a stale duplicate (stamped at boot) shadowed every later edit — the pi5 kept playing `bbb_1080p_24fps_hevc.mp4` while `[DEFAULT]` said `sync_test_pi5_hevc.mp4`.

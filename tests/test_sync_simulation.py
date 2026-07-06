@@ -234,6 +234,38 @@ class SyncSimulationTest(unittest.TestCase):
 
         collab._maintain_video_sync.assert_called_once()
 
+    def test_netclock_without_clock_falls_back_to_udp(self):
+        """netclock configured but never established (e.g. leader in udp
+        mode) must fall back to the UDP rate controller instead of leaving
+        playback uncorrected - a mode mismatch once sat 0.96s off forever."""
+        config = MockConfig(kp=0.1, max_samples=5)
+        config.sync_mode = "netclock"
+        collab = self.get_collaborator(config)
+
+        collab.video_player.play()
+        collab.video_player.seek(5.2)  # 0.2s ahead of the leader
+        collab.video_player.set_speed = MagicMock(return_value=True)
+        # MockVideoDriver has no _net_clock attribute -> netclock inactive
+
+        collab._maintain_video_sync(5.0)
+
+        collab.video_player.set_speed.assert_called_once()
+        rate = collab.video_player.set_speed.call_args.args[0]
+        self.assertLess(rate, 1.0)  # slowing down to let the leader catch up
+
+    def test_netclock_watchdog_failed_realign_backs_off(self):
+        """A rejected realign must set a settle window, not retry every tick
+        (a failed realign once spun 14,000 times)."""
+        config = MockConfig()
+        config.sync_mode = "netclock"
+        collab = self.get_collaborator(config)
+        collab.video_player.netclock_realign = MagicMock(return_value=False)
+
+        collab._netclock_watchdog(-0.9, 10.0, 1000.0)
+
+        self.assertEqual(collab.hard_seek_count, 0)
+        self.assertEqual(collab._settle_until, 1002.5)
+
     def test_netclock_watchdog(self):
         """Watchdog ignores small deviation, realigns on gross divergence."""
         config = MockConfig()

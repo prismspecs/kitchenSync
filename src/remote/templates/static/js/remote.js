@@ -8,7 +8,7 @@ let latestState = null;
 
 const REFRESH_ICON_SVG = `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"></path><path d="M1 20v-6h6"></path><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>`;
 
-console.log('remote.js v14 loaded');
+console.log('remote.js v15 loaded');
 async function postJson(path, payload) {
     const response = await fetch(path, {
         method: 'POST',
@@ -372,6 +372,7 @@ function renderConfigCell(device, videoOptions, scheduleOptions) {
         'enable_caching',
         'enable_latency_compensation',
         'enable_deviation_log',
+        'video_offset',
         'midi_port',
         'video_width',
         'video_height',

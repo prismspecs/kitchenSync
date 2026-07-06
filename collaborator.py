@@ -129,6 +129,7 @@ class CollaboratorPi:
         self._smoothed_latency = None  # EWMA-smoothed per-device transport latency
         self._current_deviation = 0.0
         self._current_playback_rate = 1.0
+        self._netclock_fallback_warned = False
 
         # Sync Decoupling
         self._latest_sync_state = None
@@ -543,6 +544,12 @@ class CollaboratorPi:
         now = time.time()
         if now < self._settle_until:
             return
+        # Static per-device offset (seconds): positive delays this device
+        # relative to the leader. Dials out display-chain latency differences
+        # between screens - the residual offset clock sync cannot see.
+        video_offset = getattr(self.config, "video_offset", 0.0)
+        if video_offset:
+            leader_time = leader_time - video_offset
         # Use wall-clock position when leader sends wall-based time (mock driver fallback)
         # to avoid comparing wall-based time against hardware-decoded position (which has
         # a pipeline delay). When the leader uses media position, use get_position().
@@ -586,9 +593,20 @@ class CollaboratorPi:
             if self.startup_sync_count < self.FAST_SYNC_THRESHOLD: self.startup_sync_count += 1
 
             if getattr(self.config, "sync_mode", "udp") == "netclock":
-                self._netclock_watchdog(median_dev, leader_time, now)
-                self._log_deviation(now, leader_time, video_pos, deviation)
-                return
+                if getattr(self.video_player, "_net_clock", None) is not None:
+                    self._netclock_watchdog(median_dev, leader_time, now)
+                    self._log_deviation(now, leader_time, video_pos, deviation)
+                    return
+                # netclock configured but never established (leader in udp
+                # mode, port blocked, ...) - the UDP controller below is the
+                # only thing that can correct playback, so fall through.
+                if not self._netclock_fallback_warned:
+                    self._netclock_fallback_warned = True
+                    log_warning(
+                        "Sync: netclock configured but no net clock established "
+                        "(is the leader also in netclock mode?). Falling back to UDP rate control.",
+                        component="collaborator",
+                    )
 
             # Seek overrides for loop boundaries
             allow_hard_seek = abs(median_dev) > 5.0 if is_near_loop else abs(median_dev) > 2.0
@@ -631,14 +649,20 @@ class CollaboratorPi:
             return
         if not hasattr(self.video_player, "netclock_realign"):
             return
-        self.hard_seek_count += 1
-        log_info(
-            f"Sync: NetClock divergence {median_dev:.3f}s exceeds {guard}s - realigning to leader "
-            f"[Total realigns: {self.hard_seek_count}]",
-            component="collaborator",
-        )
         if self.video_player.netclock_realign(leader_time):
+            self.hard_seek_count += 1
+            log_info(
+                f"Sync: NetClock divergence {median_dev:.3f}s exceeded {guard}s - realigned to leader "
+                f"[Total realigns: {self.hard_seek_count}]",
+                component="collaborator",
+            )
             self.deviation_samples.clear()
+            self._settle_until = now + 2.5
+        else:
+            # Realign rejected (pipeline not ready / clock gone) - back off
+            # instead of retrying every tick. A failed attempt once spun
+            # 14,000 times, inflating the hard-seek counter uselessly.
+            log_warning(f"Sync: NetClock realign failed (dev={median_dev:.3f}s); backing off 2.5s", component="collaborator")
             self._settle_until = now + 2.5
 
     def _log_deviation(self, now: float, leader_time: float, video_pos: float, deviation: float) -> None:
@@ -716,6 +740,7 @@ class CollaboratorPi:
             self.startup_sync_count = 0
             self.deviation_samples.clear()
             self._settle_until = time.time() + 1.5
+            self._netclock_fallback_warned = False
             self._stop_sync_thread.clear()
             self._sync_thread = threading.Thread(target=self._sync_processor_loop, daemon=True)
             self._sync_thread.start()

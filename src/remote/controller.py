@@ -886,7 +886,7 @@ def _handle_leader_announce(msg: Dict[str, Any], addr: tuple) -> None:
         "status": msg.get("status", "leader"),
         "video_file": msg.get("video_file", ""),
         "video_driver": msg.get("video_driver", ""),
-        "is_optimized": False,
+        "is_optimized": msg.get("is_optimized", False),
         "hard_seeks": 0,
     }
 

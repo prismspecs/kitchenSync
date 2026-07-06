@@ -32,7 +32,7 @@ CONFIG_ROLE_KEYS = {
         "enable_caching", "enable_latency_compensation", "crop_mode",
         "video_file", "video_driver", "midi_port", "sync_port",
         "video_width", "video_height", "position_poll_interval", "remote_sync_mode", "sync_mode",
-        "enable_deviation_log", "netclock_max_drift", "netclock_port",
+        "enable_deviation_log", "netclock_max_drift", "netclock_port", "video_offset",
     },
     "bystander": {"role", "device_id", "overlay", "enable_system_logging"},
 }
@@ -83,6 +83,7 @@ EDITABLE_CONFIG_FIELDS = {
         {"key": "remote_sync_mode", "type": "choice", "label": "Remote Sync Mode", "default": "http", "options": ["http", "rsync"], "tooltip": "Method to sync content from leader: http (standard Web UI download) or rsync (advanced folder sync)."},
         {"key": "sync_mode", "type": "choice", "label": "Sync Mode", "default": "udp", "options": ["udp", "netclock"], "tooltip": "udp: custom P-gain speed control. netclock: GStreamer native clock sync."},
         {"key": "enable_deviation_log", "type": "bool", "label": "Deviation CSV Log", "default": True, "tooltip": "Write per-tick sync deviation to logs/sync_deviation.csv (main diagnostic for sync quality)."},
+        {"key": "video_offset", "type": "float", "label": "Video Offset (s)", "default": 0.0, "min": -1.0, "max": 1.0, "step": 0.001, "tooltip": "Static offset for THIS device: positive = delay it relative to the leader. Use to dial out display-latency differences between screens (e.g. this screen appears 30ms ahead -> set 0.030)."},
     ],
     "bystander": [
         {"key": "device_id", "type": "string", "label": "Device Name/ID", "default": "pi-unknown", "tooltip": "A custom friendly name/ID for this Bystander node."},
@@ -451,6 +452,9 @@ class ConfigManager:
 
     @property
     def enable_deviation_log(self) -> bool: return self.getboolean("enable_deviation_log", True)
+
+    @property
+    def video_offset(self) -> float: return self.getfloat("video_offset", 0.0)
 
     @property
     def latency_factor(self) -> float: return self.getfloat("latency_factor", 0.5)

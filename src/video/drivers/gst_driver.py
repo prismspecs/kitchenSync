@@ -721,7 +721,17 @@ class GstDriver(VideoDriver):
             # the sync watchdog absorb the difference.
             margin_ns = int(0.5 * Gst.SECOND)
             t0 = self._net_clock.get_time() + margin_ns
-            target = (t0 - self._net_base_time) % dur
+            # video_offset (s): positive delays this device on the shared
+            # timeline, compensating display-chain latency differences.
+            # (netclock_realign receives an already-offset-adjusted target
+            # from the collaborator, so the offset is only applied here.)
+            offset_ns = 0
+            if self.config:
+                try:
+                    offset_ns = int(self.config.getfloat("video_offset", 0.0) * Gst.SECOND)
+                except Exception:
+                    offset_ns = 0
+            target = (t0 - self._net_base_time - offset_ns) % dur
 
             # SEGMENT + stop=duration arms gapless looping (SEGMENT_DONE)
             seeked = self.pipeline.seek(

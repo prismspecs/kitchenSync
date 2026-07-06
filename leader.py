@@ -170,12 +170,19 @@ class LeaderPi:
     def _handle_discover(self, msg: dict, addr: tuple) -> None:
         print(f"[DISCOVER] Received discover from {addr[0]}:{addr[1]}")
         self._refresh_driver_name()
+        is_optimized = False
+        if self.video_path:
+            try:
+                is_optimized = self.video_manager.get_metadata(self.video_path).get("is_optimized", False)
+            except Exception:
+                pass
         response = {
             "type": "leader_announce",
             "device_id": self.config.device_id,
             "status": "leader",
             "video_file": Path(self.video_path).name if self.video_path else "",
             "video_driver": self.video_driver_name,
+            "is_optimized": is_optimized,
         }
         self._send_unicast(response, addr[0])
 
