@@ -140,6 +140,8 @@ class LeaderPi:
         self.command_manager.register_handler("discover", lambda msg, addr: self._handle_discover(msg, addr))
         self.command_manager.register_handler("device_update", lambda msg, addr: self._handle_device_update(msg, addr))
         self.command_manager.register_handler("log_request", lambda msg, addr: self._handle_log_request(msg, addr))
+        self.command_manager.register_handler("file_list_request", lambda msg, addr: self._handle_file_list_request(msg, addr))
+        self.command_manager.register_handler("file_delete_request", lambda msg, addr: self._handle_file_delete_request(msg, addr))
 
         self.command_manager.start_listening()
         self.command_manager.start_latency_probing()
@@ -437,24 +439,19 @@ class LeaderPi:
 
     def _handle_file_list_request(self, msg: dict, addr: tuple) -> None:
         """Reply with the local media list."""
-        device_id = msg.get("target_device_id")
-        if device_id and device_id != "leader-pi":
+        if not self._message_targets_this_device(msg):
             return
 
         response = {
             "type": "file_list_response",
-            "device_id": "leader-pi",
+            "device_id": self.config.device_id,
             "media": self.video_manager.list_videos(),
         }
-        self.command_manager.send_command(response, target_pi=None) # Broadcast back or send to addr?
-        # CommandManager.send_command currently broadcasts if target_pi not in collaborators.
-        # But addr is where it came from.
-        # I'll use a more direct send if I can.
-        
+        self._send_unicast(response, addr[0])
+
     def _handle_file_delete_request(self, msg: dict, addr: tuple) -> None:
         """Delete a local file and report updated list."""
-        device_id = msg.get("target_device_id")
-        if device_id and device_id != "leader-pi":
+        if not self._message_targets_this_device(msg):
             return
 
         filename = msg.get("filename")
@@ -505,8 +502,11 @@ class LeaderPi:
         }
         self.command_manager.send_command(response, target_pi=None)
         
-        if "role" in updates and updates["role"] != "leader":
-            log_info("Role change detected. Restarting...", component="leader")
+        current_video = Path(self.video_path).name if self.video_path else ""
+        video_changed = bool(updates.get("video_file")) and updates["video_file"] != current_video
+        if ("role" in updates and updates["role"] != "leader") or video_changed:
+            reason = "Role change" if "role" in updates and updates["role"] != "leader" else "Video change"
+            log_info(f"{reason} detected. Restarting...", component="leader")
             time.sleep(1)
             os.execv(sys.executable, [sys.executable, "kitchensync.py"])
 

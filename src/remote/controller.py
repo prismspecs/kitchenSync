@@ -823,6 +823,38 @@ class RemoteHandler(BaseHTTPRequestHandler):
             self._send_json({"status": "requested"}, status=202)
             return
 
+        if action == "api/media/load":
+            device_id = payload.get("device_id")
+            filename = payload.get("filename")
+            if not device_id or not filename:
+                self._send_json({"status": "error", "message": "device_id and filename required"}, status=400)
+                return
+
+            if device_id == LOCAL_LEADER_ID:
+                cluster_state.current_video = filename
+                log_info(f"Video changed to: {filename}", component="remote")
+                if cluster_state.is_playing:
+                    command_manager.send_command({"type": "stop"})
+                    cluster_state.is_playing = False
+                self._send_json({"status": "ok"})
+                return
+
+            # Persist as the device's configured video_file; the device saves
+            # and restarts itself (leader restarts on video change, collaborator
+            # restarts on any config update), then playback resumes with the
+            # new file via the normal start-command flow.
+            log_info(f"Load video '{filename}' on {device_id}", component="remote")
+            command_manager.send_command(
+                {
+                    "type": "config_update",
+                    "target_device_id": device_id,
+                    "updates": {"video_file": filename},
+                },
+                target_pi=device_id,
+            )
+            self._send_json({"status": "requested"}, status=202)
+            return
+
         if action == "api/device/update":
             device_id = payload.get("device_id")
             if not device_id:

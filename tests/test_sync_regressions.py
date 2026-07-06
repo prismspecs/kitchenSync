@@ -37,6 +37,7 @@ class TestLeaderConfigTargeting(unittest.TestCase):
                 clean_and_save_config=MagicMock(),
             ),
             command_manager=SimpleNamespace(send_command=MagicMock()),
+            video_path="media/current_video.mp4",
         )
         dummy._message_targets_this_device = (
             lambda msg: leader.LeaderPi._message_targets_this_device(dummy, msg)

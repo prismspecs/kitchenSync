@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### Web UI: Load Button, Leader Media List, Edit Stability (2026-07-06)
+
+- **Load button** on every Available Videos entry: sets that file as the device's `video_file` and restarts playback (new `/api/media/load`; leader now restarts on video change like it does on role change).
+- **Available Videos fixed for the Pi leader**: `leader.py` never registered a `file_list_request` handler (and the dead implementation used a hardcoded `leader-pi` id + broadcast reply); now registered, target-filtered, unicast reply. Frontend also auto-requests media for the Pi leader (was collaborators-only).
+- **Edit stability**: the 1.5s refresh loop no longer re-renders while a config field is focused (edits were being clobbered mid-typing). After Save/Load the UI re-pulls the device's config at +4s/+9s so the panel shows what was actually persisted post-restart.
+- **Deviation CSV restored**: `enable_deviation_log` (plus `netclock_max_drift`/`netclock_port`) were missing from the config-save whitelist, so ANY web-UI save silently stripped them from ksync.ini — that's why logs/sync_deviation.csv stopped appearing. Whitelisted, exposed as an Advanced toggle, and default flipped to true.
+
 ### Codec Detection & Per-Device Media Strategy (2026-07-06)
 
 - Fixed `_discover_via_cli` in `file_manager.py`: it only understood the legacy `Video:` gst-discoverer output, so on modern GStreamer it parsed nothing, and the dotted `"h.265"` codec string failed the HEVC check — the same file showed **HEVC** on one Pi and **Non-HEVC** on another purely depending on which metadata fallback ran. Parser now handles `video #N: H.265 (...)` and strips dots before matching.

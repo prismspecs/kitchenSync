@@ -8,7 +8,7 @@ let latestState = null;
 
 const REFRESH_ICON_SVG = `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"></path><path d="M1 20v-6h6"></path><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>`;
 
-console.log('remote.js v13 loaded');
+console.log('remote.js v14 loaded');
 async function postJson(path, payload) {
     const response = await fetch(path, {
         method: 'POST',
@@ -112,6 +112,24 @@ async function syncMedia(deviceId, filename) {
 
 async function requestMedia(deviceId) {
     await postJson('/api/media/request', { device_id: deviceId });
+}
+
+async function loadVideo(deviceId, filename) {
+    if (deviceId === 'remote-leader') {
+        await changeVideo(filename);
+        setTimeout(refresh, 500);
+        return;
+    }
+    if (!confirm(`Load ${filename} on ${deviceId}? The device will restart playback.`)) return;
+    const draftValues = draftConfigValues.get(deviceId) || {};
+    draftConfigValues.set(deviceId, { ...draftValues, video_file: filename });
+    lastSaveAt.set(deviceId, Date.now() / 1000);
+    await postJson('/api/media/load', { device_id: deviceId, filename });
+    // The device saves the config and restarts itself; re-pull its config
+    // once it should be back so the panel reflects reality.
+    setTimeout(() => requestConfig(deviceId), 4000);
+    setTimeout(() => requestConfig(deviceId), 9000);
+    setTimeout(refresh, 1000);
 }
 
 async function playCluster() {
@@ -353,6 +371,7 @@ function renderConfigCell(device, videoOptions, scheduleOptions) {
         'max_rate',
         'enable_caching',
         'enable_latency_compensation',
+        'enable_deviation_log',
         'midi_port',
         'video_width',
         'video_height',
@@ -424,7 +443,9 @@ function renderMediaCell(device, leaderMedia) {
         `;
     }
 
-    if (!isLeader && device.media === null && !requestedConfigs.has(device.device_id + '-media')) {
+    // Auto-request media for every real device (the Pi leader included -
+    // only the local web-UI node has its media injected directly).
+    if (device.device_id !== 'remote-leader' && device.media == null && !requestedConfigs.has(device.device_id + '-media')) {
         requestedConfigs.add(device.device_id + '-media');
         requestMedia(device.device_id);
     }
@@ -443,6 +464,7 @@ function renderMediaCell(device, leaderMedia) {
                 </div>
                 <div class="media-item-actions">
                     <span class="media-meta">${sizeMb} MB</span>
+                    <button class="btn-small btn-primary" title="Set as this device's video and restart playback" onclick="loadVideo('${device.device_id}', '${escapeHtml(m.name)}')">Load</button>
                     <button class="btn-small btn-info" onclick="toggleMediaInfo(event, '${infoId}')">Info</button>
                     <button class="btn-small btn-danger" onclick="deleteMedia('${device.device_id}', '${escapeHtml(m.name)}')">Delete</button>
                 </div>
@@ -829,6 +851,12 @@ async function saveConfig(event, deviceId, role) {
     lastSaveAt.set(deviceId, Date.now() / 1000);
     await postJson('/api/config/save', { device_id: deviceId, role, updates });
     setTimeout(refresh, 500);
+    // Devices restart after applying a config update; re-pull their config
+    // once they're back up so the panel shows what was actually persisted.
+    if (deviceId !== 'remote-leader') {
+        setTimeout(() => requestConfig(deviceId), 4000);
+        setTimeout(() => requestConfig(deviceId), 9000);
+    }
 }
 
 async function loadDefaults(deviceId) {
@@ -840,7 +868,16 @@ async function loadDefaults(deviceId) {
     setTimeout(refresh, 500);
 }
 
+function isEditingForm() {
+    const ae = document.activeElement;
+    if (!ae || !ae.closest) return false;
+    return !!ae.closest('.config-panel form');
+}
+
 async function refresh() {
+    // Don't re-render anything while the user is editing a config field -
+    // the periodic refresh was clobbering in-progress edits.
+    if (isEditingForm()) return;
     try {
         const response = await fetch('/api/state');
         const state = await response.json();

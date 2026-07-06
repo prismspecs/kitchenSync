@@ -232,6 +232,12 @@ tr:nth-child(odd) td {
     border-color: #722;
 }
 
+.btn-primary {
+    color: #fff;
+    background: #2a7;
+    border-color: #185;
+}
+
 .sync-section {
     margin-top: 15px;
     padding-top: 10px;
