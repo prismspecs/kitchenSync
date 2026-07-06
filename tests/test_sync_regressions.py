@@ -216,6 +216,7 @@ class TestCollaboratorLoopHandling(unittest.TestCase):
         )
         dummy = SimpleNamespace(
             video_player=video_player,
+            config=SimpleNamespace(),  # no sync_mode attr -> defaults to udp
             debug_deviation_mode=False,
             deviation_samples=[-0.10, -0.10],
             max_samples=3,
@@ -227,6 +228,7 @@ class TestCollaboratorLoopHandling(unittest.TestCase):
             kp=0.1,
             min_rate=0.9,
             max_rate=1.2,
+            _log_deviation=MagicMock(),
         )
         dummy._normalize_loop_time = lambda media_time: collaborator.CollaboratorPi._normalize_loop_time(dummy, media_time)
         dummy._normalize_loop_deviation = lambda video_pos, leader_time: collaborator.CollaboratorPi._normalize_loop_deviation(dummy, video_pos, leader_time)

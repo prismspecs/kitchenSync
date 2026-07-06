@@ -98,6 +98,9 @@ class GstDriver(VideoDriver):
         self._gapless_looping = False
         self._decoders_prioritized = False
         self.net_time_provider = None
+        # Netclock client state: set via use_network_clock(), consumed in play()
+        self._net_clock = None
+        self._net_base_time = None
         
         # Position polling
         self._cached_position = 0.0
@@ -327,6 +330,10 @@ class GstDriver(VideoDriver):
         if getattr(self, "video_sink_name", None) == "fakesink":
             sink = Gst.ElementFactory.make("fakesink", "videosink")
             if sink:
+                # sync=true keeps the pipeline clocked at realtime so position
+                # queries (and therefore sync broadcasts) stay meaningful;
+                # fakesink's default sync=false lets the pipeline free-run.
+                sink.set_property("sync", True)
                 return sink, "fakesink"
 
         crop_str = ""
@@ -434,6 +441,10 @@ class GstDriver(VideoDriver):
 
         self.video_path = video_path
         self._reprioritize_decoders()
+
+        # New pipeline: any previous netclock slaving no longer applies
+        self._net_clock = None
+        self._net_base_time = None
 
         # Always use playbin - it is much more robust at negotiating hardware 
         # buffers (DMABuf) than a manually constructed pipeline.
@@ -615,7 +626,14 @@ class GstDriver(VideoDriver):
     def play(self) -> bool:
         if not self.pipeline:
             return False
-        
+
+        # Netclock client: align position/base-time to the leader's timeline
+        # while still paused, so rendering starts in sync instead of relying
+        # on QoS frame-dropping to catch up (which Pi decoders can't sustain).
+        aligned_position = None
+        if self._net_base_time is not None and self._net_clock is not None:
+            aligned_position = self._align_to_network_clock()
+
         ret = self.pipeline.set_state(Gst.State.PLAYING)
         if ret == Gst.StateChangeReturn.FAILURE:
             log_error("Gst: Failed to set pipeline to PLAYING")
@@ -623,7 +641,7 @@ class GstDriver(VideoDriver):
                 return True
             self.state = PlayerState.ERROR
             return False
-            
+
         # Wait up to 1s for the pipeline to reach PAUSED/PLAYING (important for Pi hardware)
         success, current, _ = self.pipeline.get_state(1.0 * Gst.SECOND)
         if success == Gst.StateChangeReturn.FAILURE:
@@ -634,18 +652,19 @@ class GstDriver(VideoDriver):
             return False
 
         self.state = PlayerState.PLAYING
-        self._cached_position = 0.0
+        self._cached_position = aligned_position if aligned_position is not None else 0.0
         self._last_poll_time = time.time() # Reset poll time to current to avoid extrapolation explosion
         self._start_polling()
 
-        # Phase 3 NetTimeProvider setup for clock sync
-        if self.config and getattr(self.config, "sync_mode", "udp") == "netclock":
+        # Phase 3 NetTimeProvider setup for clock sync.
+        # Only serve our clock when we are NOT slaved to someone else's
+        # (a netclock client serving its own port 9997 is useless noise).
+        if self.config and getattr(self.config, "sync_mode", "udp") == "netclock" and self._net_base_time is None:
             try:
                 from gi.repository import GstNet
                 clock = self.pipeline.get_clock()
                 if clock:
                     clock_port = self.config.getint("netclock_port", 9997)
-                    # Create NetTimeProvider to serve clock over TCP
                     self.net_time_provider = GstNet.NetTimeProvider.new(clock, "0.0.0.0", clock_port)
                     log_info(f"Gst: Started NetTimeProvider on port {clock_port}", component="video")
             except Exception as e:
@@ -665,10 +684,70 @@ class GstDriver(VideoDriver):
         else:
             log_warning("Gst: Could not identify active decoder element")
 
-        # Enable gapless looping after pipeline is stable
-        self._enable_gapless_looping()
-            
+        # Enable gapless looping after pipeline is stable.
+        # The netclock alignment seek already armed SEGMENT looping.
+        if aligned_position is None:
+            self._enable_gapless_looping()
+
         return True
+
+    def _align_to_network_clock(self):
+        """Join the leader's timeline: seek to where the leader will be at T0
+        (a short margin from now) and anchor base_time so that position renders
+        exactly at T0. Returns the target position in seconds, or None.
+
+        The naive approach (share base_time, start at position 0) leaves a
+        late joiner permanently behind by its startup latency, because sinks
+        only ever drop late frames as fast as the decoder allows.
+        """
+        try:
+            ret = self.pipeline.set_state(Gst.State.PAUSED)
+            if ret == Gst.StateChangeReturn.FAILURE:
+                log_warning("Gst: NetClock align - PAUSED transition failed", component="video")
+                return None
+            success, _, _ = self.pipeline.get_state(5 * Gst.SECOND)
+            if success == Gst.StateChangeReturn.FAILURE:
+                log_warning("Gst: NetClock align - preroll failed", component="video")
+                return None
+
+            ok, dur = self.pipeline.query_duration(Gst.Format.TIME)
+            if not ok or dur <= 0:
+                log_warning("Gst: NetClock align - duration unavailable", component="video")
+                return None
+
+            # Margin must cover the align seek + PLAYING transition below.
+            # If we settle early the sink simply waits for T0 (frame-accurate
+            # start); if we overrun, frames start slightly late and QoS plus
+            # the sync watchdog absorb the difference.
+            margin_ns = int(0.5 * Gst.SECOND)
+            t0 = self._net_clock.get_time() + margin_ns
+            target = (t0 - self._net_base_time) % dur
+
+            # SEGMENT + stop=duration arms gapless looping (SEGMENT_DONE)
+            seeked = self.pipeline.seek(
+                self.current_rate,
+                Gst.Format.TIME,
+                Gst.SeekFlags.FLUSH | Gst.SeekFlags.ACCURATE | Gst.SeekFlags.SEGMENT,
+                Gst.SeekType.SET, target,
+                Gst.SeekType.SET, dur,
+            )
+            if not seeked:
+                log_warning("Gst: NetClock align - seek rejected", component="video")
+                return None
+            self.pipeline.get_state(5 * Gst.SECOND)
+
+            # Anchor: running-time 0 (== position `target`) renders at T0.
+            self.pipeline.set_start_time(Gst.CLOCK_TIME_NONE)
+            self.pipeline.set_base_time(t0)
+            self._gapless_looping = True
+            log_info(
+                f"Gst: NetClock aligned - starting at {target / Gst.SECOND:.3f}s on leader timeline",
+                component="video",
+            )
+            return target / Gst.SECOND
+        except Exception as e:
+            log_error(f"Gst: NetClock align failed: {e}", component="video")
+            return None
 
     def pause(self) -> bool:
         if self.pipeline:
@@ -825,8 +904,16 @@ class GstDriver(VideoDriver):
         return self.pipeline.get_bus() if self.pipeline else None
 
     def get_pipeline_base_time(self):
-        """Get the GStreamer pipeline's base time in nanoseconds."""
-        return self.pipeline.get_base_time() if self.pipeline else 0
+        """Get the GStreamer pipeline's base time in nanoseconds.
+
+        Waits for any pending async state change first: an in-flight flushing
+        seek (e.g. the gapless-looping setup) redistributes base_time when it
+        settles, so reading immediately after play() returns a stale value.
+        """
+        if not self.pipeline:
+            return 0
+        self.pipeline.get_state(2 * Gst.SECOND)
+        return self.pipeline.get_base_time()
 
     def set_pipeline_base_time(self, base_time):
         """Set the GStreamer pipeline's base time in nanoseconds."""
@@ -839,35 +926,72 @@ class GstDriver(VideoDriver):
             self.pipeline.set_start_time(start_time)
 
     def use_network_clock(self, leader_ip: str, base_time: int, port: int = 9997) -> bool:
-        """Configure the pipeline to use GstNetClientClock synced to leader."""
+        """Slave this pipeline to the leader's GstNetTimeProvider.
+
+        Stores the client clock and the leader's base_time; the actual
+        position/base-time alignment happens in play() once the pipeline can
+        preroll (see _align_to_network_clock).
+        """
         try:
             from gi.repository import GstNet
             log_info(f"Gst: Connecting to leader NetClock at {leader_ip}:{port}...", component="video")
-            
-            # Create client clock synced to leader's clock
+
             client_clock = GstNet.NetClientClock.new("ksync-clock", leader_ip, port, 0)
             if not client_clock:
                 log_error("Gst: Failed to create GstNetClientClock", component="video")
                 return False
-                
+
             # Wait for sync to establish (up to 5s)
             success = client_clock.wait_for_sync(5 * Gst.SECOND)
             if not success:
                 log_warning("Gst: Clock sync timeout. Proceeding anyway...", component="video")
-                
-            # Apply to pipeline
+
             self.pipeline.use_clock(client_clock)
-            
-            # Align pipeline timing (GStreamer handles sync using base_time)
-            # We must set start_time to CLOCK_TIME_NONE so base_time calculation works correctly
+            # Disable automatic base-time management; play() sets it explicitly
             self.pipeline.set_start_time(Gst.CLOCK_TIME_NONE)
-            self.pipeline.set_base_time(base_time)
-            
-            log_info(f"Gst: Pipeline synced to leader clock. Base time set to {base_time}", component="video")
+
+            self._net_clock = client_clock
+            self._net_base_time = int(base_time)
+            log_info(f"Gst: Using leader clock (leader base_time {base_time})", component="video")
             return True
         except Exception as e:
             log_error(f"Gst: Failed to configure network clock: {e}", component="video")
             return False
+
+    def netclock_realign(self, leader_position: float, margin: float = 0.5) -> bool:
+        """Re-join the leader's timeline while PLAYING.
+
+        Used by the collaborator's sync watchdog when netclock playback has
+        diverged (leader seek, EOS fallback, failed clock sync at startup).
+        Seeks to where the leader will be `margin` seconds from now and
+        re-anchors base_time so that position renders exactly then.
+        """
+        if self._net_clock is None or not self._is_ready(timeout_ms=500):
+            return False
+
+        ok, dur = self.pipeline.query_duration(Gst.Format.TIME)
+        if not ok or dur <= 0:
+            return False
+
+        t0 = self._net_clock.get_time() + int(margin * Gst.SECOND)
+        target = int((leader_position + margin) * Gst.SECOND) % dur
+
+        self.is_seeking = True
+        seeked = self.pipeline.seek(
+            self.current_rate,
+            Gst.Format.TIME,
+            Gst.SeekFlags.FLUSH | Gst.SeekFlags.ACCURATE | Gst.SeekFlags.SEGMENT,
+            Gst.SeekType.SET, target,
+            Gst.SeekType.SET, dur,
+        )
+        if not seeked:
+            self.is_seeking = False
+            log_warning("Gst: NetClock realign seek rejected", component="video")
+            return False
+
+        self.pipeline.set_base_time(t0)
+        log_info(f"Gst: NetClock realigned to {target / Gst.SECOND:.3f}s", component="video")
+        return True
 
     def get_state(self) -> PlayerState:
         if not self.pipeline:

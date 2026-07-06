@@ -2,6 +2,8 @@
 
 kSync is a Raspberry Pi video-sync system for synchronized playback and protocol output (MIDI, OSC) across leader and collaborator nodes.
 
+> **Start here:** [docs/PROJECT_OVERVIEW.md](docs/PROJECT_OVERVIEW.md) — architecture, how both sync modes work, network/port reference, config deployment model, and a diagnostics runbook.
+
 The active stack is:
 - **GStreamer** for high-performance video playback
 - **Openbox/X11** for the display session

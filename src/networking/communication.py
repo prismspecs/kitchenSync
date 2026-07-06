@@ -152,8 +152,13 @@ class SyncBroadcaster:
                             self.sync_sock.sendto(
                                 payload.encode(), (target, self.sync_port)
                             )
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        # Rate-limited: silence here once hid a dead unicast
+                        # target for weeks (sync_peer_ip pointing nowhere).
+                        now_err = time.time()
+                        if now_err - getattr(self, "_last_send_error_at", 0.0) > 10.0:
+                            self._last_send_error_at = now_err
+                            log_warning(f"Sync: send failed ({e}) - check network / sync_peer_ip", component="network")
 
                 time.sleep(self.tick_interval)
 

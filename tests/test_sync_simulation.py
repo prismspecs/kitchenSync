@@ -40,6 +40,9 @@ class MockConfig:
     def getint(self, key, default, section=None):
         return getattr(self, key, default)
 
+    def getfloat(self, key, default, section=None):
+        return getattr(self, key, default)
+
     def role_name(self) -> str:
         return "collaborator"
 
@@ -220,15 +223,34 @@ class SyncSimulationTest(unittest.TestCase):
             "192.168.0.221", 123456789, 9998
         )
         
-        # Verify _maintain_video_sync is bypassed when sync_mode is netclock
+        # _maintain_video_sync still runs in netclock mode: it measures
+        # deviation (heartbeats/CSV) and acts as a coarse divergence watchdog
         collab._maintain_video_sync = MagicMock()
-        
+
         with patch('time.time', return_value=1000.0):
             # Simulate a sync tick
             collab._handle_sync(10.0, 1000.0, "leader-001")
             collab._process_sync_tick()
-            
-        collab._maintain_video_sync.assert_not_called()
+
+        collab._maintain_video_sync.assert_called_once()
+
+    def test_netclock_watchdog(self):
+        """Watchdog ignores small deviation, realigns on gross divergence."""
+        config = MockConfig()
+        config.sync_mode = "netclock"
+        collab = self.get_collaborator(config)
+        collab.video_player.netclock_realign = MagicMock(return_value=True)
+
+        # Within guard (default 0.5s): no correction, rate pinned to 1.0
+        collab._netclock_watchdog(0.2, 10.0, 1000.0)
+        collab.video_player.netclock_realign.assert_not_called()
+        self.assertEqual(collab._current_playback_rate, 1.0)
+
+        # Beyond guard: realign to leader position and back off (settle window)
+        collab._netclock_watchdog(-0.8, 10.0, 1000.0)
+        collab.video_player.netclock_realign.assert_called_once_with(10.0)
+        self.assertEqual(collab.hard_seek_count, 1)
+        self.assertEqual(collab._settle_until, 1002.5)
 
 if __name__ == "__main__":
     unittest.main()

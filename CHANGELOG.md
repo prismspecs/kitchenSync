@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+### Sync Investigation & NetClock Repair (2026-07-06)
+
+Root-caused the constant ~1s collaborator lag (three compounding issues) and repaired the netclock path. Full write-up: `docs/PROJECT_OVERVIEW.md`.
+
+- **Config**: `sync_mode` returned to `udp` on both device mirrors; `sync_peer_ip` removed — it was set to the **leader's own IP**, so sync ticks were unicast to ourselves with broadcast disabled and the collaborator received nothing.
+- **Guard**: leader now detects a self-IP `sync_peer_ip`, logs an error, and falls back to broadcast. `SyncBroadcaster` send failures are rate-limit logged instead of silently swallowed.
+- **NetClock join fixed** (`GstDriver._align_to_network_clock`): collaborator prerolls paused, seeks to where the leader will be 0.5s from now, and anchors `base_time` so that frame renders exactly then. Previously it shared base_time and started at position 0, relying on QoS frame-dropping that Pi decoders can't sustain — the source of the permanent startup lag.
+- **NetClock watchdog**: `_maintain_video_sync` now runs in netclock mode too — deviation CSV + heartbeat `Dev` stay honest (they previously reported 0.000 forever) — and realigns via `GstDriver.netclock_realign()` when |median deviation| > `netclock_max_drift` (default 0.5s), recovering from leader seeks/EOS rebases.
+- **Stale base_time race fixed**: `get_pipeline_base_time()` waits for pending seeks to settle (the gapless-loop SEGMENT seek redistributes base_time when it completes), and the leader re-reads base_time on every 30s start re-broadcast instead of caching the initial value.
+- **fakesink fallback** now sets `sync=true` so headless pipelines stay clocked at realtime instead of free-running.
+- Verified end-to-end with the real driver on desktop GStreamer 1.28: late join settles at +0.0ms; a deliberate 5s leader seek recovers to -0.1ms after one realign. Test suite extended (`test_netclock_watchdog`); 36/36 pass.
+
 ### Ethernet Direct-Cable Sync
 - Added `sync_peer_ip` config field for leader (e.g. `10.0.0.2` for Pi 4's Ethernet IP).
 - When set, leader sends sync packets via unicast over Ethernet (port 5005) instead of WiFi broadcast.

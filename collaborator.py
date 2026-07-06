@@ -533,8 +533,9 @@ class CollaboratorPi:
             self.system_state.current_time = adjusted_leader_time
             if self.midi_scheduler:
                 self.midi_scheduler.process_cues(adjusted_leader_time)
-            if getattr(self.config, "sync_mode", "udp") != "netclock":
-                self._maintain_video_sync(adjusted_leader_time, source=source)
+            # Runs in BOTH sync modes: in netclock mode it measures/logs
+            # deviation and acts only as a coarse divergence watchdog.
+            self._maintain_video_sync(adjusted_leader_time, source=source)
 
     def _maintain_video_sync(self, leader_time: float, source: str = "media") -> None:
         if not self.video_player.is_playing or getattr(self.video_player, "is_seeking", False):
@@ -584,6 +585,11 @@ class CollaboratorPi:
             median_dev = deviation if self.startup_sync_count < self.FAST_SYNC_THRESHOLD else statistics.median(self.deviation_samples)
             if self.startup_sync_count < self.FAST_SYNC_THRESHOLD: self.startup_sync_count += 1
 
+            if getattr(self.config, "sync_mode", "udp") == "netclock":
+                self._netclock_watchdog(median_dev, leader_time, now)
+                self._log_deviation(now, leader_time, video_pos, deviation)
+                return
+
             # Seek overrides for loop boundaries
             allow_hard_seek = abs(median_dev) > 5.0 if is_near_loop else abs(median_dev) > 2.0
             allow_accurate_seek = False if is_near_loop else abs(median_dev) >= self.max_drift
@@ -610,13 +616,39 @@ class CollaboratorPi:
                 self._current_playback_rate = 1.0
                 self.video_player.set_speed(1.0)
 
-            # Log to CSV if enabled
-            if getattr(self, "enable_deviation_log", False):
-                try:
-                    with open(self.deviation_log_path, "a") as f:
-                        f.write(f"{now:.6f},{leader_time:.6f},{video_pos:.6f},{deviation:.6f},{self._current_playback_rate:.4f},{self.hard_seek_count}\n")
-                except Exception:
-                    pass
+            self._log_deviation(now, leader_time, video_pos, deviation)
+
+    def _netclock_watchdog(self, median_dev: float, leader_time: float, now: float) -> None:
+        """Coarse divergence guard while GStreamer's network clock drives playback.
+
+        The net clock keeps rate perfectly matched, so no rate control or fine
+        seeking here — only a realign when playback has grossly diverged
+        (leader seek, EOS flush fallback, or a failed clock sync at startup).
+        """
+        self._current_playback_rate = 1.0
+        guard = self.config.getfloat("netclock_max_drift", 0.5)
+        if abs(median_dev) <= guard:
+            return
+        if not hasattr(self.video_player, "netclock_realign"):
+            return
+        self.hard_seek_count += 1
+        log_info(
+            f"Sync: NetClock divergence {median_dev:.3f}s exceeds {guard}s - realigning to leader "
+            f"[Total realigns: {self.hard_seek_count}]",
+            component="collaborator",
+        )
+        if self.video_player.netclock_realign(leader_time):
+            self.deviation_samples.clear()
+            self._settle_until = now + 2.5
+
+    def _log_deviation(self, now: float, leader_time: float, video_pos: float, deviation: float) -> None:
+        if not getattr(self, "enable_deviation_log", False):
+            return
+        try:
+            with open(self.deviation_log_path, "a") as f:
+                f.write(f"{now:.6f},{leader_time:.6f},{video_pos:.6f},{deviation:.6f},{self._current_playback_rate:.4f},{self.hard_seek_count}\n")
+        except Exception:
+            pass
 
     def _handle_start_command(self, msg: dict, addr: Optional[tuple] = None) -> None:
         leader_file = msg.get("video_file")

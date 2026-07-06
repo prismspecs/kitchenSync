@@ -144,6 +144,17 @@ class LeaderPi:
         self.command_manager.start_listening()
         self.command_manager.start_latency_probing()
 
+    @staticmethod
+    def _ip_is_local(ip: str) -> bool:
+        """True if the IP is bound to one of this machine's own interfaces."""
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.bind((ip, 0))
+            s.close()
+            return True
+        except OSError:
+            return False
+
     def _send_unicast(self, payload: dict, host: str) -> None:
         """Send a UDP message directly to a specific host (no broadcast)."""
         try:
@@ -291,6 +302,13 @@ class LeaderPi:
         self.sync_broadcaster.leader_id = self.config.device_id
         self.sync_broadcaster.is_wall_clock = "fakesink" in self.video_driver_name or "mock" in self.video_driver_name
         peer_ip = (self.config.get("sync_peer_ip", "") or "").strip()
+        if peer_ip and self._ip_is_local(peer_ip):
+            log_error(
+                f"Sync: sync_peer_ip {peer_ip} is THIS device's own address - collaborators would receive "
+                f"no sync at all. Ignoring it and using broadcast. Set it to the COLLABORATOR's IP or remove it.",
+                component="leader",
+            )
+            peer_ip = ""
         if peer_ip:
             log_warning(f"Sync: Using unicast to peer {peer_ip} over Ethernet (WiFi broadcast disabled)", component="leader")
             self.sync_broadcaster.set_unicast_targets([peer_ip], use_broadcast=False)
@@ -303,34 +321,38 @@ class LeaderPi:
 
         # Periodically send start command to collaborators
         def start_broadcast_loop():
-            gst_base_time = None
-            if getattr(self.config, "sync_mode", "udp") == "netclock" and hasattr(self.video_player, "get_pipeline_base_time"):
-                gst_base_time = self.video_player.get_pipeline_base_time()
-
-            start_command = {
-                "type": "start",
-                "video_file": Path(self.video_path).name if self.video_path else None,
-                "schedule": self.schedule.get_cues(),
-                "start_time": self.system_state.start_time,
-                "leader_id": self.config.device_id,
-                "debug_mode": self.config.debug_mode,
-                "sync_params": {
-                    "max_drift": self.config.max_drift,
-                    "min_drift": self.config.min_drift,
-                    "kp": self.config.kp,
-                    "min_rate": self.config.min_rate,
-                    "max_rate": self.config.max_rate,
-                    "max_samples": self.config.max_samples,
-                    "enable_audio": self.config.enable_audio,
-                },
-            }
-            if gst_base_time is not None:
-                start_command["gst_base_time"] = gst_base_time
-                start_command["netclock_port"] = self.config.getint("netclock_port", 9997)
+            def build_start_command():
+                cmd = {
+                    "type": "start",
+                    "video_file": Path(self.video_path).name if self.video_path else None,
+                    "schedule": self.schedule.get_cues(),
+                    "start_time": self.system_state.start_time,
+                    "leader_id": self.config.device_id,
+                    "debug_mode": self.config.debug_mode,
+                    "sync_params": {
+                        "max_drift": self.config.max_drift,
+                        "min_drift": self.config.min_drift,
+                        "kp": self.config.kp,
+                        "min_rate": self.config.min_rate,
+                        "max_rate": self.config.max_rate,
+                        "max_samples": self.config.max_samples,
+                        "enable_audio": self.config.enable_audio,
+                    },
+                }
+                # Re-read base_time on every send: it changes whenever this
+                # pipeline rebases (gapless-loop setup seek, EOS flush
+                # fallback, manual seeks), and a stale value permanently
+                # offsets any collaborator that joins with it.
+                if getattr(self.config, "sync_mode", "udp") == "netclock" and hasattr(self.video_player, "get_pipeline_base_time"):
+                    gst_base_time = self.video_player.get_pipeline_base_time()
+                    if gst_base_time:
+                        cmd["gst_base_time"] = gst_base_time
+                        cmd["netclock_port"] = self.config.getint("netclock_port", 9997)
+                return cmd
 
             # Send immediately on start
-            self.command_manager.send_command(start_command)
-            
+            self.command_manager.send_command(build_start_command())
+
             # Then much slower re-broadcast for late joiners (every 30s instead of 10s)
             while self.system_state.is_running:
                 time.sleep(30.0)
@@ -338,7 +360,7 @@ class LeaderPi:
                     # Only broadcast (don't send direct to everyone again to reduce noise)
                     try:
                         self.command_manager._ensure_send_socket()
-                        payload = json.dumps(start_command)
+                        payload = json.dumps(build_start_command())
                         self.command_manager.control_sock.sendto(
                             payload.encode(), (self.command_manager.broadcast_ip, self.command_manager.control_port)
                         )

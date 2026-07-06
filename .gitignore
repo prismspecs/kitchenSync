@@ -159,3 +159,8 @@ Thumbs.db
 # Raspberry Pi specific
 .gpio_state
 omxplayer_wrapper.log
+
+# Per-device config: each Pi keeps its own untracked ksync.ini; tracking these
+# would collide with device-local files and break git pull on the Pis.
+ksync.ini
+ksync_collaborator.ini
