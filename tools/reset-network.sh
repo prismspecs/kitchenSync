@@ -43,12 +43,7 @@ elif [ -f /etc/dhcpcd.conf ]; then
         # Let's comment out lines matching the eth0 interface block
         sudo sed -i '/^interface eth0/,/^[a-zA-Z]/ { /^[a-zA-Z]/! s/^/# /; /^interface eth0/ s/^/# / }' /etc/dhcpcd.conf
         
-        echo "==> Restarting dhcpcd service..."
         sudo systemctl restart dhcpcd
-    else
-        echo "❌ Error: /etc/dhcpcd.conf not found."
-        exit 1
-    fi
 else
     echo "❌ Error: Neither NetworkManager (nmcli) nor dhcpcd (/etc/dhcpcd.conf) was detected on this system."
     exit 1
