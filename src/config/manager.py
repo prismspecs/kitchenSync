@@ -251,13 +251,44 @@ class ConfigManager:
         except: return default
 
     def update_local_config(self, target_file: str, updates: Dict[str, Any], section: str = "KITCHENSYNC") -> None:
+        """Persist values into the local config, section-aware.
+
+        Each key is routed to its canonical section (per CONFIG_ROLE_SECTIONS)
+        and any literal duplicate in other sections is removed. configparser
+        resolves a section's own key before [DEFAULT], so a stale duplicate
+        left in [KITCHENSYNC] silently overrides every later edit to
+        [DEFAULT] — this once pinned the leader to an old video_file no
+        matter what was saved.
+        """
         local_config = configparser.ConfigParser()
         if os.path.exists(target_file):
             local_config.read(target_file)
-        if section not in local_config:
-            local_config.add_section(section)
+
+        role = str(updates.get("role") or self.role_name()).lower()
+        role_sections = CONFIG_ROLE_SECTIONS.get(role, {})
+
         for key, value in updates.items():
-            local_config.set(section, key, str(value))
+            target_section = section
+            for section_name, keys in role_sections.items():
+                if key in keys:
+                    target_section = section_name
+                    break
+
+            if target_section != "DEFAULT" and target_section not in local_config:
+                local_config.add_section(target_section)
+            local_config.set(target_section, key, str(value))
+
+            # Remove literal duplicates from every other section (inherited
+            # DEFAULT values are untouched by remove_option).
+            for other_section in local_config.sections():
+                if other_section != target_section:
+                    local_config.remove_option(other_section, key)
+            if target_section != "DEFAULT":
+                try:
+                    local_config.remove_option("DEFAULT", key)
+                except configparser.Error:
+                    pass
+
         with open(target_file, "w") as f:
             local_config.write(f)
         log_info(f"Updated {target_file}", component="config")

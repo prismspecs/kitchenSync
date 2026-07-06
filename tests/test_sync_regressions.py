@@ -26,6 +26,38 @@ from video.drivers import gst_driver
 from ui import window_manager
 
 
+class TestUpdateLocalConfigSectionRouting(unittest.TestCase):
+    """A literal key in [KITCHENSYNC] shadows [DEFAULT] on reads, so the boot
+    persistence path must route keys to their canonical section and strip
+    duplicates — a stale [KITCHENSYNC] video_file once pinned the leader to
+    an old video no matter what was saved."""
+
+    def test_removes_shadowing_duplicate(self):
+        import configparser
+        import tempfile
+        from config.manager import ConfigManager
+
+        cm = ConfigManager.__new__(ConfigManager)
+        with tempfile.TemporaryDirectory() as td:
+            path = os.path.join(td, "ksync.ini")
+            with open(path, "w") as f:
+                f.write(
+                    "[DEFAULT]\nvideo_file = ignored.mp4\n\n"
+                    "[KITCHENSYNC]\nrole = leader\nvideo_file = stale.mp4\n"
+                )
+
+            cm.update_local_config(path, {"role": "leader", "video_file": "new.mp4"})
+
+            parsed = configparser.ConfigParser()
+            parsed.read(path)
+            # canonical location updated...
+            self.assertEqual(parsed.get("DEFAULT", "video_file"), "new.mp4")
+            # ...and the shadowing literal removed, so reads resolve to DEFAULT
+            self.assertTrue(parsed.remove_option("KITCHENSYNC", "video_file") is False)
+            self.assertEqual(parsed.get("KITCHENSYNC", "video_file"), "new.mp4")
+            self.assertEqual(parsed.get("KITCHENSYNC", "role"), "leader")
+
+
 class TestLeaderConfigTargeting(unittest.TestCase):
     """Broadcast config updates addressed to a collaborator must never be
     applied by the leader (this once demoted the leader to a collaborator)."""
