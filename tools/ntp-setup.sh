@@ -1,6 +1,5 @@
 #!/bin/bash
-# Setup chrony NTP sync between Pi 5 (leader) and Pi 4 (collaborator)
-# Temporarily takes eth0 down so internet-bound traffic routes through WiFi.
+# Setup chrony NTP sync between Pi 5 (leader) and Pi 4 (collaborator) over router LAN.
 #
 # Usage:
 #   On Pi 5 (leader):  bash ntp-setup.sh leader
