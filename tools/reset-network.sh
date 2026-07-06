@@ -8,8 +8,8 @@ set -e
 OS_CODENAME=$(cat /etc/os-release | grep VERSION_CODENAME | cut -d= -f2 | tr -d '"')
 echo "==> Detected OS Codename: $OS_CODENAME"
 
-if [ "$OS_CODENAME" = "bookworm" ]; then
-    echo "==> Resetting NetworkManager (Bookworm standard)..."
+if which nmcli >/dev/null 2>&1; then
+    echo "==> Resetting NetworkManager (nmcli detected)..."
     
     # Find active Ethernet connection
     ETH_CONN=$(nmcli -t -f NAME,TYPE connection show --active | grep ethernet | cut -d: -f1 | head -n 1 || true)
@@ -30,10 +30,9 @@ if [ "$OS_CODENAME" = "bookworm" ]; then
     echo "==> Re-applying network settings..."
     sudo nmcli connection up "$ETH_CONN" || true
     
-elif [ "$OS_CODENAME" = "bullseye" ] || [ "$OS_CODENAME" = "buster" ]; then
-    echo "==> Resetting dhcpcd (Bullseye/Buster standard)..."
-    
-    if [ -f /etc/dhcpcd.conf ]; then
+elif [ -f /etc/dhcpcd.conf ]; then
+    echo "==> Resetting dhcpcd (/etc/dhcpcd.conf detected)..."
+
         # Create a backup of dhcpcd.conf
         sudo cp /etc/dhcpcd.conf /etc/dhcpcd.conf.bak
         echo "==> Created backup at /etc/dhcpcd.conf.bak"
@@ -51,7 +50,7 @@ elif [ "$OS_CODENAME" = "bullseye" ] || [ "$OS_CODENAME" = "buster" ]; then
         exit 1
     fi
 else
-    echo "❌ Unsupported OS Codename: $OS_CODENAME"
+    echo "❌ Error: Neither NetworkManager (nmcli) nor dhcpcd (/etc/dhcpcd.conf) was detected on this system."
     exit 1
 fi
 
