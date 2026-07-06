@@ -71,7 +71,7 @@ kitchenSync/
 ├── tools/                    # Simulator, GStreamer verifier, NTP setup
 ├── docs/                     # Deployment, testing, MIDI, roadmap docs
 ├── arduino/                  # Arduino MIDI controller sketch
-└── .gemini/                  # Agents and skills (this directory)
+└── .agents/                  # Agents and skills (this directory)
 ```
 
 ## Data Flow: Sync Cycle
