@@ -540,7 +540,7 @@ class CollaboratorPi:
         if not self.video_player.is_playing or getattr(self.video_player, "is_seeking", False):
             return
         now = time.time()
-        if now < self._settle_until and self.startup_sync_count > 0:
+        if now < self._settle_until:
             return
         # Use wall-clock position when leader sends wall-based time (mock driver fallback)
         # to avoid comparing wall-based time against hardware-decoded position (which has
