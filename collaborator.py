@@ -130,6 +130,7 @@ class CollaboratorPi:
         self._current_deviation = 0.0
         self._current_playback_rate = 1.0
         self._netclock_fallback_warned = False
+        self._last_hard_seek_at = 0.0
 
         # Sync Decoupling
         self._latest_sync_state = None
@@ -615,8 +616,15 @@ class CollaboratorPi:
             if allow_hard_seek:
                 self.hard_seek_count += 1
                 self._current_playback_rate = 1.0
-                log_info(f"Sync: Initiating hard seek to {leader_time:.3f}s (dev={median_dev:.3f}s, near_loop={is_near_loop}) [Total hard seeks: {self.hard_seek_count}]", component="collaborator")
-                self.video_player.seek(leader_time, accurate=False)
+                # Fast KEY_UNIT seeks snap to the nearest keyframe. On
+                # long-GOP files that can be the START of the file, so the
+                # seek never converges and the collaborator hovers at 0:00
+                # until the leader loops around. If the previous hard seek
+                # was recent (didn't converge), escalate to frame-accurate.
+                accurate = (now - self._last_hard_seek_at) < 15.0
+                self._last_hard_seek_at = now
+                log_info(f"Sync: Initiating hard seek to {leader_time:.3f}s (dev={median_dev:.3f}s, near_loop={is_near_loop}, accurate={accurate}) [Total hard seeks: {self.hard_seek_count}]", component="collaborator")
+                self.video_player.seek(leader_time, accurate=accurate)
                 self.deviation_samples.clear()
                 self.startup_sync_count = 0
                 self._settle_until = now + 2.5
@@ -741,6 +749,7 @@ class CollaboratorPi:
             self.deviation_samples.clear()
             self._settle_until = time.time() + 1.5
             self._netclock_fallback_warned = False
+            self._last_hard_seek_at = 0.0
             self._stop_sync_thread.clear()
             self._sync_thread = threading.Thread(target=self._sync_processor_loop, daemon=True)
             self._sync_thread.start()

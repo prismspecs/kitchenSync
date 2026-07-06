@@ -234,6 +234,26 @@ class SyncSimulationTest(unittest.TestCase):
 
         collab._maintain_video_sync.assert_called_once()
 
+    def test_hard_seek_escalates_to_accurate_on_repeat(self):
+        """A fast KEY_UNIT hard seek that doesn't converge (long-GOP file
+        snapping back to a distant keyframe) must escalate to an accurate
+        seek instead of hovering at the keyframe until the leader loops."""
+        config = MockConfig()
+        collab = self.get_collaborator(config)
+        collab.video_player.play()
+        collab.video_player.seek = MagicMock(return_value=True)
+        collab.video_player.get_position = MagicMock(return_value=50.0)
+        collab.video_player.get_duration = MagicMock(return_value=300.0)
+
+        collab._settle_until = 0
+        collab._maintain_video_sync(100.0)  # dev = -50s -> hard seek
+        self.assertEqual(collab.video_player.seek.call_args.kwargs["accurate"], False)
+
+        # Seek "landed" back at 50s (keyframe miss); next attempt escalates
+        collab._settle_until = 0
+        collab._maintain_video_sync(100.0)
+        self.assertEqual(collab.video_player.seek.call_args.kwargs["accurate"], True)
+
     def test_netclock_without_clock_falls_back_to_udp(self):
         """netclock configured but never established (e.g. leader in udp
         mode) must fall back to the UDP rate controller instead of leaving
