@@ -7,6 +7,7 @@ Handles finding and managing video files from various sources
 import glob
 import json
 import os
+import re
 import shutil
 import subprocess
 import threading
@@ -304,6 +305,16 @@ class VideoFileManager:
                                 duration = h * 3600 + m * 60 + s
                             except ValueError:
                                 pass
+                    elif _stream_match := re.match(r"(?i)(video|audio)(?:\s*#\d+)?\s*:\s*(.+)", stripped):
+                        # Handles both legacy "Video: H.264" and modern
+                        # (>=1.22) "video #1: H.265 (Main Profile)" formats
+                        kind = _stream_match.group(1).lower()
+                        codec = _stream_match.group(2).split("(")[0].strip().lower()
+                        if kind == "video":
+                            video_codec = codec
+                        else:
+                            audio_codec = codec
+                            audio_tracks += 1
                     elif stripped.startswith("Video:"):
                         in_video = True
                         in_audio = False
@@ -334,7 +345,11 @@ class VideoFileManager:
                 metadata["audio_tracks"] = audio_tracks
                 metadata["width"] = width
                 metadata["height"] = height
-                if "h265" in video_codec or "hevc" in video_codec:
+                # gst-discoverer prints "H.265 (Main Profile)" - strip dots so
+                # the codec check matches (the dotted form made the same file
+                # show as Non-HEVC on devices that hit this fallback path)
+                codec_compact = video_codec.replace(".", "")
+                if "h265" in codec_compact or "hevc" in codec_compact:
                     metadata["is_optimized"] = True
         except Exception as e:
             log_warning(f"Metadata CLI discovery failed: {e}", "video")

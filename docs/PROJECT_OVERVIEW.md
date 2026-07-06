@@ -17,12 +17,42 @@ Current hardware:
 
 | Node | Device | device_id | Decode notes |
 |------|--------|-----------|--------------|
-| Leader | Pi 5 | `pi5_1` | **No H.264 hardware decode** (BCM2712). The driver deliberately demotes all h264 HW decoders and falls back to software (`avdec_h264`). HEVC decodes in hardware. |
-| Collaborator | Pi 4 | `pi4_1` | H.264 and HEVC hardware decode via v4l2. |
+| Leader | Pi 5 | `pi5_1` | **No H.264 hardware decode** (BCM2712) — h264 falls back to software (`avdec_h264`). HEVC decodes in hardware (rpivid). |
+| Collaborator | Pi 4 | `pi4_1` | H.264 hardware decode (`v4l2h264dec`) — always solid. HEVC hardware decode needs the stateless `v4l2slh265dec` (Bookworm / GStreamer ≥ 1.22); without it HEVC lands on software decode and **stutters at 1080p**. |
 
-Practical consequence: with an H.264 test file the *leader* carries the
-heavier CPU load. For best performance encode content as **HEVC** so both
-Pis use hardware decode (`media/bbb_1080p_24fps_hevc.mp4` style).
+There is no single codec both Pis decode well, so encode **one file per
+codec from the same source** and point each device at its own via
+`video_file` in its `ksync.ini` (a collaborator's configured `video_file`
+overrides the filename the leader broadcasts). Sync compares positions, not
+content — different encodes stay in sync as long as fps and duration are
+identical.
+
+```bash
+# Pi 4 (H.264 hardware decode):
+ffmpeg -i SOURCE -an -vf "fps=30,format=yuv420p" \
+  -c:v libx264 -profile:v high -level 4.2 -preset slow \
+  -x264-params keyint=30:min-keyint=30:scenecut=0 \
+  -b:v 10M -maxrate 12M -bufsize 20M \
+  sync_test_pi4_h264.mp4
+
+# Pi 5 (HEVC hardware decode):
+ffmpeg -i SOURCE -an -vf "fps=30,format=yuv420p" \
+  -c:v libx265 -preset medium -tag:v hvc1 \
+  -x265-params keyint=30:min-keyint=30:scenecut=0 \
+  -b:v 10M -maxrate 12M -bufsize 20M \
+  sync_test_pi5_hevc.mp4
+```
+
+The 1-second keyframe interval (`keyint=30` at 30 fps, scene-cut off) is
+load-bearing: fast KEY_UNIT seeks snap to the nearest keyframe, so with
+default encoder GOPs (~8 s for x265) a "hard seek to the leader" can land
+seconds away from its target and the corrector spirals. Verify which
+decoder is actually active on a device with:
+
+```bash
+grep -E "Active hardware decoder|PERFORMANCE WARNING" logs/kitchensync.log | tail -3
+gst-inspect-1.0 | grep -E "v4l2(sl)?h?(264|265|evc)"
+```
 
 ## Process / file map
 

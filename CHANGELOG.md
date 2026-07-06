@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### Codec Detection & Per-Device Media Strategy (2026-07-06)
+
+- Fixed `_discover_via_cli` in `file_manager.py`: it only understood the legacy `Video:` gst-discoverer output, so on modern GStreamer it parsed nothing, and the dotted `"h.265"` codec string failed the HEVC check — the same file showed **HEVC** on one Pi and **Non-HEVC** on another purely depending on which metadata fallback ran. Parser now handles `video #N: H.265 (...)` and strips dots before matching.
+- Documented the per-device codec reality (Pi 5: HEVC HW only; Pi 4: H.264 HW always, HEVC HW only with `v4l2slh265dec`) plus ffmpeg recipes with 1s keyframe intervals in `docs/PROJECT_OVERVIEW.md`. Sparse default GOPs (~8s) made KEY_UNIT hard seeks land seconds off target — the observed 23-hard-seek divergence spiral.
+
 ### Leader Config Clobbering Fix (2026-07-06)
 
 - **Critical**: `config_update`/`config_request` are sent with a `target_device_id` but also broadcast; the collaborator filtered by target, the leader did not. Editing a collaborator's config in the web UI therefore overwrote the leader's `ksync.ini` with the collaborator's entire config (`role = collaborator`, `device_id = pi4_1`, …), demoting the leader to a second collaborator on restart. Leader now ignores config messages addressed to other devices (`_message_targets_this_device`, same as collaborator). Regression tests added.
