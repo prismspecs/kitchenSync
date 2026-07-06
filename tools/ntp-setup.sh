@@ -17,26 +17,8 @@ if [ -z "$ROLE" ]; then
     exit 1
 fi
 
-# Check if eth0 is up — if so, we need to temporarily take it down so
-# apt-get can route through WiFi (ethernet has no internet on our setup).
-ETH_WAS_UP=false
-if ip link show "$ETH_IFACE" 2>/dev/null | grep -q "state UP"; then
-    echo "==> $ETH_IFACE is up — taking it down temporarily for internet access..."
-    ETH_WAS_UP=true
-    sudo ip link set "$ETH_IFACE" down
-    # Wait for route to switch to WiFi
-    sleep 2
-fi
+# Installing chrony
 
-restore_eth0() {
-    if [ "$ETH_WAS_UP" = true ]; then
-        echo "==> Restoring $ETH_IFACE..."
-        sudo ip link set "$ETH_IFACE" up
-        sleep 1
-        ETH_WAS_UP=false  # prevent double-restore
-    fi
-}
-trap restore_eth0 EXIT
 
 echo "==> Installing chrony..."
 sudo apt-get install -y chrony
@@ -82,8 +64,7 @@ server $LEADER_IP iburst prefer minpoll 2 maxpoll 4
 EOF
 fi
 
-# Restore eth0 BEFORE restarting chrony so it binds to the live interface
-restore_eth0
+
 
 echo "==> Restarting chrony..."
 sudo systemctl restart chrony
