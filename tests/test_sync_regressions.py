@@ -217,9 +217,9 @@ class TestCollaboratorLoopHandling(unittest.TestCase):
         dummy = SimpleNamespace(
             video_player=video_player,
             debug_deviation_mode=False,
-            deviation_samples=[],
+            deviation_samples=[-0.10, -0.10],
             max_samples=3,
-            startup_sync_count=0,
+            startup_sync_count=3,
             FAST_SYNC_THRESHOLD=3,
             _settle_until=0,
             max_drift=0.5,

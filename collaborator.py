@@ -569,9 +569,12 @@ class CollaboratorPi:
         # seeks here and let the P-controller seamlessly adjust speed, unless there
         # is a massive out-of-sync situation (> 5.0s).
         is_near_loop = False
-        if duration and duration > 3.0:
-            if video_pos < 3.0 or video_pos > (duration - 3.0):
-                is_near_loop = True
+        # Suppress loop boundary seek-suppression during the initial startup sync phase 
+        # so that the collaborator can snap to the leader's position immediately.
+        if self.startup_sync_count >= self.FAST_SYNC_THRESHOLD:
+            if duration and duration > 3.0:
+                if video_pos < 3.0 or video_pos > (duration - 3.0):
+                    is_near_loop = True
 
         self.deviation_samples.append(deviation)
         if len(self.deviation_samples) > self.max_samples:
