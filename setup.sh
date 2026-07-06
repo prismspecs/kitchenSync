@@ -14,7 +14,7 @@ sudo apt install -y --no-install-recommends \
     gstreamer1.0-plugins-base gstreamer1.0-plugins-good \
     gstreamer1.0-plugins-bad gstreamer1.0-libav \
     gstreamer1.0-tools python3-gst-1.0 gir1.2-gst-plugins-base-1.0 \
-    unclutter v4l-utils
+    unclutter wmctrl v4l-utils
 
 # 2. X Server Permissions & Legacy Mode
 echo "Configuring X Server permissions..."
@@ -132,7 +132,7 @@ sudo systemctl enable kitchensync.service
 
 # 8. Sudo Permissions (password-less reboot for remote update)
 echo "Setting up sudo permissions..."
-echo "$CURRENT_USER ALL=(ALL) NOPASSWD: /sbin/reboot, /sbin/shutdown" | sudo tee /etc/sudoers.d/ksync-reboot
+echo "$CURRENT_USER ALL=(ALL) NOPASSWD: /sbin/reboot, /usr/sbin/reboot, /sbin/shutdown, /usr/sbin/shutdown, /bin/systemctl, /usr/bin/systemctl" | sudo tee /etc/sudoers.d/ksync-reboot
 sudo chmod 440 /etc/sudoers.d/ksync-reboot
 
 echo "-------------------------------------------------------"

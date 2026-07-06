@@ -14,6 +14,8 @@ import statistics
 import threading
 import urllib.request
 from pathlib import Path
+from typing import Optional
+
 
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent / "src"))
