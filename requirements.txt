@@ -1,22 +1,16 @@
-# kSync Requirements
+# kSync pip requirements — installed by setup.sh into ./.venv
+# (GStreamer/gi bindings come from apt, NOT pip; the venv uses --system-site-packages.)
 
-# MIDI Support
-python-rtmidi>=1.4.0
+# MIDI / serial (dormant feature — see docs/MIDI_CONTROL.md)
 mido>=1.2.10
 pyserial>=3.5
 
-# OSC Support
+# OSC (scaffold — see .agents/skills/ksync-research-frontier F5)
 python-osc>=1.8.3
 
+# Optional, only for direct USB-MIDI hardware output (needs apt libasound2-dev to build):
+# python-rtmidi>=1.4.0
 
-# Standard library modules used:
-# - socket, json, time, subprocess, threading
-# - configparser, pathlib, os, sys, statistics, collections
-
-# System Dependencies (install via apt):
-# sudo apt install python3-pip python3-venv python3-dev libasound2-dev libdbus-1-dev libglib2.0-dev python3-gst-1.0 gir1.2-gst-plugins-base-1.0
-
-# Installation:
-# python3 -m venv --system-site-packages ~/ks-env
-# source ~/ks-env/bin/activate
-# pip install -r requirements.txt
+# Manual install (setup.sh does this for you):
+#   python3 -m venv --system-site-packages .venv
+#   .venv/bin/pip install -r requirements.txt

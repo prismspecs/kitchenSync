@@ -91,7 +91,7 @@ fi
 
 echo "Installing Python dependencies..."
 "$VENV_DIR/bin/pip" install --upgrade pip
-"$VENV_DIR/bin/pip" install mido pyserial python-osc
+"$VENV_DIR/bin/pip" install -r requirements.txt
 
 # 7. Systemd Service Configuration
 # NOTE: the unit generated below is the ONLY source of truth for the service.
