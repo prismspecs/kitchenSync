@@ -188,7 +188,7 @@ def store_config_message(payload: Dict[str, Any]) -> None:
     if not device_id:
         return
 
-    print(f"[CONFIG] Received config_state from {device_id}")
+    log_info(f"Config: received config_state from {device_id}", component="remote")
 
     # Update snapshot values but keep track of when they actually arrived
     existing_snapshot = config_snapshots.get(device_id, {})
@@ -879,7 +879,7 @@ def _handle_leader_announce(msg: Dict[str, Any], addr: tuple) -> None:
     device_id = msg.get("device_id")
     if not device_id:
         return
-    print(f"[DISCOVER] leader_announce from {device_id} at {addr[0]}")
+    log_info(f"Discover: leader_announce from {device_id} at {addr[0]}", component="remote")
     command_manager.collaborators[device_id] = {
         "ip": addr[0],
         "last_seen": time.time(),
@@ -975,7 +975,7 @@ def start_remote():
     # Periodically broadcast discovery so leaders respond via unicast
     def _discover_loop():
         while True:
-            print("[DISCOVER] Broadcasting discover...")
+            log_info("Discover: broadcasting...", component="remote")
             command_manager.send_command({"type": "discover", "device_id": LOCAL_LEADER_ID})
             time.sleep(10)
 

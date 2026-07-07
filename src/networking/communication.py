@@ -437,7 +437,9 @@ class CommandManager:
                 try:
                     data, addr = self.control_sock.recvfrom(UDP_MAX_DATAGRAM_SIZE)
                     msg_text = data.decode()
-                    print(f"\n[NET] Received from {addr}: {msg_text}")
+                    # Per-datagram at INFO: silent unless enable_system_logging
+                    # (was a print() — journal noise scaling with node count)
+                    log_info(f"Net: received from {addr}: {msg_text[:300]}", component="network")
                     msg = json.loads(msg_text)
                     
                     msg_type = msg.get("type")
@@ -509,7 +511,7 @@ class CommandManager:
                 try:
                     self._ping_sent_at[target_pi] = time.time()
                     self.control_sock.sendto(payload.encode(), (ip, self.control_port))
-                    print(f"[NET] Sent {command['type']} directly to {target_pi} ({ip})")
+                    log_info(f"Net: sent {command['type']} directly to {target_pi} ({ip})", component="network")
                 except Exception:
                     pass
         else:
@@ -518,7 +520,7 @@ class CommandManager:
                 try:
                     self._ping_sent_at[device_id] = time.time()
                     self.control_sock.sendto(payload.encode(), (info["ip"], self.control_port))
-                    print(f"[NET] Sent {command['type']} directly to {device_id} ({info['ip']})")
+                    log_info(f"Net: sent {command['type']} directly to {device_id} ({info['ip']})", component="network")
                 except Exception:
                     pass
 
@@ -527,7 +529,7 @@ class CommandManager:
             self.control_sock.sendto(
                 payload.encode(), (self.broadcast_ip, self.control_port)
             )
-            print(f"[NET] Broadcasted {command['type']} to {self.broadcast_ip}")
+            log_info(f"Net: broadcast {command['type']} to {self.broadcast_ip}", component="network")
         except Exception as e:
             log_warning(f"Broadcast failed for {command['type']}: {e}", component="network")
 
@@ -635,6 +637,9 @@ class CommandListener:
         self.control_sock = None
         self.is_running = False
         self.message_handlers = {}
+        # Cached send socket + broadcast address (see send_message)
+        self._send_sock = None
+        self._broadcast_ip = None
 
     def setup_socket(self) -> None:
         """Initialize command socket"""
@@ -703,19 +708,36 @@ class CommandListener:
         self.send_message(registration)
 
     def send_message(self, message: Dict[str, Any], host: Optional[str] = None) -> None:
-        """Send a control message directly or via broadcast."""
+        """Send a control message directly or via broadcast.
+
+        Socket and broadcast address are cached: this runs for every 2s
+        heartbeat, and the old per-call socket + 8.8.8.8-probe pattern
+        created two sockets per message for nothing. On any send failure the
+        cache resets so a changed network (DHCP renew, interface flap) is
+        picked up on the next attempt.
+        """
         try:
-            destination_host = host or _get_broadcast_address()
-            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            if self._send_sock is None:
+                self._send_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                self._send_sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
             if host is None:
-                sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-            sock.sendto(
+                if self._broadcast_ip is None:
+                    self._broadcast_ip = _get_broadcast_address()
+                destination_host = self._broadcast_ip
+            else:
+                destination_host = host
+            self._send_sock.sendto(
                 json.dumps(message).encode(),
                 (destination_host, self.control_port),
             )
-            sock.close()
         except Exception:
-            pass
+            try:
+                if self._send_sock:
+                    self._send_sock.close()
+            except Exception:
+                pass
+            self._send_sock = None
+            self._broadcast_ip = None
 
     def send_heartbeat(self, device_id: str, status: str = "ready", hard_seeks: int = 0, video_file: str = "", is_optimized: bool = False, video_driver: str = "", sync_deviation: float = 0.0, playback_rate: float = 1.0) -> None:
         """Send heartbeat to leader"""

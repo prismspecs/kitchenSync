@@ -48,7 +48,7 @@ the fleet pulls.
 | `docs/MIDI_CONTROL.md` (473 lines) | Feature dormant (enable_midi=false in production; property default true — mismatch) | KEEP doc; add a "dormant as of 2026-07" banner; fix the default mismatch |
 | Firefox cleanup flow | Lived only in code_archive/scripts/ | ✅ DELETED with code_archive 2026-07-07; TODO item closed |
 | Unused top-level imports | AST scan 2026-07-06 found 11 candidates; per-item verification caught one FALSE POSITIVE: `video/__init__.py VideoFileManager` is a re-export consumed by kitchensync.py — AST scanners don't see re-exports; always grep importers before deleting | ✅ 10 REMOVED 2026-07-07 (Batch 1); VideoFileManager kept |
-| Duplicated code leader.py ↔ collaborator.py | `_log_startup_crash` (identical), `_handle_device_update`/`_do_update` (near-identical ~35 lines), `_handle_log_request` (near-identical), `_message_targets_this_device` (identical) | REFACTOR into `src/core/` shared helpers — this class of drift is how the leader missed the target-filter fix that the collaborator had (b4e153c) |
+| Duplicated code leader.py ↔ collaborator.py | Startup-crash hook, device-update, log-request tail, target filter — all duplicated; this drift class caused b4e153c | ✅ REFACTORED 2026-07-07 (Batch 4) into `src/core/node_common.py` (install_startup_crash_logger, message_targets_this_device, start_device_update, read_recent_log) |
 | `leader.py` non-`--auto` interactive CLI (CommandInterface/StatusDisplay) | Production always runs `--auto` via kitchensync.py | KEEP (debug value) unless src/ui/interface.py rots; re-evaluate |
 | `mock` video driver | Used by tests and as leader fallback | KEEP — load-bearing |
 

@@ -1,5 +1,10 @@
 # kSync Code Cleanup Report — 2026-07-06
 
+> **Execution status (2026-07-07)**: Batches 1–4 DONE (commits 9b1273a, 955a100,
+> cec11ee..1b8908a, and the node_common/socket/logging batch). Live per-item status
+> is tracked in `.agents/skills/ksync-code-hygiene`. Batch 5 (C3/C4/D1 organizational
+> splits) is intentionally deferred until those files are next touched for a feature.
+
 Full-tree audit: what to remove, fix, optimize, and reorganize. Every item carries
 its evidence; nothing has been deleted yet. Execution rules per
 `.agents/skills/ksync-change-control` (one theme per commit, tests green, boot one Pi

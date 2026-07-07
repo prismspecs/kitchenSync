@@ -24,22 +24,17 @@ from video import get_video_driver
 from video.file_manager import VideoFileManager
 from networking.communication import CommandListener, SyncReceiver
 from core import SystemState, get_ntp_status
-from core.logger import log_info, log_error, log_warning, enable_system_logging, log_file_paths
+from core.logger import log_info, log_error, log_warning, enable_system_logging
+from core.node_common import (
+    install_startup_crash_logger,
+    message_targets_this_device,
+    start_device_update,
+    read_recent_log,
+)
 from ui.window_manager import hide_mouse_cursor
 
 
-def _log_startup_crash(exc_type, exc_value, exc_tb):
-    """Log startup crashes to file — catches import-time errors before logging init."""
-    import traceback
-    log_dir = Path(__file__).parent / "logs"
-    log_dir.mkdir(exist_ok=True)
-    with open(log_dir / "startup_crash.log", "a") as f:
-        f.write(f"--- CRASH at {time.strftime('%Y-%m-%d %H:%M:%S')} ---\n")
-        traceback.print_exception(exc_type, exc_value, exc_tb, file=f)
-    traceback.print_exception(exc_type, exc_value, exc_tb)
-
-
-sys.excepthook = _log_startup_crash
+install_startup_crash_logger(Path(__file__).parent)
 
 
 class CollaboratorPi:
@@ -268,44 +263,10 @@ class CollaboratorPi:
     def _handle_device_update(self, msg: dict) -> None:
         if not self._message_targets_this_device(msg):
             return
-        log_info("Device update requested — git pull && reboot", component="collaborator")
-        print("[UPDATE] Starting device update sequence...")
-
-        def _do_update():
-            import subprocess
-            repo = os.path.dirname(os.path.abspath(__file__))
-            try:
-                result = subprocess.run(
-                    ["git", "pull"],
-                    cwd=repo, capture_output=True, text=True, timeout=30,
-                )
-                print(f"[UPDATE] git pull: {result.stdout.strip() or result.stderr.strip()}")
-            except Exception as e:
-                log_warning(f"Update git pull failed: {e}", component="collaborator")
-                print(f"[UPDATE] git pull failed: {e}")
-
-            import time
-            time.sleep(2)
-            reboot_commands = [
-                ["sudo", "-n", "reboot"],
-                ["sudo", "-n", "/sbin/reboot"],
-                ["sudo", "-n", "/usr/sbin/reboot"],
-                ["sudo", "-n", "systemctl", "reboot"],
-            ]
-            for cmd in reboot_commands:
-                result = subprocess.run(
-                    cmd, capture_output=True, text=True,
-                )
-                log_info(f"Device update: {' '.join(cmd)} returned rc={result.returncode} — {result.stderr.strip() or result.stdout.strip()}", component="collaborator")
-                if result.returncode == 0:
-                    return
-            log_error(f"Device update: all reboot attempts failed — last stderr: {result.stderr.strip()}", component="collaborator")
-
-        threading.Thread(target=_do_update, daemon=True).start()
+        start_device_update(component="collaborator")
 
     def _message_targets_this_device(self, msg: dict) -> bool:
-        target_device_id = msg.get("target_device_id")
-        return not target_device_id or target_device_id == self.config.device_id
+        return message_targets_this_device(msg, self.config.device_id)
 
     def _handle_config_request(self, msg: dict, addr: tuple) -> None:
         if not self._message_targets_this_device(msg):
@@ -367,25 +328,11 @@ class CollaboratorPi:
     def _handle_log_request(self, msg: dict, addr: tuple) -> None:
         if not self._message_targets_this_device(msg):
             return
-        
-        try:
-            log_paths = log_file_paths()
-            sys_log_path = log_paths.get("system", "logs/kitchensync.log")
-            if os.path.exists(sys_log_path):
-                with open(sys_log_path, "r", errors="replace") as f:
-                    lines = f.readlines()
-                    log_content = "".join(lines[-100:])
-                    if len(log_content) > 30000:
-                        log_content = "... [TRUNCATED] ...\n" + log_content[-30000:]
-            else:
-                log_content = "No log file found on collaborator."
-        except Exception as exc:
-            log_content = f"Error reading logs: {exc}"
 
         response = {
             "type": "log_response",
             "device_id": self.config.device_id,
-            "logs": log_content
+            "logs": read_recent_log(missing_note="No log file found on collaborator."),
         }
         self.command_listener.send_message(response, host=addr[0])
 
