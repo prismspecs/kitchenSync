@@ -1,5 +1,10 @@
 # kSync MIDI Relay Control
 
+> **Status: DORMANT as of 2026-07.** Production configs ship `enable_midi = false`
+> and the feature has not been exercised against the current sync stack. Reviving
+> timeline protocol events is a planned campaign — see
+> `.agents/skills/ksync-research-frontier` (item F5) before relying on anything here.
+
 This document explains how to use kSync's MIDI functionality for relay control.
 
 ## Overview

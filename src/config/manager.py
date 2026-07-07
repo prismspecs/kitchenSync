@@ -44,7 +44,7 @@ EDITABLE_CONFIG_FIELDS = {
         {"key": "schedule_file", "type": "string", "label": "Schedule file", "default": "schedule.json", "tooltip": "MIDI/OSC cue schedule file (.json or .mid)."},
         {"key": "enable_audio", "type": "bool", "label": "Enable Audio", "default": True, "tooltip": "Toggle audio playback on/off."},
         {"key": "audio_output", "type": "choice", "label": "Audio Output", "default": "hdmi", "options": ["hdmi", "headphone"], "tooltip": "Select audio destination: HDMI or the 3.5mm Headphone Jack."},
-        {"key": "enable_midi", "type": "bool", "label": "Enable MIDI", "default": True, "tooltip": "Enable MIDI output triggers via USB or Serial."},
+        {"key": "enable_midi", "type": "bool", "label": "Enable MIDI", "default": False, "tooltip": "Enable MIDI output triggers via USB or Serial (dormant feature - see docs/MIDI_CONTROL.md)."},
         {"key": "enable_caching", "type": "bool", "label": "Local Caching", "default": False, "tooltip": "If enabled, external USB videos will be copied to SD card for smoother playback."},
         {"key": "crop_mode", "type": "choice", "label": "Cropping Mode", "default": "letterbox", "options": ["letterbox", "crop-to-fill"], "tooltip": "Fit video to display. Letterbox: add black bars. Crop-to-fill: zoom and crop to fill without distortion."},
         {"key": "overlay", "type": "bool", "label": "Debug Overlay", "default": False, "tooltip": "Show real-time synchronization statistics as an on-screen video overlay."},
@@ -369,7 +369,7 @@ class ConfigManager:
     def video_driver(self) -> str: return self.get("video_driver", "gst")
 
     @property
-    def enable_midi(self) -> bool: return self.getboolean("enable_midi", True)
+    def enable_midi(self) -> bool: return self.getboolean("enable_midi", False)
 
     @property
     def enable_osc(self) -> bool: return self.getboolean("enable_osc", False)
