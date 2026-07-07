@@ -338,15 +338,9 @@ class LeaderPi:
                     "start_time": self.system_state.start_time,
                     "leader_id": self.config.device_id,
                     "debug_mode": self.config.debug_mode,
-                    "sync_params": {
-                        "max_drift": self.config.max_drift,
-                        "min_drift": self.config.min_drift,
-                        "kp": self.config.kp,
-                        "min_rate": self.config.min_rate,
-                        "max_rate": self.config.max_rate,
-                        "max_samples": self.config.max_samples,
-                        "enable_audio": self.config.enable_audio,
-                    },
+                    # NOTE: sync tuning is per-device config, NOT leader-pushed.
+                    # A "sync_params" payload used to be broadcast here but no
+                    # collaborator ever read it (removed 2026-07-07).
                 }
                 # Re-read base_time on every send: it changes whenever this
                 # pipeline rebases (gapless-loop setup seek, EOS flush

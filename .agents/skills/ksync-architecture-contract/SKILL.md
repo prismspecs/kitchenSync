@@ -64,7 +64,7 @@ Port 5006 (CommandManager/CommandListener, JSON datagrams):
 
 | type | direction | purpose |
 |---|---|---|
-| start | leader → all | video_file, schedule, start_time, sync_params; + gst_base_time, netclock_port in netclock mode; re-broadcast every 30s with FRESH base_time |
+| start | leader → all | video_file, schedule, start_time; + gst_base_time, netclock_port in netclock mode; re-broadcast every 30s with FRESH base_time. (Sync tuning is per-device config, never leader-pushed — a dead sync_params payload was removed 2026-07-07) |
 | stop | leader → all | stop playback |
 | register / heartbeat | collab → leader+UI | presence, status, video_file, driver, hard_seeks, sync_deviation, playback_rate (2s cadence) |
 | ping / pong | leader↔collab | RTT probe (2s) → `latency_update` {latency: rtt/2} pushed to that collaborator |

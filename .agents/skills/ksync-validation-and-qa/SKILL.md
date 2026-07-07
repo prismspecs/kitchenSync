@@ -38,7 +38,7 @@ python3 -m unittest tests.test_sync_simulation.SyncSimulationTest.test_netclock_
 
 | File | Covers |
 |---|---|
-| test_core.py | driver factory, SystemState, legacy SyncTracker (imports code_archive!) |
+| test_core.py | driver factory, SystemState (SyncTracker case removed with code_archive, 2026-07-07) |
 | test_networking.py | broadcast address calc, SyncBroadcaster/Receiver basics, RTT recording |
 | test_ntp_check.py | core.ntp_check parsing |
 | test_remote_controller.py | web-UI state building, byte-range resolution |

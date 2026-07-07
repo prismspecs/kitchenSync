@@ -39,8 +39,8 @@ the fleet pulls.
 | `kitchensync.service` (tracked file) | setup.sh GENERATES its own service file; the tracked one was browser-overlay-era (Firefox `MOZ_*` env vars, stale venv path) | ✅ DELETED 2026-07-07 (Batch 1) |
 | `tools/ntp-setup.sh` | Chrony-era (archaeology E7 — DO-NOT-REOPEN) | ✅ DELETED 2026-07-07 (Batch 1). reset-network.sh kept as generic interface tool |
 | `src/protocols/osc_handler.py` + `enable_osc` | Handler is instantiated when enable_osc=true but **never called anywhere** (`grep -n "osc_handler\." collaborator.py` → nothing). Dead feature scaffold | KEEP the file (protocol events revival is planned — ksync-research-frontier item e) but add a comment "scaffold, not wired"; or delete and re-add when needed |
-| `sync_params` in the start command | Leader builds and broadcasts it; **collaborator never reads it** (`grep -n sync_params collaborator.py` → nothing). Dead payload, misleading (implies leader-controlled tuning) | Either wire it (collaborator applies on start) or delete from leader.py — decide, don't leave ambiguous |
-| `max_samples` config | Collaborator hardcodes `self.max_samples = 3`, ignoring config (property default 10, UI default 3) | Fix: read from config; align defaults to 3 |
+| `sync_params` in the start command | Leader broadcast it; zero readers — dead payload implying leader-controlled tuning | ✅ REMOVED from leader.py 2026-07-07 (Batch 3); tuning is per-device config by design |
+| `max_samples` config | Was hardcoded 3, ignoring config; property default was 10 | ✅ FIXED 2026-07-07 (Batch 3): config-driven, default 3 everywhere |
 | `arduino/test.py` | Standalone hardware util, no imports from main code | KEEP (hardware bring-up tool) but move under tools/ or examples/ |
 | `examples/` (3 tracked files: schedule JSONs) | Referenced by docs/MIDI_CONTROL.md workflows | KEEP while MIDI docs exist |
 | `research/` | Only research.md + .gitignore tracked; 39 MB of cloned repos are already untracked | KEEP as history; never import from it |
@@ -86,7 +86,7 @@ the fleet pulls.
 Written 2026-07-06 from a full-tree audit (grep evidence embedded above).
 Re-verify before acting:
 - code_archive still test-imported: `grep -rn "code_archive" tests/`
-- sync_params still dead: `grep -n "sync_params" collaborator.py`
+- sync_params stays removed: `grep -rn '"sync_params"' leader.py collaborator.py` (expect none)
 - OSC still unwired: `grep -n "osc_handler\." collaborator.py`
 - Unused imports still unused: re-run an AST scan or pyflakes if available
 - Tracked service still stale: `grep -c MOZ kitchensync.service`

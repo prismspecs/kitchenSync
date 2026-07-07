@@ -105,5 +105,5 @@ Written 2026-07-06 (commit 608864e era). Re-verify:
 - Regenerate property list: `grep -n "def .*: return self.get" src/config/manager.py`
 - Regenerate raw reads: `grep -rn "getint(\|getfloat(\|getboolean(" *.py src/ | grep -v manager.py | grep -o '"[a-z_]*"' | sort -u`
 - Whitelists: `grep -n "CONFIG_ROLE_KEYS" -A 20 src/config/manager.py`
-- sync_params still dead on collaborator: `grep -n "sync_params" collaborator.py` (no output = still dead)
+- sync_params stays removed: `grep -rn '"sync_params"' leader.py collaborator.py` (expect no matches)
 - remote.js version: `grep -n "remote.js?v=" src/remote/templates/index.html`
