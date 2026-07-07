@@ -52,7 +52,7 @@ dormant = feature currently off in production.
 | min_drift | float (0.005) | collaborator deadband | C | yes | prod |
 | kp | float (2.0) | collaborator P-gain | C | yes | prod. High values oscillate (see theory skill) |
 | min_rate / max_rate | float (0.9 / 1.2) | collaborator rate clamp | C | yes | prod |
-| max_samples | int (property default 10; UI default 3) | **leader only** (broadcast in sync_params) | C | yes | ⚠ QUIRK: collaborator hardcodes `self.max_samples = 3` and NEVER applies the broadcast sync_params — the whole `sync_params` payload in the start command is currently dead on arrival. Verified 2026-07-06 |
+| max_samples | int (3) | collaborator median filter | C | yes | prod. (Was hardcoded 3 ignoring config until 2026-07-07; defaults aligned to 3 everywhere) |
 | netclock_port | int (9997) | leader start cmd, gst driver NetTimeProvider, collaborator | L,C,D | no | prod (netclock mode) |
 | netclock_max_drift | float (0.5) | collaborator watchdog guard | C | no | prod (netclock mode) |
 | video_offset | float (0.0) | collaborator comparison + driver netclock align | C,D | yes (Advanced) | prod. Seconds; positive DELAYS this device. For display-latency deltas only |

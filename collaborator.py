@@ -113,7 +113,7 @@ class CollaboratorPi:
         self.critical_window_logging = False
         self.debug_deviation_mode = False
         self.deviation_samples = []
-        self.max_samples = 3
+        self.max_samples = self.config.max_samples
         self.max_drift = self.config.max_drift
         self.min_drift = self.config.min_drift
         self.kp = self.config.kp

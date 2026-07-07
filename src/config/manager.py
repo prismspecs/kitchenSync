@@ -441,7 +441,7 @@ class ConfigManager:
     def max_rate(self) -> float: return self.getfloat("max_rate", 1.2)
 
     @property
-    def max_samples(self) -> int: return self.getint("max_samples", 10)
+    def max_samples(self) -> int: return self.getint("max_samples", 3)
 
     @property
     def enable_audio(self) -> bool: return self.getboolean("enable_audio", True)
