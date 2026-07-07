@@ -35,7 +35,7 @@ the fleet pulls.
 
 | Item | Evidence | Recommendation |
 |---|---|---|
-| `code_archive/` (whole tree, ~15 files: debug_v2 overlay 43 KB, remote_controller.py 24 KB, legacy setup scripts, midi tools) | **One live edge**: `tests/test_core.py` imports `code_archive.system_state_legacy.SyncTracker`. Nothing else references it | Move `SyncTracker` test coverage into src or delete that test case; then DELETE the tree (git history preserves it — that's what it's for) |
+| `code_archive/` (whole tree: debug_v2 overlay, legacy remote_controller, setup scripts, midi tools) | One live edge was `tests/test_core.py` importing the legacy SyncTracker — a test of archived code, deleted with it | ✅ DELETED 2026-07-07 (Batch 2). History: `git log --all -- code_archive/` |
 | `kitchensync.service` (tracked file) | setup.sh GENERATES its own service file; the tracked one was browser-overlay-era (Firefox `MOZ_*` env vars, stale venv path) | ✅ DELETED 2026-07-07 (Batch 1) |
 | `tools/ntp-setup.sh` | Chrony-era (archaeology E7 — DO-NOT-REOPEN) | ✅ DELETED 2026-07-07 (Batch 1). reset-network.sh kept as generic interface tool |
 | `src/protocols/osc_handler.py` + `enable_osc` | Handler is instantiated when enable_osc=true but **never called anywhere** (`grep -n "osc_handler\." collaborator.py` → nothing). Dead feature scaffold | KEEP the file (protocol events revival is planned — ksync-research-frontier item e) but add a comment "scaffold, not wired"; or delete and re-add when needed |
@@ -46,7 +46,7 @@ the fleet pulls.
 | `research/` | Only research.md + .gitignore tracked; 39 MB of cloned repos are already untracked | KEEP as history; never import from it |
 | `GEMINI.md` | Stale manifest: still called the P-controller *the* sync model | ✅ REPLACED with a thin pointer 2026-07-07 (Batch 1) |
 | `docs/MIDI_CONTROL.md` (473 lines) | Feature dormant (enable_midi=false in production; property default true — mismatch) | KEEP doc; add a "dormant as of 2026-07" banner; fix the default mismatch |
-| Firefox cleanup flow | Only in code_archive/scripts/cleanup_firefox.sh; TODO.md still carries the revive-or-delete decision | DELETE with code_archive; close the TODO item |
+| Firefox cleanup flow | Lived only in code_archive/scripts/ | ✅ DELETED with code_archive 2026-07-07; TODO item closed |
 | Unused top-level imports | AST scan 2026-07-06 found 11 candidates; per-item verification caught one FALSE POSITIVE: `video/__init__.py VideoFileManager` is a re-export consumed by kitchensync.py — AST scanners don't see re-exports; always grep importers before deleting | ✅ 10 REMOVED 2026-07-07 (Batch 1); VideoFileManager kept |
 | Duplicated code leader.py ↔ collaborator.py | `_log_startup_crash` (identical), `_handle_device_update`/`_do_update` (near-identical ~35 lines), `_handle_log_request` (near-identical), `_message_targets_this_device` (identical) | REFACTOR into `src/core/` shared helpers — this class of drift is how the leader missed the target-filter fix that the collaborator had (b4e153c) |
 | `leader.py` non-`--auto` interactive CLI (CommandInterface/StatusDisplay) | Production always runs `--auto` via kitchensync.py | KEEP (debug value) unless src/ui/interface.py rots; re-evaluate |

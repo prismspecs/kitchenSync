@@ -21,7 +21,7 @@ The active stack is:
 - `src/remote/`: Web-based remote controller and schedule editor.
 - `docs/`: Detailed guides for installation, testing, and MIDI control.
 - `arduino/`: Firmware for Arduino-based MIDI relay control.
-- `code_archive/`: Legacy scripts and tools for reference.
+- `.agents/skills/`: The project skill library (start with `ksync-architecture-contract`).
 
 ## Quick Start
 

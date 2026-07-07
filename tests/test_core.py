@@ -19,7 +19,6 @@ sys.modules['gi.repository'] = MagicMock()
 from video import get_video_driver
 from video.driver import PlayerState
 from core import SystemState
-from code_archive.system_state_legacy import SyncTracker
 
 class TestkSync(unittest.TestCase):
     def test_video_driver_factory(self):
@@ -33,20 +32,6 @@ class TestkSync(unittest.TestCase):
         legacy_alias = get_video_driver("vlc")
         self.assertIsNotNone(legacy_alias)
 
-    def test_sync_tracker(self):
-        """Verify the sync tracker correctly calculates drift."""
-        tracker = SyncTracker()
-        
-        # Initial sync
-        tracker.record_sync(100.0, 100.0)
-        
-        # Simulate 0.1s drift (leader time advanced more than local time)
-        # Local time advances 1s, Leader time advances 1.1s
-        tracker.record_sync(101.1, 101.0)
-        
-        # Drift should be 0.1
-        self.assertAlmostEqual(tracker.get_average_drift(), 0.1)
-        
     def test_system_state(self):
         """Verify session state transitions."""
         state = SystemState()
