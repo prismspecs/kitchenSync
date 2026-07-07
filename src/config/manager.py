@@ -7,7 +7,6 @@ Handles loading and managing configuration from various sources
 import configparser
 import os
 import subprocess
-from pathlib import Path
 from typing import Optional, Dict, Any
 
 from core.logger import log_info, log_warning, log_error

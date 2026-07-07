@@ -5,8 +5,7 @@ Manages system state and provides status information
 """
 
 import time
-from typing import Dict, Any, Optional, List
-from collections import deque
+from typing import Dict, Any, Optional
 
 
 class SystemState:

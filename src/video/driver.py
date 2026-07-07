@@ -6,7 +6,7 @@ Ensures all video backends (GStreamer, VLC, mpv) follow the same contract.
 
 from abc import ABC, abstractmethod
 from enum import Enum
-from typing import Optional, Dict, Any
+from typing import Dict, Any
 
 
 class PlayerState(Enum):

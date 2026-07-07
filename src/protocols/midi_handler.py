@@ -9,7 +9,7 @@ import time
 import glob
 import bisect
 from typing import List, Dict, Any, Set, Optional
-from core.logger import log_info, log_warning, log_error
+from core.logger import log_info
 
 
 # Try to import rtmidi

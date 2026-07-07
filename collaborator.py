@@ -9,7 +9,6 @@ import sys
 import os
 import time
 import argparse
-import signal
 import statistics
 import threading
 import urllib.request

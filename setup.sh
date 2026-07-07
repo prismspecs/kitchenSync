@@ -94,8 +94,9 @@ echo "Installing Python dependencies..."
 "$VENV_DIR/bin/pip" install mido pyserial python-osc
 
 # 7. Systemd Service Configuration
+# NOTE: the unit generated below is the ONLY source of truth for the service.
+# (A stale kitchensync.service was once tracked in the repo and misled people.)
 echo "Configuring systemd service..."
-SERVICE_FILE="kitchensync.service"
 CURRENT_USER=$(whoami)
 INSTALL_DIR=$(pwd)
 VENV_PYTHON="$VENV_DIR/bin/python3"

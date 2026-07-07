@@ -4,7 +4,6 @@ Video File Discovery and Management for kSync
 Handles finding and managing video files from various sources
 """
 
-import glob
 import json
 import os
 import re

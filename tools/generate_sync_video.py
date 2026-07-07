@@ -14,7 +14,6 @@ Usage:
 import argparse
 import os
 import subprocess
-import sys
 import tempfile
 
 COLORS = [

@@ -109,8 +109,8 @@ something is the way it is, or whether an idea was already tried.
   found; seccomp and config-ordering hypotheses tested; cause never identified).
   Full debug log preserved in `research/research.md` ("Phase 1 Blocked — NTP Not
   Working").
-- **Resolution**: NTP proven unnecessary (see E5). `tools/ntp-setup.sh` and parts of
-  `tools/reset-network.sh` are chrony-era artifacts.
+- **Resolution**: NTP proven unnecessary (see E5). `tools/ntp-setup.sh` was deleted
+  2026-07-07; `tools/reset-network.sh` remains as a generic interface-reset tool.
 - **Status**: **DO-NOT-REOPEN** for sync purposes. If a future feature genuinely needs
   wall-clock agreement (e.g., "start show at 19:00"), that is a new problem — document
   it as such.
@@ -202,5 +202,5 @@ TODO.md, and the 2026-07-06 investigation session. Re-verify:
 
 - Hashes exist: `git log --oneline | grep -E "ebb773a|20bc1d9|cb09752|bf53a41|a021f66|b9e05ad"`
 - New incidents since this was written: `git log --oneline --since=2026-07-06`
-- Chrony artifacts still present: `ls tools/ntp-setup.sh`
+- Chrony artifacts stay deleted: `ls tools/ntp-setup.sh 2>&1` (expect "No such file")
 - VLC removal warning still in place: `grep -rn "VLC backend has been removed" src/video/__init__.py`

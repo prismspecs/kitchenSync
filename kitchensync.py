@@ -8,7 +8,6 @@ Prioritizes ksync.ini on USB root.
 import os
 import sys
 import subprocess
-import time
 from pathlib import Path
 import zipfile
 import shutil
