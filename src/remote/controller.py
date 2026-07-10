@@ -258,7 +258,7 @@ def _run_conversion(source_path: Path, output_path: Path, target_codec: str, dev
 
         for line in proc.stdout:
             line = line.strip()
-            if line.startswith("out_time_usec="):
+            if line.startswith("out_time_us=") or line.startswith("out_time_usec="):
                 try:
                     usec = int(line.split("=")[1])
                     pct = min(usec / 1_000_000 / duration * 100, 99.9)
