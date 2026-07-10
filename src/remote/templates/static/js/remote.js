@@ -616,10 +616,7 @@ function renderMediaCell(device, leaderMedia) {
 
     let syncSection = '';
     
-    if (!isLeader) {
-        const deviceFileNames = media.map(m => m.name);
-        const missingFiles = (leaderMedia || []).filter(m => !deviceFileNames.includes(m.name));
-        
+    if (device.device_id !== 'remote-leader') {
         const uploadSection = `
             <div class="sync-section">
                 <h4>Upload to device</h4>
@@ -651,25 +648,28 @@ function renderMediaCell(device, leaderMedia) {
             </div>
         `;
 
-        if (missingFiles.length > 0) {
-            const options = missingFiles.map(m => `
-                <option value="${escapeHtml(m.name)}">${escapeHtml(m.name)} (${(m.size / (1024 * 1024)).toFixed(1)} MB)</option>
-            `).join('');
-            
-            syncSection = `
-                <div class="sync-section">
-                    <h4>Download video from Leader</h4>
-                    <div class="row btn-group">
-                        <select id="sync-select-${device.device_id}" class="select-small">${options}</select>
-                        <button class="btn-small" onclick="syncMedia('${device.device_id}', document.getElementById('sync-select-${device.device_id}').value)">Pull</button>
+        if (!isLeader) {
+            const deviceFileNames = media.map(m => m.name);
+            const missingFiles = (leaderMedia || []).filter(m => !deviceFileNames.includes(m.name));
+            if (missingFiles.length > 0) {
+                const options = missingFiles.map(m => `
+                    <option value="${escapeHtml(m.name)}">${escapeHtml(m.name)} (${(m.size / (1024 * 1024)).toFixed(1)} MB)</option>
+                `).join('');
+                syncSection = `
+                    <div class="sync-section">
+                        <h4>Download video from Leader</h4>
+                        <div class="row btn-group">
+                            <select id="sync-select-${device.device_id}" class="select-small">${options}</select>
+                            <button class="btn-small" onclick="syncMedia('${device.device_id}', document.getElementById('sync-select-${device.device_id}').value)">Pull</button>
+                        </div>
                     </div>
-                </div>
-                ${uploadSection}
-            `;
+                    ${uploadSection}
+                `;
+            } else {
+                syncSection = uploadSection;
+            }
         } else {
-            syncSection = `
-                ${uploadSection}
-            `;
+            syncSection = uploadSection;
         }
     }
 
