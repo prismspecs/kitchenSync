@@ -594,6 +594,7 @@ class CommandManager:
                 "video_driver": msg.get("video_driver", ""),
                 "is_optimized": msg.get("is_optimized", False),
                 "hard_seeks": msg.get("hard_seeks", 0),
+                "pi_model": msg.get("pi_model", ""),
             }
 
         elif msg_type == "heartbeat":
@@ -613,6 +614,7 @@ class CommandManager:
                 "hard_seeks": msg.get("hard_seeks", 0),
                 "sync_deviation": msg.get("sync_deviation", 0.0),
                 "playback_rate": msg.get("playback_rate", 1.0),
+                "pi_model": msg.get("pi_model", ""),
             }
 
     def get_collaborators(self) -> Dict[str, Dict]:
@@ -695,7 +697,7 @@ class CommandListener:
         """Register a catch-all callback for any message"""
         self.message_handlers["__all__"] = callback
 
-    def send_registration(self, device_id: str, video_file: str, hard_seeks: int = 0) -> None:
+    def send_registration(self, device_id: str, video_file: str, hard_seeks: int = 0, pi_model: str = "") -> None:
         """Send registration to leader"""
         registration = {
             "type": "register",
@@ -703,6 +705,7 @@ class CommandListener:
             "status": "ready",
             "video_file": video_file,
             "hard_seeks": hard_seeks,
+            "pi_model": pi_model,
         }
 
         self.send_message(registration)
@@ -739,7 +742,7 @@ class CommandListener:
             self._send_sock = None
             self._broadcast_ip = None
 
-    def send_heartbeat(self, device_id: str, status: str = "ready", hard_seeks: int = 0, video_file: str = "", is_optimized: bool = False, video_driver: str = "", sync_deviation: float = 0.0, playback_rate: float = 1.0) -> None:
+    def send_heartbeat(self, device_id: str, status: str = "ready", hard_seeks: int = 0, video_file: str = "", is_optimized: bool = False, video_driver: str = "", sync_deviation: float = 0.0, playback_rate: float = 1.0, pi_model: str = "") -> None:
         """Send heartbeat to leader"""
         heartbeat = {
             "type": "heartbeat",
@@ -751,5 +754,6 @@ class CommandListener:
             "video_driver": video_driver,
             "sync_deviation": sync_deviation,
             "playback_rate": playback_rate,
+            "pi_model": pi_model,
         }
         self.send_message(heartbeat)

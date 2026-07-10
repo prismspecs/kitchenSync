@@ -20,6 +20,7 @@ sys.path.insert(0, str(Path(__file__).parent / "src"))
 
 from config.manager import ConfigManager
 from video import get_video_driver
+from video.drivers.gst_driver import get_pi_model
 from video.file_manager import VideoFileManager
 from networking.communication import SyncBroadcaster, CommandManager
 from core.schedule import Schedule
@@ -178,6 +179,7 @@ class LeaderPi:
             "video_file": Path(self.video_path).name if self.video_path else "",
             "video_driver": self.video_driver_name,
             "is_optimized": is_optimized,
+            "pi_model": get_pi_model(),
         }
         self._send_unicast(response, addr[0])
 

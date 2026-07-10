@@ -8,7 +8,7 @@ let latestState = null;
 
 const REFRESH_ICON_SVG = `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"></path><path d="M1 20v-6h6"></path><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>`;
 
-console.log('remote.js v15 loaded');
+console.log('remote.js v16 loaded');
 async function postJson(path, payload) {
     const response = await fetch(path, {
         method: 'POST',
@@ -86,6 +86,141 @@ async function uploadMedia(deviceId = null) {
     } catch (err) {
         status.textContent = 'Error: ' + err.message;
     }
+}
+
+async function convertAndUpload(deviceId) {
+    const inputId = `convert-input-${deviceId}`;
+    const statusId = `convert-status-${deviceId}`;
+    const convertProgressId = `convert-progress-${deviceId}`;
+    const uploadProgressId = `upload-progress-${deviceId}`;
+
+    const input = document.getElementById(inputId);
+    const status = document.getElementById(statusId);
+    const convertProgress = document.getElementById(convertProgressId);
+    const uploadProgress = document.getElementById(uploadProgressId);
+    if (!input || !input.files.length) return;
+
+    const file = input.files[0];
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const url = `/api/media/convert-and-upload?target_device_id=${encodeURIComponent(deviceId)}`;
+
+    status.textContent = 'Uploading source file...';
+    status.style.display = 'block';
+    convertProgress.style.display = 'block';
+    convertProgress.querySelector('.progress-fill').style.width = '0%';
+    uploadProgress.style.display = 'none';
+
+    try {
+        const xhr = new XMLHttpRequest();
+        const result = await new Promise((resolve, reject) => {
+            xhr.upload.addEventListener('progress', (e) => {
+                if (e.lengthComputable) {
+                    status.textContent = `Uploading source: ${Math.round((e.loaded / e.total) * 100)}%`;
+                }
+            });
+            xhr.addEventListener('load', () => {
+                if (xhr.status >= 200 && xhr.status < 300) {
+                    try { resolve(JSON.parse(xhr.responseText)); }
+                    catch { resolve({ status: 'ok' }); }
+                } else {
+                    try { resolve(JSON.parse(xhr.responseText)); }
+                    catch { reject(new Error(`Upload failed (${xhr.status})`)); }
+                }
+            });
+            xhr.addEventListener('error', () => reject(new Error('Network error during upload')));
+            xhr.open('POST', url);
+            xhr.send(formData);
+        });
+
+        if (result.status === 'started') {
+            status.textContent = 'Conversion started...';
+            pollConvertStatus(deviceId);
+        } else {
+            status.textContent = 'Error: ' + (result.message || 'Failed to start conversion');
+        }
+    } catch (err) {
+        status.textContent = 'Error: ' + err.message;
+    }
+}
+
+let convertPollTimers = {};
+
+function pollConvertStatus(deviceId) {
+    const statusId = `convert-status-${deviceId}`;
+    const convertProgressId = `convert-progress-${deviceId}`;
+    const uploadProgressId = `upload-progress-${deviceId}`;
+
+    if (convertPollTimers[deviceId]) {
+        clearInterval(convertPollTimers[deviceId]);
+    }
+
+    convertPollTimers[deviceId] = setInterval(async () => {
+        try {
+            const response = await fetch(`/api/media/convert-status?device_id=${encodeURIComponent(deviceId)}`);
+            const data = await response.json();
+
+            const status = document.getElementById(statusId);
+            const convertProgress = document.getElementById(convertProgressId);
+            const uploadProgress = document.getElementById(uploadProgressId);
+
+            if (!status) {
+                clearInterval(convertPollTimers[deviceId]);
+                delete convertPollTimers[deviceId];
+                return;
+            }
+
+            if (data.status === 'not_found') {
+                status.textContent = 'Conversion job not found';
+                clearInterval(convertPollTimers[deviceId]);
+                delete convertPollTimers[deviceId];
+                return;
+            }
+
+            if (data.status === 'converting') {
+                convertProgress.style.display = 'block';
+                convertProgress.querySelector('.progress-fill').style.width = data.convert_progress + '%';
+                convertProgress.querySelector('.progress-label').textContent = `Converting (${data.convert_progress}%)`;
+                status.textContent = `Converting to ${data.target_codec.toUpperCase()}...`;
+                return;
+            }
+
+            if (data.status === 'uploading') {
+                convertProgress.querySelector('.progress-fill').style.width = '100%';
+                convertProgress.querySelector('.progress-label').textContent = 'Conversion complete';
+                uploadProgress.style.display = 'block';
+                uploadProgress.querySelector('.progress-fill').style.width = '50%';
+                uploadProgress.querySelector('.progress-label').textContent = 'Transferring to device...';
+                status.textContent = 'Uploading to device...';
+                return;
+            }
+
+            if (data.status === 'complete') {
+                convertProgress.querySelector('.progress-fill').style.width = '100%';
+                convertProgress.querySelector('.progress-label').textContent = 'Conversion complete';
+                uploadProgress.style.display = 'block';
+                uploadProgress.querySelector('.progress-fill').style.width = '100%';
+                uploadProgress.querySelector('.progress-label').textContent = 'Uploaded';
+                status.textContent = `Complete: ${data.output_filename}`;
+                status.className = 'message ok';
+                clearInterval(convertPollTimers[deviceId]);
+                delete convertPollTimers[deviceId];
+                setTimeout(refresh, 2000);
+                return;
+            }
+
+            if (data.status === 'error') {
+                status.textContent = 'Error: ' + (data.error || 'Conversion failed');
+                status.className = 'message error';
+                clearInterval(convertPollTimers[deviceId]);
+                delete convertPollTimers[deviceId];
+                return;
+            }
+        } catch (err) {
+            // Silently retry on network errors
+        }
+    }, 500);
 }
 
 async function deleteMedia(deviceId, filename) {
@@ -494,6 +629,26 @@ function renderMediaCell(device, leaderMedia) {
                 </div>
                 <div id="upload-status-${device.device_id}" class="message info" style="display:none"></div>
             </div>
+            <div class="sync-section">
+                <h4>Convert &amp; Upload</h4>
+                <div class="row btn-group">
+                    <input type="file" id="convert-input-${device.device_id}" class="file-input-small">
+                    <button class="btn-small btn-primary" onclick="convertAndUpload('${device.device_id}')">Convert &amp; Upload</button>
+                </div>
+                <div class="convert-progress" id="convert-progress-${device.device_id}" style="display:none">
+                    <div class="progress-bar">
+                        <div class="progress-fill" style="width:0%"></div>
+                    </div>
+                    <span class="progress-label">Waiting...</span>
+                </div>
+                <div class="convert-progress" id="upload-progress-${device.device_id}" style="display:none">
+                    <div class="progress-bar progress-upload">
+                        <div class="progress-fill" style="width:0%"></div>
+                    </div>
+                    <span class="progress-label">Waiting...</span>
+                </div>
+                <div id="convert-status-${device.device_id}" class="message info" style="display:none"></div>
+            </div>
         `;
 
         if (missingFiles.length > 0) {
@@ -729,6 +884,7 @@ function renderState(state) {
                     </div>
                     <div class="device-summary-line device-summary-role">${escapeHtml(device.role)}</div>
                     ${device.video_driver ? `<div class="device-summary-line device-summary-driver">Driver: ${escapeHtml(device.video_driver)}</div>` : ''}
+                    ${device.pi_model ? `<div class="device-summary-line device-summary-model">${escapeHtml(device.pi_model)}</div>` : ''}
                     <div class="device-summary-line device-summary-ip">${escapeHtml(device.ip)}</div>
                     <div class="device-summary-line device-summary-latency">${escapeHtml(latencyText)}</div>
                     ${device.sync_deviation != null ? `<div class="device-summary-line device-summary-deviation">Dev: ${device.sync_deviation > 0 ? '+' : ''}${device.sync_deviation.toFixed(3)}s</div>` : ''}

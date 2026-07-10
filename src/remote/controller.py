@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
 import json
 import os
+import re
+import shutil
 import subprocess
 import sys
 import threading
 import time
-from dataclasses import dataclass
+import uuid
+from dataclasses import dataclass, field
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -49,6 +52,22 @@ log_events: Dict[str, threading.Event] = {}
 
 # Media state cache
 media_snapshots: Dict[str, List[Dict[str, Any]]] = {}
+
+# Conversion job tracking
+@dataclass
+class ConversionJob:
+    device_id: str
+    status: str = "queued"  # queued, converting, uploading, complete, error
+    convert_progress: float = 0.0  # 0–100
+    upload_progress: float = 0.0   # 0–100
+    output_filename: str = ""
+    error: str = ""
+    source_filename: str = ""
+    target_codec: str = ""
+
+_conversion_jobs: Dict[str, ConversionJob] = {}
+_conversion_jobs_lock = threading.Lock()
+CONVERT_TMP = Path("media/.convert_tmp")
 
 
 def _find_real_leader() -> Optional[str]:
@@ -141,6 +160,144 @@ def list_available_schedules() -> list[str]:
         for file in Path(".").glob("*.json")
         if file.name != "package.json" and file.name != "package-lock.json"
     )
+
+
+def _get_target_codec(pi_model: str) -> str:
+    if "Raspberry Pi 4" in pi_model:
+        return "h264"
+    return "hevc"
+
+
+def _get_conversion_job(device_id: str) -> Optional[ConversionJob]:
+    with _conversion_jobs_lock:
+        return _conversion_jobs.get(device_id)
+
+
+def _set_conversion_job(job: ConversionJob) -> None:
+    with _conversion_jobs_lock:
+        _conversion_jobs[job.device_id] = job
+
+
+def _run_conversion(source_path: Path, output_path: Path, target_codec: str, device_id: str) -> bool:
+    """Run ffmpeg conversion with progress tracking. Returns True on success."""
+    job = _get_conversion_job(device_id)
+    if not job:
+        return False
+
+    # Detect source frame rate via ffprobe
+    fps = 30.0
+    try:
+        probe = subprocess.run(
+            ["ffprobe", "-v", "0", "-of", "csv=p=0", "-select_streams", "v:0",
+             "-show_entries", "stream=r_frame_rate", str(source_path)],
+            capture_output=True, text=True, timeout=10,
+        )
+        if probe.returncode == 0 and probe.stdout.strip():
+            match = re.match(r"(\d+)/(\d+)", probe.stdout.strip())
+            if match:
+                fps = float(match.group(1)) / float(match.group(2))
+    except Exception:
+        pass
+
+    keyint = max(int(round(fps)), 1)
+    log_info(f"Convert: detected fps={fps:.2f}, keyint={keyint} for {device_id}", component="remote")
+
+    if target_codec == "h264":
+        cmd = [
+            "ffmpeg", "-y",
+            "-i", str(source_path),
+            "-an",
+            "-vf", f"fps={fps:.2f},format=yuv420p",
+            "-c:v", "libx264",
+            "-profile:v", "high",
+            "-level", "4.2",
+            "-preset", "slow",
+            "-x264-params", f"keyint={keyint}:min-keyint={keyint}:scenecut=0",
+            "-b:v", "10M", "-maxrate", "12M", "-bufsize", "20M",
+            "-progress", "pipe:1",
+            "-nostats",
+            str(output_path),
+        ]
+    else:
+        cmd = [
+            "ffmpeg", "-y",
+            "-i", str(source_path),
+            "-an",
+            "-vf", f"fps={fps:.2f},format=yuv420p",
+            "-c:v", "libx265",
+            "-preset", "medium",
+            "-tag:v", "hvc1",
+            "-x265-params", f"keyint={keyint}:min-keyint={keyint}:scenecut=0",
+            "-b:v", "10M", "-maxrate", "12M", "-bufsize", "20M",
+            "-progress", "pipe:1",
+            "-nostats",
+            str(output_path),
+        ]
+
+    # Get source duration for progress calculation
+    duration = 0.0
+    try:
+        dur_probe = subprocess.run(
+            ["ffprobe", "-v", "0", "-of", "csv=p=0", "-select_streams", "v:0",
+             "-show_entries", "format=duration", str(source_path)],
+            capture_output=True, text=True, timeout=10,
+        )
+        if dur_probe.returncode == 0 and dur_probe.stdout.strip():
+            duration = float(dur_probe.stdout.strip())
+    except Exception:
+        pass
+
+    if duration <= 0:
+        duration = 30.0  # fallback
+
+    log_info(f"Convert: starting ffmpeg for {device_id} ({target_codec}), duration={duration:.1f}s", component="remote")
+
+    try:
+        proc = subprocess.Popen(
+            cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        )
+
+        for line in proc.stdout:
+            line = line.strip()
+            if line.startswith("out_time_usec="):
+                try:
+                    usec = int(line.split("=")[1])
+                    pct = min(usec / 1_000_000 / duration * 100, 99.9)
+                    job.convert_progress = round(pct, 1)
+                    _set_conversion_job(job)
+                except (ValueError, ZeroDivisionError):
+                    pass
+
+        proc.wait(timeout=3600)
+
+        if proc.returncode != 0:
+            stderr = proc.stderr.read()[:500] if proc.stderr else ""
+            job.status = "error"
+            job.error = f"ffmpeg failed (code {proc.returncode}): {stderr}"
+            _set_conversion_job(job)
+            log_warning(f"Convert: ffmpeg error for {device_id}: {job.error}", component="remote")
+            return False
+
+        job.convert_progress = 100.0
+        _set_conversion_job(job)
+        log_info(f"Convert: completed for {device_id} -> {output_path.name}", component="remote")
+        return True
+
+    except subprocess.TimeoutExpired:
+        job.status = "error"
+        job.error = "ffmpeg timed out after 1 hour"
+        _set_conversion_job(job)
+        return False
+    except FileNotFoundError:
+        job.status = "error"
+        job.error = "ffmpeg not found on this system"
+        _set_conversion_job(job)
+        return False
+    except Exception as e:
+        job.status = "error"
+        job.error = f"Conversion failed: {e}"
+        _set_conversion_job(job)
+        return False
 
 
 def update_runtime_from_config() -> None:
@@ -242,6 +399,7 @@ def build_ui_state() -> Dict[str, Any]:
             "video_file": leader_video,
             "video_driver": local_config.get("video_driver", config.video_driver),
             "is_optimized": leader_optimized,
+            "pi_model": "",
         }
     ]
 
@@ -290,6 +448,7 @@ def build_ui_state() -> Dict[str, Any]:
                 "config": config_snapshots.get(device_id),
                 "message": config_messages.get(device_id),
                 "media": media_snapshots.get(device_id),
+                "pi_model": info.get("pi_model", ""),
             }
         )
 
@@ -448,6 +607,144 @@ class RemoteHandler(BaseHTTPRequestHandler):
         else:
             self._send_json({"status": "error", "message": "No file found in request"}, status=400)
 
+    def _handle_convert_and_upload(self):
+        """Handle multipart upload with on-the-fly codec conversion for target device."""
+        content_type = self.headers.get("Content-Type", "")
+        if "multipart/form-data" not in content_type:
+            self._send_json({"status": "error", "message": "Expected multipart/form-data"}, status=400)
+            return
+
+        parsed_path = urlparse(self.path)
+        query = parse_qs(parsed_path.query)
+        target_device_id = query.get("target_device_id", [None])[0]
+        if not target_device_id:
+            self._send_json({"status": "error", "message": "target_device_id required"}, status=400)
+            return
+
+        # Check for existing job
+        existing = _get_conversion_job(target_device_id)
+        if existing and existing.status in ("queued", "converting", "uploading"):
+            self._send_json({"status": "error", "message": "A conversion is already in progress for this device"}, status=409)
+            return
+
+        # Get device info and determine target codec
+        collaborators = command_manager.get_collaborators()
+        device_info = collaborators.get(target_device_id, {})
+        pi_model = device_info.get("pi_model", "")
+        target_codec = _get_target_codec(pi_model)
+        log_info(f"Convert: target={target_device_id} pi_model='{pi_model}' codec={target_codec}", component="remote")
+
+        # Parse the uploaded file
+        boundary = content_type.split("boundary=")[1].encode()
+        length = int(self.headers.get("Content-Length"))
+        input_data = self.rfile.read(length)
+        parts = input_data.split(b"--" + boundary)
+
+        file_data = None
+        source_filename = None
+        for part in parts:
+            if b"Content-Disposition" in part and b"filename=" in part:
+                headers, body = part.split(b"\r\n\r\n", 1)
+                if body.endswith(b"\r\n"):
+                    body = body[:-2]
+                file_data = body
+                for line in headers.decode().split("\r\n"):
+                    if "Content-Disposition" in line and "filename=" in line:
+                        source_filename = line.split("filename=")[1].strip('"')
+                        break
+
+        if not source_filename or not file_data:
+            self._send_json({"status": "error", "message": "No file found in request"}, status=400)
+            return
+
+        # Save source file temporarily
+        CONVERT_TMP.mkdir(parents=True, exist_ok=True)
+        source_stem = Path(source_filename).stem
+        safe_stem = re.sub(r'[^a-zA-Z0-9_-]', '_', source_stem)
+        source_path = CONVERT_TMP / f"{uuid.uuid4().hex}_{safe_stem}{Path(source_filename).suffix}"
+        with open(source_path, "wb") as f:
+            f.write(file_data)
+
+        # Determine output filename
+        codec_tag = f"pi5_hevc" if target_codec == "hevc" else "pi4_h264"
+        output_filename = f"{safe_stem}_{codec_tag}.mp4"
+        output_path = Path("media") / output_filename
+
+        # Create job record
+        job = ConversionJob(
+            device_id=target_device_id,
+            status="converting",
+            source_filename=source_filename,
+            output_filename=output_filename,
+            target_codec=target_codec,
+        )
+        _set_conversion_job(job)
+
+        # Run conversion in background
+        def _do_conversion():
+            job = _get_conversion_job(target_device_id)
+            if not job:
+                return
+
+            try:
+                success = _run_conversion(source_path, output_path, target_codec, target_device_id)
+                if not success:
+                    return
+
+                # Conversion done, trigger upload to target device
+                job.status = "uploading"
+                _set_conversion_job(job)
+
+                # Trigger file sync to the target device
+                s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                try:
+                    s.connect(("8.8.8.8", 80))
+                    leader_ip = s.getsockname()[0]
+                finally:
+                    s.close()
+
+                command_manager.send_command(
+                    {
+                        "type": "file_upload_notify",
+                        "filename": output_filename,
+                        "source_url": f"http://{leader_ip}:8080/api/media/download?filename={quote(output_filename)}",
+                        "target_device_id": target_device_id,
+                    },
+                    target_pi=target_device_id,
+                )
+
+                # Trigger a media scan so the file appears locally
+                video_manager.trigger_background_scan(force=True)
+
+                job.status = "complete"
+                job.upload_progress = 100.0
+                _set_conversion_job(job)
+                log_info(f"Convert+Upload: complete for {target_device_id} -> {output_filename}", component="remote")
+
+            except Exception as e:
+                job.status = "error"
+                job.error = str(e)
+                _set_conversion_job(job)
+                log_warning(f"Convert+Upload: failed for {target_device_id}: {e}", component="remote")
+            finally:
+                # Clean up source temp file
+                try:
+                    if source_path.exists():
+                        source_path.unlink()
+                except Exception:
+                    pass
+
+        threading.Thread(target=_do_conversion, daemon=True).start()
+
+        self._send_json({
+            "status": "started",
+            "job": {
+                "device_id": target_device_id,
+                "output_filename": output_filename,
+                "target_codec": target_codec,
+            },
+        })
+
     def do_GET(self):
         parsed_path = urlparse(self.path)
         path = parsed_path.path
@@ -521,6 +818,27 @@ class RemoteHandler(BaseHTTPRequestHandler):
                 pass
             except Exception as exc:
                 log_info(f"Stream error: {exc}", component="remote")
+            return
+
+        if path == "/api/media/convert-status":
+            query = parse_qs(parsed_path.query)
+            device_id = query.get("device_id", [None])[0]
+            if not device_id:
+                self._send_json({"status": "error", "message": "device_id required"}, status=400)
+                return
+            job = _get_conversion_job(device_id)
+            if not job:
+                self._send_json({"status": "not_found"})
+                return
+            self._send_json({
+                "status": job.status,
+                "convert_progress": job.convert_progress,
+                "upload_progress": job.upload_progress,
+                "output_filename": job.output_filename,
+                "source_filename": job.source_filename,
+                "target_codec": job.target_codec,
+                "error": job.error,
+            })
             return
 
         if path == "/api/logs":
@@ -607,6 +925,10 @@ class RemoteHandler(BaseHTTPRequestHandler):
         
         if action == "api/media/upload":
             self._handle_upload()
+            return
+
+        if action == "api/media/convert-and-upload":
+            self._handle_convert_and_upload()
             return
 
         payload = self._read_json_body()
@@ -888,6 +1210,7 @@ def _handle_leader_announce(msg: Dict[str, Any], addr: tuple) -> None:
         "video_driver": msg.get("video_driver", ""),
         "is_optimized": msg.get("is_optimized", False),
         "hard_seeks": 0,
+        "pi_model": msg.get("pi_model", ""),
     }
 
 

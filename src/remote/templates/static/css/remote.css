@@ -642,3 +642,36 @@ select {
     border-top: 1px solid #ddd;
     padding-top: 10px;
 }
+
+.convert-progress {
+    margin: 6px 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.progress-bar {
+    flex: 1;
+    height: 14px;
+    background: #e0e0e0;
+    border-radius: 7px;
+    overflow: hidden;
+    min-width: 80px;
+}
+
+.progress-bar .progress-fill {
+    height: 100%;
+    background: #2a7;
+    border-radius: 7px;
+    transition: width 0.3s ease;
+}
+
+.progress-upload .progress-fill {
+    background: #1f5ea8;
+}
+
+.progress-label {
+    font-size: 11px;
+    color: #555;
+    white-space: nowrap;
+}

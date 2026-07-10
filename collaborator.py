@@ -21,6 +21,7 @@ sys.path.insert(0, str(Path(__file__).parent / "src"))
 
 from config.manager import ConfigManager
 from video import get_video_driver
+from video.drivers.gst_driver import get_pi_model
 from video.file_manager import VideoFileManager
 from networking.communication import CommandListener, SyncReceiver
 from core import SystemState, get_ntp_status
@@ -199,6 +200,7 @@ class CollaboratorPi:
                         video_driver=getattr(self, "video_driver_name", ""),
                         sync_deviation=self._current_deviation,
                         playback_rate=self._current_playback_rate,
+                        pi_model=get_pi_model(),
                     )
                 except Exception as e:
                     log_warning(f"Failed to send heartbeat: {e}", component="collaborator")
