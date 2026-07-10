@@ -184,12 +184,11 @@ def _run_conversion(source_path: Path, output_path: Path, target_codec: str, dev
     if not job:
         return False
 
-    # Detect source frame rate via ffprobe
     fps = 30.0
     try:
         probe = subprocess.run(
             ["ffprobe", "-v", "0", "-of", "csv=p=0", "-select_streams", "v:0",
-             "-show_entries", "stream=r_frame_rate", str(source_path)],
+             "-show_entries", "stream=avg_frame_rate", str(source_path)],
             capture_output=True, text=True, timeout=10,
         )
         if probe.returncode == 0 and probe.stdout.strip():
