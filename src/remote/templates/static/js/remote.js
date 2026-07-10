@@ -89,15 +89,7 @@ async function uploadMedia(deviceId = null) {
 }
 
 async function convertAndUpload(deviceId) {
-    const inputId = `convert-input-${deviceId}`;
-    const statusId = `convert-status-${deviceId}`;
-    const convertProgressId = `convert-progress-${deviceId}`;
-    const uploadProgressId = `upload-progress-${deviceId}`;
-
-    const input = document.getElementById(inputId);
-    const status = document.getElementById(statusId);
-    const convertProgress = document.getElementById(convertProgressId);
-    const uploadProgress = document.getElementById(uploadProgressId);
+    const input = document.getElementById(`convert-input-${deviceId}`);
     if (!input || !input.files.length) return;
 
     const file = input.files[0];
@@ -106,18 +98,28 @@ async function convertAndUpload(deviceId) {
 
     const url = `/api/media/convert-and-upload?target_device_id=${encodeURIComponent(deviceId)}`;
 
-    status.textContent = 'Uploading source file...';
-    status.style.display = 'block';
-    convertProgress.style.display = 'block';
-    convertProgress.querySelector('.progress-fill').style.width = '0%';
-    uploadProgress.style.display = 'none';
+    conversionJobs.set(deviceId, {
+        status: 'uploading_source',
+        convert_progress: 0,
+        upload_progress: 0,
+        target_codec: '',
+        error: '',
+    });
+    refresh();
 
     try {
         const xhr = new XMLHttpRequest();
         const result = await new Promise((resolve, reject) => {
             xhr.upload.addEventListener('progress', (e) => {
                 if (e.lengthComputable) {
-                    status.textContent = `Uploading source: ${Math.round((e.loaded / e.total) * 100)}%`;
+                    conversionJobs.set(deviceId, {
+                        status: 'uploading_source',
+                        convert_progress: Math.round((e.loaded / e.total) * 100),
+                        upload_progress: 0,
+                        target_codec: '',
+                        error: '',
+                    });
+                    refresh();
                 }
             });
             xhr.addEventListener('load', () => {
@@ -135,23 +137,33 @@ async function convertAndUpload(deviceId) {
         });
 
         if (result.status === 'started') {
-            status.textContent = 'Conversion started...';
             pollConvertStatus(deviceId);
         } else {
-            status.textContent = 'Error: ' + (result.message || 'Failed to start conversion');
+            conversionJobs.set(deviceId, {
+                status: 'error',
+                convert_progress: 0,
+                upload_progress: 0,
+                target_codec: '',
+                error: result.message || 'Failed to start conversion',
+            });
+            refresh();
         }
     } catch (err) {
-        status.textContent = 'Error: ' + err.message;
+        conversionJobs.set(deviceId, {
+            status: 'error',
+            convert_progress: 0,
+            upload_progress: 0,
+            target_codec: '',
+            error: err.message,
+        });
+        refresh();
     }
 }
 
+const conversionJobs = new Map();
 let convertPollTimers = {};
 
 function pollConvertStatus(deviceId) {
-    const statusId = `convert-status-${deviceId}`;
-    const convertProgressId = `convert-progress-${deviceId}`;
-    const uploadProgressId = `upload-progress-${deviceId}`;
-
     if (convertPollTimers[deviceId]) {
         clearInterval(convertPollTimers[deviceId]);
     }
@@ -161,61 +173,35 @@ function pollConvertStatus(deviceId) {
             const response = await fetch(`/api/media/convert-status?device_id=${encodeURIComponent(deviceId)}`);
             const data = await response.json();
 
-            const status = document.getElementById(statusId);
-            const convertProgress = document.getElementById(convertProgressId);
-            const uploadProgress = document.getElementById(uploadProgressId);
-
-            if (!status) {
-                clearInterval(convertPollTimers[deviceId]);
-                delete convertPollTimers[deviceId];
-                return;
-            }
-
             if (data.status === 'not_found') {
-                status.textContent = 'Conversion job not found';
+                conversionJobs.delete(deviceId);
                 clearInterval(convertPollTimers[deviceId]);
                 delete convertPollTimers[deviceId];
+                refresh();
                 return;
             }
 
-            if (data.status === 'converting') {
-                convertProgress.style.display = 'block';
-                convertProgress.querySelector('.progress-fill').style.width = data.convert_progress + '%';
-                convertProgress.querySelector('.progress-label').textContent = `Converting (${data.convert_progress}%)`;
-                status.textContent = `Converting to ${data.target_codec.toUpperCase()}...`;
-                return;
-            }
-
-            if (data.status === 'uploading') {
-                convertProgress.querySelector('.progress-fill').style.width = '100%';
-                convertProgress.querySelector('.progress-label').textContent = 'Conversion complete';
-                uploadProgress.style.display = 'block';
-                uploadProgress.querySelector('.progress-fill').style.width = '50%';
-                uploadProgress.querySelector('.progress-label').textContent = 'Transferring to device...';
-                status.textContent = 'Uploading to device...';
-                return;
-            }
+            conversionJobs.set(deviceId, data);
+            refresh();
 
             if (data.status === 'complete') {
-                convertProgress.querySelector('.progress-fill').style.width = '100%';
-                convertProgress.querySelector('.progress-label').textContent = 'Conversion complete';
-                uploadProgress.style.display = 'block';
-                uploadProgress.querySelector('.progress-fill').style.width = '100%';
-                uploadProgress.querySelector('.progress-label').textContent = 'Uploaded';
-                status.textContent = `Complete: ${data.output_filename}`;
-                status.className = 'message ok';
                 clearInterval(convertPollTimers[deviceId]);
                 delete convertPollTimers[deviceId];
-                setTimeout(refresh, 2000);
-                return;
+                setTimeout(() => {
+                    conversionJobs.delete(deviceId);
+                    refresh();
+                }, 10000);
             }
 
             if (data.status === 'error') {
-                status.textContent = 'Error: ' + (data.error || 'Conversion failed');
-                status.className = 'message error';
                 clearInterval(convertPollTimers[deviceId]);
                 delete convertPollTimers[deviceId];
-                return;
+                setTimeout(() => {
+                    if (conversionJobs.get(deviceId)?.status === 'error') {
+                        conversionJobs.delete(deviceId);
+                        refresh();
+                    }
+                }, 30000);
             }
         } catch (err) {
             // Silently retry on network errors
@@ -617,6 +603,20 @@ function renderMediaCell(device, leaderMedia) {
     let syncSection = '';
     
     if (device.device_id !== 'remote-leader') {
+        const convJob = conversionJobs.get(device.device_id);
+        const cv = convJob || {};
+        const showConvert = cv.status && cv.status !== 'uploading_source' && cv.status !== 'complete' ? 'block' : 'none';
+        const showUpload = cv.status === 'uploading' ? 'block' : 'none';
+        const showSourceUpload = cv.status === 'uploading_source' ? 'block' : 'none';
+        const cvPct = cv.convert_progress || 0;
+        const upPct = cv.upload_progress || 0;
+        const srcPct = cv.convert_progress || 0;
+        const cvLabel = cv.status === 'converting' ? `Converting (${cvPct}%)` : 'Conversion complete';
+        const upLabel = cv.status === 'uploading' ? 'Transferring to device...' : 'Uploaded';
+        const srcLabel = `Uploading source... (${srcPct}%)`;
+        const errMsg = cv.status === 'error' ? `Error: ${cv.error || 'Conversion failed'}` : '';
+        const errClass = cv.status === 'error' ? 'error' : 'info';
+
         const uploadSection = `
             <div class="sync-section">
                 <h4>Upload to device</h4>
@@ -632,19 +632,25 @@ function renderMediaCell(device, leaderMedia) {
                     <input type="file" id="convert-input-${device.device_id}" class="file-input-small">
                     <button class="btn-small btn-primary" onclick="convertAndUpload('${device.device_id}')">Convert &amp; Upload</button>
                 </div>
-                <div class="convert-progress" id="convert-progress-${device.device_id}" style="display:none">
+                <div class="convert-progress" id="convert-progress-${device.device_id}" style="display:${showSourceUpload}">
                     <div class="progress-bar">
-                        <div class="progress-fill" style="width:0%"></div>
+                        <div class="progress-fill" style="width:${srcPct}%"></div>
                     </div>
-                    <span class="progress-label">Waiting...</span>
+                    <span class="progress-label">${srcLabel}</span>
                 </div>
-                <div class="convert-progress" id="upload-progress-${device.device_id}" style="display:none">
+                <div class="convert-progress" id="convert-progress-bar-${device.device_id}" style="display:${showConvert}">
+                    <div class="progress-bar">
+                        <div class="progress-fill" style="width:${cvPct}%"></div>
+                    </div>
+                    <span class="progress-label">${cvLabel}</span>
+                </div>
+                <div class="convert-progress" id="upload-progress-${device.device_id}" style="display:${showUpload}">
                     <div class="progress-bar progress-upload">
-                        <div class="progress-fill" style="width:0%"></div>
+                        <div class="progress-fill" style="width:${upPct}%"></div>
                     </div>
-                    <span class="progress-label">Waiting...</span>
+                    <span class="progress-label">${upLabel}</span>
                 </div>
-                <div id="convert-status-${device.device_id}" class="message info" style="display:none"></div>
+                <div id="convert-status-${device.device_id}" class="message ${errClass}" style="display:${errMsg ? 'block' : 'none'}">${errMsg}</div>
             </div>
         `;
 
