@@ -25,6 +25,7 @@ CONFIG_ROLE_KEYS = {
         "video_width", "video_height", "position_poll_interval", "remote_sync_mode",
         "emulated_render_lag", "sync_peer_ip", "sync_mode",
         "enable_deviation_log", "netclock_max_drift", "netclock_port",
+        "cluster_name", "hotspot_password", "wifi_ssid", "wifi_password",
     },
     "collaborator": {
         "role", "device_id", "overlay", "enable_system_logging", "enable_audio",
@@ -32,8 +33,12 @@ CONFIG_ROLE_KEYS = {
         "video_file", "video_driver", "midi_port", "sync_port",
         "video_width", "video_height", "position_poll_interval", "remote_sync_mode", "sync_mode",
         "enable_deviation_log", "netclock_max_drift", "netclock_port", "video_offset",
+        "cluster_name", "hotspot_password", "wifi_ssid", "wifi_password",
     },
-    "bystander": {"role", "device_id", "overlay", "enable_system_logging"},
+    "bystander": {
+        "role", "device_id", "overlay", "enable_system_logging",
+        "cluster_name", "hotspot_password", "wifi_ssid", "wifi_password",
+    },
 }
 
 EDITABLE_CONFIG_FIELDS = {
@@ -64,6 +69,10 @@ EDITABLE_CONFIG_FIELDS = {
         {"key": "sync_peer_ip", "type": "string", "label": "Sync Peer IP (Ethernet)", "default": "", "tooltip": "COLLABORATOR's IP for direct-cable unicast sync. Setting this DISABLES broadcast - leave empty on a normal router/switch network. Never set it to this device's own IP."},
         {"key": "enable_deviation_log", "type": "bool", "label": "Deviation CSV Log", "default": True, "tooltip": "Write per-tick sync deviation to logs/sync_deviation.csv (main diagnostic for sync quality)."},
         {"key": "sync_mode", "type": "choice", "label": "Sync Mode", "default": "udp", "options": ["udp", "netclock"], "tooltip": "udp: custom P-gain speed control. netclock: GStreamer native clock sync."},
+        {"key": "cluster_name", "type": "string", "label": "Cluster Name", "default": "ksync", "tooltip": "Names this installation's private WiFi (kSync-<name>). Use distinct names for separate installations in the same building."},
+        {"key": "hotspot_password", "type": "string", "label": "Cluster WiFi Password", "default": "kitchensync", "tooltip": "WPA2 password for the leader-hosted kSync network (min 8 characters)."},
+        {"key": "wifi_ssid", "type": "string", "label": "Venue WiFi SSID", "default": "", "tooltip": "Optional: join this existing WiFi network instead of hosting a private one. Leave empty for the self-hosted kSync network."},
+        {"key": "wifi_password", "type": "string", "label": "Venue WiFi Password", "default": "", "tooltip": "Password for the venue WiFi SSID above."},
     ],
     "collaborator": [
         {"key": "device_id", "type": "string", "label": "Device Name/ID", "default": "pi-001", "tooltip": "A custom friendly name/ID for this Collaborator node."},
@@ -83,6 +92,10 @@ EDITABLE_CONFIG_FIELDS = {
         {"key": "sync_mode", "type": "choice", "label": "Sync Mode", "default": "udp", "options": ["udp", "netclock"], "tooltip": "udp: custom P-gain speed control. netclock: GStreamer native clock sync."},
         {"key": "enable_deviation_log", "type": "bool", "label": "Deviation CSV Log", "default": True, "tooltip": "Write per-tick sync deviation to logs/sync_deviation.csv (main diagnostic for sync quality)."},
         {"key": "video_offset", "type": "float", "label": "Video Offset (s)", "default": 0.0, "min": -1.0, "max": 1.0, "step": 0.001, "tooltip": "Static offset for THIS device: positive = delay it relative to the leader. Use to dial out display-latency differences between screens (e.g. this screen appears 30ms ahead -> set 0.030)."},
+        {"key": "cluster_name", "type": "string", "label": "Cluster Name", "default": "ksync", "tooltip": "Which installation's private WiFi to join (kSync-<name>). Must match the leader's Cluster Name."},
+        {"key": "hotspot_password", "type": "string", "label": "Cluster WiFi Password", "default": "kitchensync", "tooltip": "WPA2 password of the leader-hosted kSync network. Must match the leader's."},
+        {"key": "wifi_ssid", "type": "string", "label": "Venue WiFi SSID", "default": "", "tooltip": "Optional: join this existing WiFi network instead of the kSync private network."},
+        {"key": "wifi_password", "type": "string", "label": "Venue WiFi Password", "default": "", "tooltip": "Password for the venue WiFi SSID above."},
     ],
     "bystander": [
         {"key": "device_id", "type": "string", "label": "Device Name/ID", "default": "pi-unknown", "tooltip": "A custom friendly name/ID for this Bystander node."},
@@ -472,6 +485,22 @@ class ConfigManager:
 
     @property
     def remote_sync_mode(self) -> str: return self.get("remote_sync_mode", "http").lower()
+
+    @property
+    def cluster_name(self) -> str: return self.get("cluster_name", "ksync")
+
+    @property
+    def hotspot_password(self) -> str:
+        # WPA2 requires >= 8 chars; an empty/short PSK would silently produce
+        # an open or broken AP, so fall back to the default instead.
+        psk = self.get("hotspot_password", "kitchensync")
+        return psk if psk and len(psk) >= 8 else "kitchensync"
+
+    @property
+    def wifi_ssid(self) -> str: return self.get("wifi_ssid", "")
+
+    @property
+    def wifi_password(self) -> str: return self.get("wifi_password", "")
 
     @property
     def emulated_render_lag(self) -> float: return self.getfloat("emulated_render_lag", 0.05)

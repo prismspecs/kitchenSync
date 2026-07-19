@@ -131,7 +131,50 @@ echo "Enabling kitchensync.service..."
 sudo systemctl daemon-reload
 sudo systemctl enable kitchensync.service
 
-# 8. Sudo Permissions (password-less reboot for remote update)
+# 8. WiFi Provisioning Prerequisites (see docs/WIFI_PROVISIONING.md)
+echo "Configuring WiFi provisioning prerequisites..."
+# netdev membership lets the service user drive NetworkManager via nmcli
+sudo usermod -a -G netdev $USER
+# WiFi is soft-blocked out of the box on some images
+sudo rfkill unblock wifi || true
+# AP (hotspot) mode silently fails while the regulatory domain is unset;
+# fresh images ship with it unset until the user picks a country.
+if command -v raspi-config >/dev/null 2>&1; then
+    WIFI_COUNTRY=$(raspi-config nonint get_wifi_country 2>/dev/null || true)
+    if [ -z "$WIFI_COUNTRY" ]; then
+        echo "WiFi country not set - defaulting to US (change with: sudo raspi-config nonint do_wifi_country <CC>)"
+        sudo raspi-config nonint do_wifi_country US || true
+    fi
+fi
+
+# Captive portal (leader hotspot only):
+# 1) resolve every hostname on the hotspot to the leader so joining phones
+#    hit the setup page (NetworkManager runs dnsmasq in shared mode);
+# 2) redirect the hotspot's port 80 to the portal server (port 8081) —
+#    a dispatcher script adds/removes the rule with the hotspot itself.
+sudo mkdir -p /etc/NetworkManager/dnsmasq-shared.d
+echo "address=/#/10.42.0.1" | sudo tee /etc/NetworkManager/dnsmasq-shared.d/ksync-portal.conf >/dev/null
+
+sudo tee /etc/NetworkManager/dispatcher.d/90-ksync-portal >/dev/null <<'EOF'
+#!/bin/bash
+# kSync captive portal: redirect hotspot HTTP (80) to the portal (8081).
+# Runs as root on every connection event; only acts on the kSync hotspot.
+IFACE="$1"; ACTION="$2"
+[ "$CONNECTION_ID" = "ksync-hotspot" ] || exit 0
+RULE=(-i "$IFACE" -p tcp --dport 80 -j REDIRECT --to-ports 8081)
+case "$ACTION" in
+    up)
+        iptables -t nat -C PREROUTING "${RULE[@]}" 2>/dev/null || \
+        iptables -t nat -A PREROUTING "${RULE[@]}"
+        ;;
+    down)
+        iptables -t nat -D PREROUTING "${RULE[@]}" 2>/dev/null || true
+        ;;
+esac
+EOF
+sudo chmod 755 /etc/NetworkManager/dispatcher.d/90-ksync-portal
+
+# 9. Sudo Permissions (password-less reboot for remote update)
 echo "Setting up sudo permissions..."
 echo "$CURRENT_USER ALL=(ALL) NOPASSWD: /sbin/reboot, /usr/sbin/reboot, /sbin/shutdown, /usr/sbin/shutdown, /bin/systemctl, /usr/bin/systemctl" | sudo tee /etc/sudoers.d/ksync-reboot
 sudo chmod 440 /etc/sudoers.d/ksync-reboot

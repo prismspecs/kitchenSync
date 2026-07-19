@@ -20,6 +20,7 @@ try:
     from config import ConfigManager, USBConfigLoader
     from video import VideoFileManager
     from ui import ErrorDisplay
+    from networking.wifi_manager import ensure_network
     from core.logger import (
         log_info,
         log_warning,
@@ -119,7 +120,13 @@ class kSyncAutoStart:
         # 2. Update local persistence
         self._update_local_configs()
 
-        # 3. Role-specific setup
+        # 3. Network bootstrap (ethernet > saved/venue WiFi > kSync private
+        # network; see docs/WIFI_PROVISIONING.md). Never blocks boot on
+        # failure — collaborators keep joining in the background via NM.
+        network_state = ensure_network(self.config)
+        log_info(f"Network bootstrap result: {network_state}", component="autostart")
+
+        # 4. Role-specific setup
         if role == "leader":
             self._set_desktop_background()
             self._check_usb_schedule()
