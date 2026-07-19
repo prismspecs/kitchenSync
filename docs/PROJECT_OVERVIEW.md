@@ -108,6 +108,11 @@ the same router/switch, single subnet, WiFi off or ignored.
 | 5006 | UDP | Commands, heartbeats, ping/pong RTT probes (both directions) |
 | 9997 | UDP | GStreamer net clock (`GstNetTimeProvider`), netclock mode only |
 | 8080 | TCP | Web UI + media download (leader) |
+| 8081 | TCP | WiFi setup portal (leader; hotspot port 80 redirects here) |
+
+With no wired network, nodes form their own WiFi cluster (leader-hosted AP,
+collaborators auto-join) and can be moved to venue WiFi via a captive
+portal — see `WIFI_PROVISIONING.md`.
 
 Pitfalls learned the hard way:
 

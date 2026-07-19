@@ -61,6 +61,7 @@ Available at `http://<pi-ip>:8080`
 ## Documentation
 
 - [Installation Guide](docs/INSTALLATION.md) - OS setup and provisioning.
+- [WiFi Provisioning](docs/WIFI_PROVISIONING.md) - How devices get on a network with zero configuration (leader-hosted kSync network, optional venue WiFi).
 - [Testing Guide](docs/TESTING.md) - Manual and automated testing procedures.
 - [MIDI Control Guide](docs/MIDI_CONTROL.md) - Using MIDI for relay and show control.
 - [Project Roadmap](docs/ROADMAP.md) - Future enhancements and architecture goals.
@@ -92,6 +93,29 @@ debug = false
 video_file = test_video.mp4
 video_driver = gst
 ```
+
+## Connecting the Devices (Network)
+
+kSync nodes only need to reach **each other** — video plays from local
+storage and only small sync packets cross the network. Three options, best
+first:
+
+1. **Ethernet** — wire every Pi into one router/switch. Nothing to configure.
+2. **kSync private WiFi (automatic)** — with no ethernet and no known WiFi,
+   the leader hosts its own network (`kSync-<cluster_name>`, password
+   `kitchensync`) and collaborators find and join it by themselves. A
+   10-channel installation syncs wirelessly with zero setup.
+3. **Venue WiFi (optional)** — join the `kSync-...` network with a phone; a
+   setup page opens automatically (or visit `http://10.42.0.1`). Pick the
+   venue network, type its password once, and every device switches together.
+   If the venue WiFi ever stops working, the devices return to their private
+   network on their own.
+
+The one-line version for exhibition manuals: *plug everything in — it syncs
+by itself. To put it on your WiFi, join the kSync network with your phone
+and type the password once.*
+
+Details, config keys, and troubleshooting: [docs/WIFI_PROVISIONING.md](docs/WIFI_PROVISIONING.md).
 
 ## Remote Control & Monitoring
 

@@ -23,6 +23,8 @@ from video import get_video_driver
 from video.drivers.gst_driver import get_pi_model
 from video.file_manager import VideoFileManager
 from networking.communication import SyncBroadcaster, CommandManager
+from networking.wifi_manager import WifiManager, start_leader_network_watchdog
+from networking.captive_portal import CaptivePortalServer, WifiProvisioner
 from core.schedule import Schedule
 from core import SystemState, get_ntp_status
 from core.logger import log_info, log_error, log_warning, enable_system_logging
@@ -141,6 +143,32 @@ class LeaderPi:
 
         self.command_manager.start_listening()
         self.command_manager.start_latency_probing()
+
+        # WiFi provisioning (docs/WIFI_PROVISIONING.md): setup portal +
+        # watchdog that re-raises the hotspot if the venue network fails.
+        self.captive_portal = None
+        try:
+            wifi_mgr = WifiManager()
+            if wifi_mgr.available():
+                provisioner = WifiProvisioner(self.config, self.command_manager, wifi_mgr)
+                self.captive_portal = CaptivePortalServer(self.config, provisioner)
+                self.captive_portal.start()
+                start_leader_network_watchdog(
+                    self.config, wifi_mgr, get_peer_silence=self._peer_silence_seconds
+                )
+        except Exception as e:
+            log_warning(f"WiFi provisioning unavailable: {e}", component="leader")
+
+    def _peer_silence_seconds(self):
+        """Seconds since ANY collaborator was last heard, or None if none
+        have ever registered (single-node installs must never revert)."""
+        try:
+            peers = self.command_manager.collaborators
+            if not peers:
+                return None
+            return time.time() - max(info["last_seen"] for info in peers.values())
+        except Exception:
+            return None
 
     @staticmethod
     def _ip_is_local(ip: str) -> bool:
@@ -366,6 +394,8 @@ class LeaderPi:
             self.stop_system()
         self.video_player.cleanup()
         self.command_manager.stop_listening()
+        if self.captive_portal:
+            self.captive_portal.stop()
         if self.midi_manager:
             self.midi_manager.cleanup()
         log_info("Cleanup completed", component="leader")

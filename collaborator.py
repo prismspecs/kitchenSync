@@ -24,6 +24,7 @@ from video import get_video_driver
 from video.drivers.gst_driver import get_pi_model
 from video.file_manager import VideoFileManager
 from networking.communication import CommandListener, SyncReceiver
+from networking.wifi_manager import handle_wifi_provision, start_collaborator_network_watchdog
 from core import SystemState, get_ntp_status
 from core.logger import log_info, log_error, log_warning, enable_system_logging
 from core.node_common import (
@@ -127,6 +128,11 @@ class CollaboratorPi:
         self._netclock_fallback_warned = False
         self._last_hard_seek_at = 0.0
 
+        # Any inbound leader traffic (commands, pings, sync ticks) refreshes
+        # this; the network watchdog uses it to detect venue WiFi that
+        # silently isolates us from the leader.
+        self._last_leader_contact = time.monotonic()
+
         # Sync Decoupling
         self._latest_sync_state = None
         self._sync_lock = threading.Lock()
@@ -167,6 +173,16 @@ class CollaboratorPi:
             
         self.command_listener.start_listening()
         self.is_running = True
+
+        # If venue WiFi hides the leader for a few minutes, drop back to the
+        # kSync cluster network (docs/WIFI_PROVISIONING.md).
+        try:
+            start_collaborator_network_watchdog(
+                self.config,
+                lambda: time.monotonic() - self._last_leader_contact < 90,
+            )
+        except Exception as e:
+            log_warning(f"Network watchdog unavailable: {e}", component="collaborator")
 
         try:
             while self.is_running:
@@ -215,7 +231,11 @@ class CollaboratorPi:
     def _handle_command(self, msg: dict, addr: tuple) -> None:
         """Consolidated command dispatcher"""
         cmd_type = msg.get("type")
-        
+        # heartbeat/register are collaborator-originated broadcasts (including
+        # our own echo) — counting them would blind the network watchdog.
+        if cmd_type not in ("heartbeat", "register"):
+            self._last_leader_contact = time.monotonic()
+
         # Safety: Ignore playback commands if in bystander mode
         if self.config.is_bystander and cmd_type in ["start", "sync"]:
             return
@@ -250,6 +270,20 @@ class CollaboratorPi:
             self._handle_latency_update(msg)
         elif cmd_type == "device_update":
             self._handle_device_update(msg)
+        elif cmd_type == "wifi_provision":
+            self._handle_wifi_provision(msg, addr)
+
+    def _handle_wifi_provision(self, msg: dict, addr: tuple) -> None:
+        """Venue WiFi credentials pushed by the leader's captive portal."""
+        def send_ack(token: str) -> None:
+            self.command_listener.send_message(
+                {"type": "wifi_provision_ack", "device_id": self.config.device_id, "token": token},
+                host=addr[0],
+            )
+        try:
+            handle_wifi_provision(msg, self.config, send_ack)
+        except Exception as e:
+            log_warning(f"WiFi provision handling failed: {e}", component="collaborator")
 
     def _handle_latency_update(self, msg: dict) -> None:
         latency = msg.get("latency", 0.0)
@@ -439,6 +473,7 @@ class CollaboratorPi:
         elif self.active_leader_id != leader_id:
             return
         self.last_sync_at = received_at
+        self._last_leader_contact = time.monotonic()
         self._sync_source = source
         if leader_ip:
             self.discovered_leader_ip = leader_ip

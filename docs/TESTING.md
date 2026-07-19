@@ -111,3 +111,32 @@ pytest tests/test_sync_regressions.py tests/test_sync_simulation.py
 The simulator hosts a tiny web server. You can access this from your phone or any browser on the network to monitor sync health without being tied to a terminal.
 - Default: `http://localhost:8080`
 - JSON Data: `http://localhost:8080/json`
+
+## 7. WiFi Provisioning (real-hardware checklist)
+
+Unit tests (`tests/test_wifi_manager.py`, `tests/test_captive_portal.py`)
+cover the decision logic; AP mode and the portal can only be proven on real
+Pis. Run these four scenarios before an unattended deployment
+(design: [WIFI_PROVISIONING.md](WIFI_PROVISIONING.md)):
+
+1. **Zero-config cluster:** boot leader + collaborator with no ethernet and
+   no saved WiFi. Expect `kSync-<cluster_name>` to appear within ~1 min and
+   the collaborator to join and sync with no interaction. Boot order must
+   not matter (start the collaborator first to confirm).
+2. **Portal flow:** join the hotspot with a phone — the setup page must
+   open automatically (fallback `http://10.42.0.1`). Submit real venue
+   credentials; expect the ack counter to reach N/N and all devices to
+   reappear on the venue network within ~1 min, still syncing.
+3. **Wrong-password recovery:** submit bad credentials; expect
+   `kSync-<cluster_name>` to return by itself within ~3 min with sync
+   restored. This is the "cannot be bricked" guarantee.
+4. **Two clusters, one room:** two leaders with different `cluster_name`s;
+   each collaborator must join only its own cluster's SSID.
+
+Useful on-device commands:
+
+```bash
+nmcli device                      # interface states
+nmcli -f NAME,TYPE connection show # ksync-hotspot / ksync-cluster / ksync-venue-wifi
+journalctl -u kitchensync.service | grep -i wifi
+```
