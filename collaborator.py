@@ -380,6 +380,22 @@ class CollaboratorPi:
             self.video_manager.delete_video(filename)
         self._handle_file_list_request(msg, addr)
 
+    def _send_transfer_progress(self, filename: str, status: str, host: str, percent: float = 0.0,
+                                 bytes_done: int = 0, total: int = 0, error: str = "") -> None:
+        """Report leader->this-device transfer status so the remote UI can show
+        real progress instead of assuming the transfer finished once the
+        file_upload_notify command was sent."""
+        self.command_listener.send_message({
+            "type": "download_progress",
+            "device_id": self.config.device_id,
+            "filename": filename,
+            "status": status,
+            "percent": round(percent, 1),
+            "bytes": bytes_done,
+            "total": total,
+            "error": error,
+        }, host=host)
+
     def _handle_file_upload_notify(self, msg: dict, addr: tuple) -> None:
         if not self._message_targets_this_device(msg):
             return
@@ -392,6 +408,8 @@ class CollaboratorPi:
             import shutil
             import subprocess
             import urllib.error
+            leader_ip = addr[0]
+            self._send_transfer_progress(filename, "downloading", leader_ip)
             try:
                 sync_mode = self.config.remote_sync_mode
                 target_path = os.path.join(self.video_manager.get_primary_video_dir(), filename)
@@ -400,7 +418,6 @@ class CollaboratorPi:
                 if sync_mode == "rsync":
                     rsync_bin = shutil.which("rsync")
                     if rsync_bin:
-                        leader_ip = addr[0]
                         log_info(f"Rsync: Attempting rsync sync for {filename} from {leader_ip}", component="collaborator")
                         try:
                             # Try to sync from leader's media folder (assuming standard kSync installation structure)
@@ -410,6 +427,7 @@ class CollaboratorPi:
                             log_info(f"Rsync complete: {filename}", component="collaborator")
                             self.video_manager.trigger_background_scan(force=True)
                             self._handle_file_list_request(msg, addr)
+                            self._send_transfer_progress(filename, "complete", leader_ip, percent=100.0)
                         except Exception as re:
                             log_warning(f"Rsync failed ({re}). Falling back to HTTP resume downloader", component="collaborator")
                     else:
@@ -421,49 +439,71 @@ class CollaboratorPi:
                     existing_size = 0
                     if os.path.exists(target_path):
                         existing_size = os.path.getsize(target_path)
-                    
+
                     if existing_size > 0:
                         req.add_header("Range", f"bytes={existing_size}-")
                         log_info(f"HTTP: Requesting Range bytes={existing_size}- to resume download of {filename}", component="collaborator")
                     else:
                         log_info(f"HTTP: Downloading {filename} from scratch", component="collaborator")
-                    
+
                     try:
                         with urllib.request.urlopen(req) as response:
                             status = response.status if hasattr(response, "status") else response.getcode()
-                            
+                            content_length = int(response.headers.get("Content-Length", 0) or 0)
+
                             if status == 206:
                                 log_info(f"HTTP: Resuming download from byte {existing_size}", component="collaborator")
                                 mode = "ab"
+                                downloaded = existing_size
+                                total_size = existing_size + content_length
                             elif status == 416:
                                 log_info(f"HTTP: File already fully downloaded or identical.", component="collaborator")
                                 self.video_manager.trigger_background_scan(force=True)
                                 self._handle_file_list_request(msg, addr)
+                                self._send_transfer_progress(filename, "complete", leader_ip, percent=100.0)
                                 return
                             else:
                                 log_info(f"HTTP: Starting fresh download", component="collaborator")
                                 mode = "wb"
-                                
+                                downloaded = 0
+                                total_size = content_length
+
                             with open(target_path, mode) as f:
                                 block_size = 1024 * 64
+                                last_sent = 0.0
                                 while True:
                                     buffer = response.read(block_size)
                                     if not buffer:
                                         break
                                     f.write(buffer)
-                                    
+                                    downloaded += len(buffer)
+                                    now = time.time()
+                                    if now - last_sent >= 0.5:
+                                        last_sent = now
+                                        pct = (downloaded / total_size * 100) if total_size else 0.0
+                                        self._send_transfer_progress(
+                                            filename, "downloading", leader_ip,
+                                            percent=pct, bytes_done=downloaded, total=total_size,
+                                        )
+
                         log_info(f"Download complete: {filename}", component="collaborator")
                         self.video_manager.trigger_background_scan(force=True)
                         self._handle_file_list_request(msg, addr)
+                        self._send_transfer_progress(
+                            filename, "complete", leader_ip,
+                            percent=100.0, bytes_done=downloaded, total=total_size,
+                        )
                     except urllib.error.HTTPError as he:
                         if he.code == 416:
                             log_info(f"HTTP: File already fully downloaded.", component="collaborator")
                             self.video_manager.trigger_background_scan(force=True)
                             self._handle_file_list_request(msg, addr)
+                            self._send_transfer_progress(filename, "complete", leader_ip, percent=100.0)
                         else:
                             raise he
             except Exception as e:
                 log_error(f"Download failed: {e}", component="collaborator")
+                self._send_transfer_progress(filename, "error", leader_ip, error=str(e))
 
         threading.Thread(target=download_task, daemon=True).start()
 

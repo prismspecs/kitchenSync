@@ -70,6 +70,42 @@ _conversion_jobs_lock = threading.Lock()
 CONVERT_TMP = Path("media/.convert_tmp")
 
 
+# Leader -> Pi transfer tracking. Distinct from ConversionJob.upload_progress:
+# this is populated from real "download_progress" beacons the collaborator
+# sends while it streams the file, not an optimistic guess made the instant
+# the notify command is fired.
+@dataclass
+class TransferJob:
+    device_id: str
+    filename: str = ""
+    status: str = "transferring"  # transferring, complete, error
+    percent: float = 0.0
+    bytes_done: int = 0
+    total_bytes: int = 0
+    error: str = ""
+    updated_at: float = 0.0
+
+_transfer_jobs: Dict[str, TransferJob] = {}
+_transfer_jobs_lock = threading.Lock()
+TRANSFER_PROGRESS_TIMEOUT = 120  # seconds with no beacon before we give up waiting
+
+
+def _get_transfer_job(device_id: str) -> Optional[TransferJob]:
+    with _transfer_jobs_lock:
+        return _transfer_jobs.get(device_id)
+
+
+def _set_transfer_job(job: TransferJob) -> None:
+    job.updated_at = time.time()
+    with _transfer_jobs_lock:
+        _transfer_jobs[job.device_id] = job
+
+
+def _clear_transfer_job(device_id: str) -> None:
+    with _transfer_jobs_lock:
+        _transfer_jobs.pop(device_id, None)
+
+
 def _find_real_leader() -> Optional[str]:
     """Return device_id of a Pi leader, or None if the web UI is the leader."""
     for device_id, snapshot in config_snapshots.items():
@@ -357,6 +393,100 @@ def store_config_message(payload: Dict[str, Any]) -> None:
     }
 
 
+def _handle_download_progress(msg: Dict[str, Any]) -> None:
+    """Handle a real transfer-progress beacon sent by a collaborator while it
+    downloads a file from the leader (see collaborator.py download_task)."""
+    device_id = msg.get("device_id")
+    if not device_id:
+        return
+    status = msg.get("status", "downloading")
+    filename = msg.get("filename", "")
+
+    conv_job = _get_conversion_job(device_id)
+    conv_active = conv_job is not None and conv_job.status == "uploading"
+
+    if status == "error":
+        error = msg.get("error", "Transfer to device failed")
+        _set_transfer_job(TransferJob(device_id=device_id, filename=filename, status="error", error=error))
+        if conv_active:
+            conv_job.status = "error"
+            conv_job.error = error
+            _set_conversion_job(conv_job)
+        return
+
+    if status == "complete":
+        _set_transfer_job(TransferJob(device_id=device_id, filename=filename, status="complete", percent=100.0))
+        if conv_active:
+            conv_job.status = "complete"
+            conv_job.upload_progress = 100.0
+            _set_conversion_job(conv_job)
+
+        def _expire():
+            time.sleep(8)
+            job = _get_transfer_job(device_id)
+            if job and job.status == "complete" and job.filename == filename:
+                _clear_transfer_job(device_id)
+
+        threading.Thread(target=_expire, daemon=True).start()
+        return
+
+    # in-progress beacon
+    _set_transfer_job(TransferJob(
+        device_id=device_id, filename=filename, status="transferring",
+        percent=msg.get("percent", 0.0), bytes_done=msg.get("bytes", 0),
+        total_bytes=msg.get("total", 0),
+    ))
+    if conv_active:
+        conv_job.upload_progress = msg.get("percent", conv_job.upload_progress)
+        _set_conversion_job(conv_job)
+
+
+def _watch_transfer_fallback(device_id: str, filename: str, started_at: float) -> None:
+    """Older collaborators (pre transfer-progress support) never send a
+    download_progress beacon. If none shows up at all, fall back to the old
+    optimistic "assume it worked" behavior rather than sitting at 0% forever.
+    If beacons DO show up but then stop mid-transfer (dropped connection),
+    time the job out as an error instead of hanging indefinitely."""
+    time.sleep(8)
+    job = _get_transfer_job(device_id)
+    if job is None or job.filename != filename:
+        return
+    if job.updated_at <= started_at + 0.5 and job.status == "transferring" and job.percent == 0.0 and job.bytes_done == 0:
+        # No beacon ever arrived - assume the target doesn't support reporting.
+        _set_transfer_job(TransferJob(device_id=device_id, filename=filename, status="complete", percent=100.0))
+        conv_job = _get_conversion_job(device_id)
+        if conv_job and conv_job.status == "uploading":
+            conv_job.status = "complete"
+            conv_job.upload_progress = 100.0
+            _set_conversion_job(conv_job)
+
+        def _expire():
+            time.sleep(8)
+            j = _get_transfer_job(device_id)
+            if j and j.status == "complete" and j.filename == filename:
+                _clear_transfer_job(device_id)
+
+        threading.Thread(target=_expire, daemon=True).start()
+        return
+
+    while True:
+        time.sleep(5)
+        job = _get_transfer_job(device_id)
+        if job is None or job.filename != filename or job.status != "transferring":
+            return
+        if time.time() - job.updated_at > TRANSFER_PROGRESS_TIMEOUT:
+            _set_transfer_job(TransferJob(
+                device_id=device_id, filename=filename, status="error",
+                error="Transfer stalled - no progress from device",
+            ))
+            conv_job = _get_conversion_job(device_id)
+            if conv_job and conv_job.status == "uploading":
+                conv_job.status = "error"
+                conv_job.error = "Transfer stalled - no progress from device"
+                _set_conversion_job(conv_job)
+            return
+
+
 def build_ui_state() -> Dict[str, Any]:
     refresh_local_snapshot()
     collaborators = command_manager.get_collaborators()
@@ -427,8 +557,17 @@ def build_ui_state() -> Dict[str, Any]:
     for device_id in sorted(known_collaborator_ids):
         info = collaborators.get(device_id, {})
         snapshot = config_snapshots.get(device_id, {})
+        transfer_job = _get_transfer_job(device_id)
         devices.append(
             {
+                "transfer_job": {
+                    "filename": transfer_job.filename,
+                    "status": transfer_job.status,
+                    "percent": transfer_job.percent,
+                    "bytes": transfer_job.bytes_done,
+                    "total": transfer_job.total_bytes,
+                    "error": transfer_job.error,
+                } if transfer_job else None,
                 "device_id": device_id,
                 "label": device_id,
                 "role": snapshot.get("role", "collaborator"),
@@ -584,14 +723,17 @@ class RemoteHandler(BaseHTTPRequestHandler):
             
             if target_device_id and target_device_id != LOCAL_LEADER_ID:
                 log_info(f"Triggering automatic sync for {filename} to {target_device_id}", "remote")
-                
+
                 s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
                 try:
                     s.connect(("8.8.8.8", 80))
                     leader_ip = s.getsockname()[0]
                 finally:
                     s.close()
-                    
+
+                _set_transfer_job(TransferJob(device_id=target_device_id, filename=filename, status="transferring"))
+                started_at = time.time()
+
                 command_manager.send_command(
                     {
                         "type": "file_upload_notify",
@@ -601,6 +743,10 @@ class RemoteHandler(BaseHTTPRequestHandler):
                     },
                     target_pi=target_device_id
                 )
+
+                threading.Thread(
+                    target=_watch_transfer_fallback, args=(target_device_id, filename, started_at), daemon=True
+                ).start()
 
             self._send_json({"status": "ok", "filename": filename})
         else:
@@ -693,6 +839,8 @@ class RemoteHandler(BaseHTTPRequestHandler):
                 # Conversion done, trigger upload to target device
                 job.status = "uploading"
                 _set_conversion_job(job)
+                _set_transfer_job(TransferJob(device_id=target_device_id, filename=output_filename, status="transferring"))
+                transfer_started_at = time.time()
 
                 # Trigger file sync to the target device
                 s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -715,10 +863,15 @@ class RemoteHandler(BaseHTTPRequestHandler):
                 # Trigger a media scan so the file appears locally
                 video_manager.trigger_background_scan(force=True)
 
-                job.status = "complete"
-                job.upload_progress = 100.0
-                _set_conversion_job(job)
-                log_info(f"Convert+Upload: complete for {target_device_id} -> {output_filename}", component="remote")
+                # Actual completion is now driven by "download_progress" beacons
+                # from the target device (see _handle_download_progress), with
+                # _watch_transfer_fallback covering devices too old to send them.
+                threading.Thread(
+                    target=_watch_transfer_fallback,
+                    args=(target_device_id, output_filename, transfer_started_at),
+                    daemon=True,
+                ).start()
+                log_info(f"Convert+Upload: transfer to {target_device_id} started for {output_filename}", component="remote")
 
             except Exception as e:
                 job.status = "error"
@@ -1238,6 +1391,8 @@ def start_remote():
                 log_events[device_id].set()
 
     command_manager.register_handler("log_response", lambda msg, addr: store_log_message(msg))
+
+    command_manager.register_handler("download_progress", lambda msg, addr: _handle_download_progress(msg))
 
     sync_broadcaster.setup_socket()
 

@@ -47,7 +47,7 @@ async function uploadMedia(deviceId = null) {
         url += `?target_device_id=${encodeURIComponent(deviceId)}`;
     }
 
-    status.textContent = '0%';
+    status.textContent = isRemote ? 'Uploading to leader... 0%' : '0%';
     status.style.display = 'block';
 
     try {
@@ -55,7 +55,8 @@ async function uploadMedia(deviceId = null) {
         const result = await new Promise((resolve, reject) => {
             xhr.upload.addEventListener('progress', (e) => {
                 if (e.lengthComputable) {
-                    status.textContent = `${Math.round((e.loaded / e.total) * 100)}%`;
+                    const pct = Math.round((e.loaded / e.total) * 100);
+                    status.textContent = isRemote ? `Uploading to leader... ${pct}%` : `${pct}%`;
                 }
             });
             xhr.addEventListener('load', () => {
@@ -74,12 +75,17 @@ async function uploadMedia(deviceId = null) {
 
         if (result.status === 'ok') {
             if (isRemote) {
-                status.textContent = 'Transferred';
+                // The leader has the file and told the device to fetch it. The
+                // device now streams it over the network - that leg is shown by
+                // the transfer-progress bar below (driven by device.transfer_job
+                // from /api/state), which keeps working even across a page reload.
+                status.style.display = 'none';
+                refresh();
             } else {
                 status.textContent = 'Uploaded: ' + result.filename;
+                setTimeout(refresh, 500);
             }
             input.value = '';
-            setTimeout(refresh, isRemote ? 3000 : 500);
         } else {
             status.textContent = 'Error: ' + (result.message || 'Upload failed');
         }
@@ -617,6 +623,16 @@ function renderMediaCell(device, leaderMedia) {
         const errMsg = cv.status === 'error' ? `Error: ${cv.error || 'Conversion failed'}` : '';
         const errClass = cv.status === 'error' ? 'error' : 'info';
 
+        // Real leader->device transfer progress, reported by the device itself
+        // (see collaborator.py _send_transfer_progress). Sourced from server
+        // state rather than local JS state so it survives a page reload.
+        const tj = device.transfer_job;
+        const tjShow = tj && (tj.status === 'transferring' || tj.status === 'complete') ? 'block' : 'none';
+        const tjPct = tj ? Math.round(tj.percent || 0) : 0;
+        const tjBytesLabel = tj && tj.total ? ` (${(tj.bytes / 1024 / 1024).toFixed(1)}/${(tj.total / 1024 / 1024).toFixed(1)} MB)` : '';
+        const tjLabel = tj && tj.status === 'complete' ? 'Transferred to device' : `Transferring to device... ${tjPct}%${tjBytesLabel}`;
+        const tjErrorMsg = tj && tj.status === 'error' ? `Error: ${escapeHtml(tj.error || 'Transfer to device failed')}` : '';
+
         const uploadSection = `
             <div class="sync-section">
                 <h4>Upload to device</h4>
@@ -625,6 +641,13 @@ function renderMediaCell(device, leaderMedia) {
                     <button class="btn-small" onclick="uploadMedia('${device.device_id}')">Upload</button>
                 </div>
                 <div id="upload-status-${device.device_id}" class="message info" style="display:none"></div>
+                <div class="convert-progress" id="upload-transfer-progress-${device.device_id}" style="display:${tjShow}">
+                    <div class="progress-bar progress-upload">
+                        <div class="progress-fill" style="width:${tjPct}%"></div>
+                    </div>
+                    <span class="progress-label">${tjLabel}</span>
+                </div>
+                <div id="upload-transfer-error-${device.device_id}" class="message error" style="display:${tjErrorMsg ? 'block' : 'none'}">${tjErrorMsg}</div>
             </div>
             <div class="sync-section">
                 <h4>Convert &amp; Upload</h4>
