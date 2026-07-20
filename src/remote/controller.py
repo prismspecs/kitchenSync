@@ -1212,6 +1212,12 @@ class RemoteHandler(BaseHTTPRequestHandler):
                 if cluster_state.is_playing:
                     command_manager.send_command({"type": "stop"})
                     cluster_state.is_playing = False
+                # Persist so the Configuration panel's video_file dropdown
+                # reflects what's actually loaded, and a leader restart
+                # resumes the same video (collaborators already persist
+                # video_file on every Load; the leader previously didn't).
+                config.clean_and_save_config("ksync_webui.ini", {"video_file": new_file}, role="leader")
+                config_snapshots[LOCAL_LEADER_ID] = build_config_snapshot(LOCAL_LEADER_ID, "leader", config)
             self.send_response(204)
             self.end_headers()
             return
@@ -1310,6 +1316,8 @@ class RemoteHandler(BaseHTTPRequestHandler):
                 if cluster_state.is_playing:
                     command_manager.send_command({"type": "stop"})
                     cluster_state.is_playing = False
+                config.clean_and_save_config("ksync_webui.ini", {"video_file": filename}, role="leader")
+                config_snapshots[LOCAL_LEADER_ID] = build_config_snapshot(LOCAL_LEADER_ID, "leader", config)
                 self._send_json({"status": "ok"})
                 return
 
