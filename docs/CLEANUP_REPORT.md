@@ -2,8 +2,11 @@
 
 > **Execution status (2026-07-07)**: Batches 1–4 DONE (commits 9b1273a, 955a100,
 > cec11ee..1b8908a, and the node_common/socket/logging batch). Live per-item status
-> is tracked in `.agents/skills/ksync-code-hygiene`. Batch 5 (C3/C4/D1 organizational
+> is tracked in `.agents/skills/ksync-code-hygiene`. Batch 5 (C3/C4 organizational
 > splits) is intentionally deferred until those files are next touched for a feature.
+> **D1 DONE (2026-09-23)**: `.agents/agents/*.md` trimmed to thin pointers into the
+> skill library and `docs/*.md` (43.5KB → 13.6KB); persona/domain restatements that
+> had gone stale (pre-netclock ADRs, pre-unified-config per-role key tables) removed.
 
 Full-tree audit: what to remove, fix, optimize, and reorganize. Every item carries
 its evidence; nothing has been deleted yet. Execution rules per

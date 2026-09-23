@@ -1,14 +1,9 @@
 # kSync — Context Pointer
 
-This manifest was retired on 2026-07-07: it had drifted badly from reality (it still
-described the udp P-controller as the only sync model, predating netclock and the
-unified config).
+This manifest was retired on 2026-07-07 (it had drifted badly from reality) and is
+now kept only because Gemini looks for this filename.
 
-Authoritative context now lives in:
-
-- **`docs/PROJECT_OVERVIEW.md`** — architecture, sync modes, ports, runbooks (living doc).
-- **`.agents/skills/`** — the full skill library: start with `ksync-architecture-contract`,
-  `ksync-debugging-playbook`, and `ksync-change-control`.
-- **`CHANGELOG.md`** — what changed and why, newest first.
+Resident context lives in **`CLAUDE.md`** — read that instead. It points on to
+`docs/PROJECT_OVERVIEW.md`, `.agents/skills/`, and `CHANGELOG.md`.
 
 Do not add project knowledge to this file.
