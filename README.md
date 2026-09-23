@@ -64,7 +64,7 @@ Available at `http://<pi-ip>:8080`
 - [WiFi Provisioning](docs/WIFI_PROVISIONING.md) - How devices get on a network with zero configuration (leader-hosted kSync network, optional venue WiFi).
 - [Testing Guide](docs/TESTING.md) - Manual and automated testing procedures.
 - [MIDI Control Guide](docs/MIDI_CONTROL.md) - Using MIDI for relay and show control.
-- [Project Roadmap](docs/ROADMAP.md) - Future enhancements and architecture goals.
+- [Project Roadmap](ROADMAP.md) - Future enhancements and architecture goals.
 
 ## USB Drive Layout
 

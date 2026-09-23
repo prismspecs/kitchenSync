@@ -86,7 +86,7 @@ distributed video synchronization system deployed on Raspberry Pi nodes.
 | Large | 20–50 | Need multicast or PTP | UDP packet loss, NTP drift |
 | Industrial | 50+ | GstNetClock (per ROADMAP.md) | Network clock distribution |
 
-## Roadmap Items (from docs/ROADMAP.md)
+## Roadmap Items (from ROADMAP.md, Track C)
 
 1. **PTP/GstNetClock** — Sub-millisecond sync (replaces UDP broadcast)
 2. **OSC Integration** — QLab, Ableton, TouchOSC interop
