@@ -1,6 +1,7 @@
 # Raspberry Pi OS Setup
 
 This project now assumes a Raspberry Pi 5 style deployment path built around X11, Openbox, and GStreamer.
+x86 mini PCs running Debian 13 are experimental; see [Mini PC (x86) with Debian 13](#mini-pc-x86-with-debian-13).
 
 ## Base Image
 
@@ -17,6 +18,63 @@ cd kitchenSync
 ./setup.sh
 sudo reboot
 ```
+
+## Mini PC (x86) with Debian 13
+
+Experimental, first trialed 2026-11 on an ACEMAGICIAN K1 (AMD Ryzen 3 4300U).
+AMD's hardware decoder handles **both H.264 and HEVC** (the Pi 5 has no
+H.264 hardware decode). It has no AV1 hardware decode.
+
+**BIOS first:** turn on "Restore on AC Power Loss" (the name varies) so the
+PC boots when power is applied, like a Pi. Then boot the installer from USB.
+
+**Installer** (`debian-13.x-amd64-netinst.iso`, ethernet plugged in):
+- **Root password: leave it blank.** Your user then gets `sudo`, which
+  `setup.sh` needs.
+- Partitioning: guided, use the entire disk. This erases the preinstalled Windows.
+- Software selection: untick "Debian desktop environment" and "GNOME"; keep
+  "SSH server" and "standard system utilities".
+
+**Install kSync** (as your normal user):
+```bash
+sudo apt install -y git
+git clone https://github.com/prismspecs/kitchenSync.git
+cd kitchenSync
+./setup.sh
+sudo reboot
+```
+
+On a PC, `setup.sh` also does the following:
+- installs what Raspberry Pi OS ships but a minimal Debian lacks (VA-API
+  hardware decode, GStreamer GL/X sinks, NetworkManager, avahi, ffmpeg);
+- turns on amdgpu TearFree and turns off screen blanking;
+- auto-mounts USB sticks at `/media/usb-<name>`;
+- hands the network from ifupdown to NetworkManager.
+
+After the reboot the PC may get a new IP address; reach it as `<hostname>.local`.
+
+**Verify hardware decode** after the reboot:
+```bash
+vainfo | grep -E "H264|HEVC"                 # expect VAProfileH264*/VAProfileHEVC* ... VAEntrypointVLD
+gst-inspect-1.0 va | grep -E "vah26[45]dec"   # expect vah264dec and vah265dec
+DISPLAY=:0 python3 tools/verify_gst_hwaccel.py --video videos/test265.mp4 --json   # active_decoder: vah265dec
+```
+
+The leader's hotspot depends on the WiFi chip supporting AP mode. If this
+PC will be a leader without ethernet, test the hotspot early.
+
+**Measured on the K1** (2026-11-05, 20 s test patterns on a 1080p60 HDMI screen):
+- **1080p30 H.264 and HEVC, and 4K30 HEVC:** hardware decode, a solid 30 fps
+  with 2 frames dropped at startup, and under half of one CPU core.
+- **4K60:** decoding has headroom (103 fps HEVC and 166 fps H.264, with
+  nothing displayed). Playback to the screen is not yet clean:
+  - HEVC reached 59.5 fps with 7 drops in 1,200 frames, but only with the
+    GPU forced to `high` (`power_dpm_force_performance_level`) and a video-only
+    playbin (`flags=0x41`).
+  - H.264 dropped 2–4% of frames.
+  - kSync's own sink bin was not measured at 4K60, and neither was a real
+    4K screen.
+- **WiFi:** a Realtek RTL8821CE (`rtw88`) that supports AP mode.
 
 ## Universal Node Boot Sequence
 

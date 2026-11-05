@@ -16,7 +16,7 @@ The active stack is:
 - `kitchensync.py`: Main boot-time entry point (handles USB mounting and role detection).
 - `leader.py`: Leader runtime (broadcasts time, manages schedule).
 - `collaborator.py`: Collaborator runtime (receives sync, adjusts playback speed).
-- `setup.sh`: Primary Raspberry Pi setup and provisioning script.
+- `setup.sh`: Node setup and provisioning script (Raspberry Pi OS; x86 Debian 13 experimental).
 - `src/`: Core implementation modules (networking, video, protocols, etc.).
 - `src/remote/`: Web-based remote controller and schedule editor.
 - `docs/`: Detailed guides for installation, testing, and MIDI control.

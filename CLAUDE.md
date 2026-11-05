@@ -8,6 +8,8 @@ not here.
 kSync is a Raspberry Pi video-sync system for synchronized playback and
 protocol output (MIDI, OSC) across leader/collaborator/bystander nodes over
 UDP. Stack: GStreamer, Openbox/X11, USB-driven config, netclock-based sync.
+x86 mini PCs on Debian 13 are an experimental node type (`setup.sh` `[PC]`
+steps; `docs/INSTALLATION.md` → Mini PC).
 
 ## Where things live
 

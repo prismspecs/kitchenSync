@@ -19,6 +19,7 @@ Current hardware:
 |------|--------|-----------|--------------|
 | Leader | Pi 5 | `pi5_1` | **No H.264 hardware decode** (BCM2712) — h264 falls back to software (`avdec_h264`). HEVC decodes in hardware (rpivid). |
 | Collaborator | Pi 4 | `pi4_1` | H.264 hardware decode (`v4l2h264dec`) — always solid. HEVC hardware decode needs the stateless `v4l2slh265dec` (Bookworm / GStreamer ≥ 1.22); without it HEVC lands on software decode and **stutters at 1080p**. |
+| Bystander (experimental, since 2026-11-05) | x86 mini PC (ACEMAGICIAN K1, Ryzen 3 4300U), Debian 13 | host `ksync-pc1` | H.264 **and** HEVC hardware decode via VA-API (`vah264dec`/`vah265dec`). 1080p30 and 4K30 play cleanly; 4K60 doesn't yet. Setup and numbers: `docs/INSTALLATION.md` → Mini PC. |
 
 There is no single codec both Pis decode well, so encode **one file per
 codec from the same source** and point each device at its own via

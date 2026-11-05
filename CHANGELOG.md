@@ -2,6 +2,31 @@
 
 ## [Unreleased]
 
+### setup.sh: x86 Mini PC (Debian 13) Path (2026-11-05)
+
+- `setup.sh` now detects the platform (`/proc/device-tree/model` says "Raspberry Pi" → `pi`, otherwise `pc`). The Pi path runs the same commands as before. The one shared addition, creating the `netdev` group if it is missing, does nothing on Pi OS.
+- **PC path**, for a minimal Debian 13 install (first trial: ACEMAGICIAN K1, Ryzen 3 4300U):
+  - **Packages** Pi OS ships but Debian lacks:
+    - VA-API hardware decode (`mesa-va-drivers`, `vainfo`)
+    - GStreamer GL/X/ALSA plugins and Mesa GL
+    - the NetworkManager stack plus `polkitd`, `iptables` and `iw` (to check whether the WiFi chip supports AP mode)
+    - `avahi-daemon`, `python3-venv` and `ffmpeg`
+    - on AMD only, `xserver-xorg-video-amdgpu` and `firmware-amd-graphics`
+  - **Display**: the Pi-only `99-vc4.conf` (which forces `/dev/dri/card1`) is not written, and is removed if present. AMD gets `TearFree`. Screen blanking/DPMS is turned off: Xorg's 10-minute idle blank otherwise fires during playback.
+  - **NetworkManager permissions**: a polkit rule lets `netdev` manage NetworkManager. Debian's own rule only covers an active desktop session, so the kSync service could not create the hotspot.
+  - **USB auto-mount**: a udev rule plus `systemd-mount` mounts sticks at `/media/usb-<name>`, where `USBConfigLoader` and `VideoFileManager` look. A minimal Debian mounts nothing by itself, which breaks USB provisioning.
+  - **Network handover**: moves the network from the installer's ifupdown config to NetworkManager, which ignores interfaces listed in `/etc/network/interfaces`. WiFi credentials from the installer carry over, the original is backed up to `interfaces.ksync-bak`, and the change applies at the next reboot. The file is read with `sudo`: the installer makes it root-only when it holds a WiFi password, and an unprivileged read had silently skipped the whole step (found on the hardware).
+- **Verified on the K1** (Debian 13.7, WiFi-only install):
+  - `setup.sh` ran cleanly.
+  - After the reboot the WiFi came back under NetworkManager, and X ran on amdgpu with TearFree.
+  - kSync booted to bystander mode, and `vah264dec`/`vah265dec` were the active decoders.
+  - 1080p30 and 4K30 played cleanly; 4K60 is not yet clean (numbers in `docs/INSTALLATION.md`).
+- Docs:
+  - `docs/INSTALLATION.md` gains a "Mini PC (x86) with Debian 13" section (BIOS, installer choices, decode verification, measured results). It's the single home for the details; the docs below point to it.
+  - The PC was added to the PROJECT_OVERVIEW hardware table and to the codec matrix (`ksync-media-encoding-reference`).
+  - An x86 section was added to `gstreamer-hwaccel-verify`, and the PC bring-up to `ksync-build-run-operate`.
+  - Notes in ROADMAP A5, DEPLOYMENT_CHECKLIST and CLAUDE.md, plus the open follow-ups in TODO.md.
+
 ### NetClock Fallback, Video Offset, Leader HEVC Badge (2026-07-06)
 
 - **netclock → udp fallback**: a collaborator configured for netclock whose net clock never establishes (leader in udp mode, port blocked) now falls back to the UDP rate controller with a one-time warning. Previously it sat ~1s off forever with rate pinned at 1.0 while the watchdog attempted ~14,000 futile realigns (the inflated hard-seek counter in sync_deviation.csv). Failed realigns now back off 2.5s and no longer increment the counter.

@@ -22,6 +22,7 @@ When NOT to use: sync math → `ksync-sync-theory-reference`; general playback f
 |---|---|---|---|
 | Pi 5 (BCM2712) | **No hardware decoder exists.** Software `avdec_h264` only | Hardware via rpivid (`v4l2slhevcdec`/`v4l2slh265dec`) | **Give Pi 5 HEVC files** |
 | Pi 4 (BCM2711) | Hardware `v4l2h264dec` — always solid, 1080p60 | Hardware ONLY via stateless `v4l2slh265dec` (needs Bookworm + GStreamer ≥ 1.22); otherwise software = stutter at 1080p | **Give Pi 4 H.264 files** (unless its HEVC HW is verified) |
+| x86 AMD Ryzen (Renoir, VA-API; experimental) | Hardware `vah264dec` | Hardware `vah265dec` (Main and Main10) | Either is fine up to 4K30. **Prefer HEVC for 4K60**: H.264 4K60 dropped 2–4% of frames, and neither is clean yet (`docs/INSTALLATION.md` → Mini PC). No AV1 hardware decode |
 
 What the driver does about it (`_reprioritize_decoders`, runs once per process): on a
 detected Pi 5 it sets rank 0 on all H.264 hardware factories (they don't exist in

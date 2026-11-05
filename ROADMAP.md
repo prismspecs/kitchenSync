@@ -159,6 +159,10 @@ Collect facts before promising anything.
 
 - Map decode elements: `v4l2h264dec` / rpivid → `vtdec` (macOS) /
   `d3d11h264dec`, `d3d11h265dec` (Windows).
+- Linux x86 is already in place: VA-API `vah264dec`/`vah265dec` sit in the
+  driver's hardware list, and `setup.sh` has a Debian 13 PC path. Verified on
+  an AMD Ryzen mini PC on 2026-11-05 (`docs/INSTALLATION.md` → Mini PC);
+  4K60 playback is still open.
 - Choose sinks per platform (`glimagesink` / `osxvideosink` / `d3d11videosink`).
 - Give each platform a `decode_profile` so auto-transcode targets the right
   codec per node.

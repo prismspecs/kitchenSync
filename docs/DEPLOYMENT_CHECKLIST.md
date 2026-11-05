@@ -1,6 +1,7 @@
 # kSync Deployment Checklist
 
 Use this checklist when setting up a new Raspberry Pi node (Leader or Collaborator).
+For an x86 mini PC on Debian 13 (experimental), follow `docs/INSTALLATION.md` → "Mini PC (x86) with Debian 13" instead.
 
 ## 1. Hardware Selection
 - [ ] **Raspberry Pi 4B or 5:** Highly recommended for GStreamer hardware acceleration.

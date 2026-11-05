@@ -1,7 +1,8 @@
 ---
 name: gstreamer-hwaccel-verify
 description: >
-  Verify GStreamer hardware acceleration status on Raspberry Pi for kSync.
+  Verify GStreamer hardware acceleration status on Raspberry Pi (or an x86
+  Debian 13 PC with VA-API) for kSync.
   Wraps tools/verify_gst_hwaccel.py with diagnostic interpretation, expected
   decoder/sink combinations per Pi model, and troubleshooting for common
   HW accel failures.
@@ -48,6 +49,18 @@ For H.264 content: `"active_decoder": "v4l2h264dec"`
 }
 ```
 Note: Pi 4B does NOT have hardware H.265 decoding.
+
+### x86 PC with AMD GPU (Debian 13, experimental)
+Expected: `active_decoder` is `vah264dec` or `vah265dec`, and the sink is
+`glimagesink`. This was verified on a Ryzen 3 4300U on 2026-11-05. Check the
+driver layer first; this needs no X session:
+```bash
+vainfo --display drm --device /dev/dri/renderD128 | grep VLD   # H264*/HEVC*/VP9* ... VAEntrypointVLD
+gst-inspect-1.0 va | grep dec:                                 # vah264dec, vah265dec
+```
+If `vainfo` fails, check that `mesa-va-drivers` and `firmware-amd-graphics` are
+installed (setup.sh installs both on AMD) and that the user is in the `render` group.
+Playback numbers and the open 4K60 issue: `docs/INSTALLATION.md` → Mini PC.
 
 ### Desktop (Development)
 ```json
