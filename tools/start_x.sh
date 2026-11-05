@@ -2,7 +2,7 @@
 # Helper script to start the graphical environment manually for testing.
 # Run this from an SSH session to trigger the Pi's local display.
 #
-# NOTE: Must be run as the target user (gsync), NOT with sudo.
+# NOTE: Must be run as the node user (the one setup.sh ran as, e.g. ksync), NOT with sudo.
 # Running startx as root creates an X server root owns, causing
 # "Authorization required" errors for VLC/GStreamer.
 

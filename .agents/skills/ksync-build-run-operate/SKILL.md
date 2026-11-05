@@ -101,7 +101,7 @@ Upload is TWO-HOP: file lands in the UI host's `media/` first, then the target d
 pulls it over HTTP in the background — failure shows only in the device log
 (`Download failed`). For large files prefer:
 ```bash
-scp video.mp4 gsync@<device-ip>:~/kitchenSync/media/
+scp video.mp4 <user>@<device-ip>:~/kitchenSync/media/   # user: ksync on new nodes, gsync on older Pis
 ```
 
 ## USB conventions
