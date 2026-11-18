@@ -310,6 +310,47 @@ above.
 
 ---
 
+## Track D: Runtime efficiency
+
+Python is the control plane only. Decode and display run inside GStreamer (C)
+and the hardware decoders, no frame passes through Python (no pad probes,
+appsinks or per-frame callbacks), and the netclock path keeps time in
+GStreamer's C clock. Measured on the K1 mini PC (2026-11-05): 1080p30 and 4K30
+hardware decode used under half of one core for the whole process. A full
+rewrite in C would cost months for little gain; the CPU worth recovering is in
+the pipeline, which costs the same in any language. Measure, then fix the
+pipeline, then move only a measured hotspot to native code.
+
+- [ ] **D0: Measure before optimising.** During playback on a Pi 4, a Pi 5 and
+      the K1, run `py-spy top --pid <pid>` and `top -H -p <pid>` to split CPU
+      between Python threads and GStreamer's own threads, and record RSS.
+      Store the numbers next to the K1 figures in `docs/INSTALLATION.md`.
+- [ ] **D1: Lean GL sink bin.** `gst_driver.py` (the `gl-optimized-bin`
+      branch) always runs `videoconvert` before `glupload`, and adds
+      `videoscale` plus a capsfilter when `video_width`/`video_height` are
+      set. Both run on the CPU and can pull hardware-decoded frames out of GPU
+      memory. Let `glcolorconvert` handle format conversion and scale in GL
+      (or with the sink's own scaling); keep `videoconvert` only as a fallback
+      when caps negotiation fails. Verify with D0 numbers and
+      `tools/verify_gst_hwaccel.py`.
+- [ ] **D2: Event-driven sync processing.** `collaborator.py`
+      `_sync_processor_loop` wakes every 10 ms whether or not a new sync
+      packet has arrived. Block on a `threading.Event`/`Condition` set by the
+      packet handler instead, with a timeout for the leader-lost check.
+- [ ] **D3: Fewer shell-outs.** `src/ui/window_manager.py` has 15
+      `subprocess` calls (window listing and moving). Replace polling and
+      repeated calls with one placement step at startup, or kiosk settings in
+      the Openbox config.
+- [ ] **D4: Native code only for a measured hotspot.** If D0 to D3 still show
+      Python in the hot path (most likely the UDP-mode sync loop), move that
+      one piece to a small C or Rust extension with the same interface. Not a
+      rewrite of the control plane.
+
+See also Track C, **Zero-copy rendering (`kmssink`)**, which removes the
+desktop compositor from the display path altogether.
+
+---
+
 ## Sequencing
 
 ```
